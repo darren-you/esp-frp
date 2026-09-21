@@ -1,0 +1,33 @@
+schema_version: 4
+name: esp_frp
+workspace_area: tooling
+archetype: tooling_repo
+lifecycle: incubating
+owner: darren-you
+governance_tier: standard
+domains:
+  - frp
+domain_roots:
+  frp:
+    - .
+delivery_surfaces:
+  - idf_component
+depends_on: []
+default_workflows:
+  - test_idf_component
+doc_status:
+  architecture: present
+  api: present
+  release: missing
+github:
+  repo: darren-you/esp_frp
+  visibility: public
+  about: 面向 ESP-IDF 的独立 FRP 客户端组件，按官方协议实现并以真实设备验证互操作
+  topics:
+    - darren-space
+    - tooling-repo
+    - frp
+    - idf-component
+entrypoints:
+  - README.md
+  - AGENTS.md

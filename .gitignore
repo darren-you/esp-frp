@@ -1,0 +1,15 @@
+._*
+.DS_Store
+build/
+.build/
+DerivedData/
+BuildInputs/
+node_modules/
+dist/
+managed_components/
+sdkconfig
+sdkconfig.old
+receipts/private/
+*.pem
+*.key
+.env
