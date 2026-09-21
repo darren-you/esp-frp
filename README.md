@@ -29,4 +29,4 @@ ctest --test-dir build --output-on-failure
 - [来源](docs/design/source_provenance.md)
 - [客户端合同](docs/design/client_contract.md)
 - [扩展 Roadmap](ROADMAP.md)
-- [FRP 工程标准](https://github.com/darren-you/darren_space/blob/master/harness/docs/workspace/standards/frp/frp_golden_path.md)
+- [FRP 工程标准](https://github.com/darren-you/darren-space/blob/master/harness/docs/workspace/standards/frp/frp_golden_path.md)

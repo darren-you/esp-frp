@@ -10,4 +10,4 @@
 
 Yamux 初始窗口 256 KiB，不每流分配等大缓冲。小 ring 消费后补 credit；慢流有时限，超时 RST 并有界排空，无法保持 framing 则结束会话。DATA 大于 ring 必须增量处理，非法 credit/溢出必须失败。预备流异步等握手，不能阻塞单 worker。work 本地目标必须命中配置 allowlist。
 
-独立 sample 不依赖 esp_base，不自动擦 NVS。官方 FRPS 互操作、C3 内存分配、双流、TLS/AEAD 负例和 100 次连接释放通过后才能标为 ready；host 帧测试不是这些结论。
+独立 sample 不依赖 `esp-base`，不自动擦 NVS。官方 FRPS 互操作、C3 内存分配、双流、TLS/AEAD 负例和 100 次连接释放通过后才能标为 ready；host 帧测试不是这些结论。

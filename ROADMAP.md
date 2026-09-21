@@ -1,6 +1,6 @@
 # ESP FRP Roadmap
 
-只有独立 ESP32-C3 示例、esp_base 组合和 esp_tool 能力状态均通过才标 verified；尚未实现或未测保持明确状态。
+只有独立 ESP32-C3 示例、`esp-base` 组合和 `esp-tool` 能力状态均通过才标 verified；尚未实现或未测保持明确状态。
 
 | 阶段 | 能力 | 当前状态 | 验收 |
 | --- | --- | --- | --- |
