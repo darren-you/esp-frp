@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "esp_frp_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,15 +12,6 @@ extern "C" {
 #define EFRP_WIRE_MAX_PAYLOAD 65536u
 #define EFRP_WIRE_HEADER_SIZE 8u
 #define EFRP_WIRE_MAGIC_SIZE 7u
-
-typedef enum {
-    EFRP_OK = 0,
-    EFRP_INVALID_ARGUMENT = -1,
-    EFRP_PROTOCOL_ERROR = -2,
-    EFRP_CAPACITY_EXCEEDED = -3,
-    EFRP_CALLBACK_REJECTED = -4,
-    EFRP_TRUNCATED = -5
-} efrp_result_t;
 
 typedef enum {
     EFRP_CLIENT_HELLO = 1,
