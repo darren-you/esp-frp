@@ -194,6 +194,31 @@ static void invalid_frames(void)
         assert(efrp_yamux_finish(&m) == EFRP_TRUNCATED);
     }
 }
+static void combined_flags(void)
+{
+    efrp_yamux_t m; efrp_yamux_init(&m, 0); uint32_t id;
+    assert(efrp_yamux_open(&m, &id) == EFRP_OK); flush(&m);
+    uint8_t input[32], out[8]; size_t used, n;
+    frame(input, 0, 2 | 4, id, 3); memcpy(input + 12, "fin", 3);
+    assert(efrp_yamux_feed(&m, input, 13, &used) == EFRP_OK);
+    efrp_yamux_stream_info_t info;
+    assert(efrp_yamux_info(&m, id, &info) == EFRP_OK && info.acknowledged && !info.remote_fin);
+    assert(efrp_yamux_read(&m, id, out, sizeof out, &n) == EFRP_OK && n == 1 && out[0] == 'f');
+    assert(efrp_yamux_read(&m, id, out, sizeof out, &n) == EFRP_WOULD_BLOCK);
+    assert(efrp_yamux_feed(&m, input + 13, 2, &used) == EFRP_OK && used == 2);
+    assert(efrp_yamux_read(&m, id, out, sizeof out, &n) == EFRP_OK && n == 2 && !memcmp(out, "in", 2));
+    assert(efrp_yamux_read(&m, id, out, sizeof out, &n) == EFRP_EOF);
+    frame(input, 0, 8, id, 3); memcpy(input + 12, "rst", 3);
+    frame(input + 15, 2, 1, 0, 97);
+    assert(efrp_yamux_feed(&m, input, 27, &used) == EFRP_OK && used == 27);
+    assert(efrp_yamux_read(&m, id, out, sizeof out, &n) == EFRP_STREAM_RESET);
+    assert(m.discarded_bytes == 3); flush(&m);
+    efrp_yamux_init(&m, 0); frame(input, 0, 1, 2, 3); memcpy(input + 12, "syn", 3);
+    assert(efrp_yamux_feed(&m, input, 15, &used) == EFRP_OK && used == 15 && m.discarded_bytes == 3);
+    for (size_t i = 0; i < EFRP_YAMUX_STREAMS; ++i) assert(!m.streams[i].id);
+    flush(&m); frame(input, 3, 0, 0, 1);
+    assert(efrp_yamux_feed(&m, input, 12, &used) == EFRP_SESSION_CLOSED);
+}
 static void deadlines_and_reuse(void)
 {
     efrp_yamux_t m; uint32_t id; size_t used; uint8_t h[12];
@@ -247,7 +272,7 @@ static void bounded_discard(void)
 int main(void)
 {
     large_frames(); window_and_output(); stalled_and_late_data(); control_and_capacity();
-    invalid_frames(); deadlines_and_reuse(); bounded_discard();
+    invalid_frames(); combined_flags(); deadlines_and_reuse(); bounded_discard();
     printf("Yamux host checks passed; caller-owned session bytes: %zu\n", sizeof(efrp_yamux_t));
     return 0;
 }

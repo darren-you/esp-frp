@@ -20,7 +20,7 @@ extern "C" {
 #define EFRP_YAMUX_OPEN_TIMEOUT_MS 10000u
 
 /* Private storage layout is exposed only for caller-owned/static allocation.
- * One owner; no callbacks, allocation, timers, sockets or retained input bytes.
+ * One owner; no callbacks, allocation, timers, sockets or retained input pointers.
  * Call tick regularly with a monotonic clock, including while I/O is blocked. */
 typedef struct {
     uint32_t id, send_credit, receive_credit, return_credit;

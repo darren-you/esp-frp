@@ -49,6 +49,10 @@ efrp_result_t efrp_wire_init(efrp_wire_reader_t *reader, uint8_t *storage,
                             efrp_frame_handler_t handler, void *context);
 efrp_result_t efrp_wire_feed(efrp_wire_reader_t *reader, const uint8_t *bytes,
                             size_t length, size_t *consumed);
+/* Stop immediately after one complete frame. Retain the unconsumed suffix:
+ * the next bytes may belong to another layer after a handshake transition. */
+efrp_result_t efrp_wire_feed_one(efrp_wire_reader_t *reader, const uint8_t *bytes,
+                                size_t length, size_t *consumed);
 efrp_result_t efrp_wire_finish(const efrp_wire_reader_t *reader);
 efrp_result_t efrp_wire_header(efrp_frame_kind_t kind, size_t payload_length,
                               uint8_t output[EFRP_WIRE_HEADER_SIZE]);

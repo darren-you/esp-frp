@@ -5,3 +5,5 @@ repository: "https://github.com/darren-you/esp-frp.git"
 license: "Apache-2.0"
 dependencies:
   idf: "==6.1.0"
+  espressif/cjson:
+    version: "==1.7.19~2"

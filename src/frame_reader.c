@@ -36,8 +36,8 @@ efrp_result_t efrp_wire_header(efrp_frame_kind_t kind, size_t length, uint8_t ou
     return EFRP_OK;
 }
 
-efrp_result_t efrp_wire_feed(efrp_wire_reader_t *r, const uint8_t *bytes,
-                            size_t length, size_t *consumed)
+static efrp_result_t feed(efrp_wire_reader_t *r, const uint8_t *bytes,
+                         size_t length, size_t *consumed, bool one)
 {
     if (consumed) *consumed = 0;
     if (!r || !consumed || (!bytes && length) || !r->handler || !r->payload)
@@ -71,9 +71,19 @@ efrp_result_t efrp_wire_feed(efrp_wire_reader_t *r, const uint8_t *bytes,
             if (!r->handler(r->context, r->kind, r->payload, r->payload_expected))
                 return r->failure = EFRP_CALLBACK_REJECTED;
             r->header_used = r->payload_used = r->payload_expected = 0;
+            if (one) return EFRP_OK;
         }
     }
     return EFRP_OK;
+}
+
+efrp_result_t efrp_wire_feed(efrp_wire_reader_t *r, const uint8_t *bytes, size_t length, size_t *consumed)
+{
+    return feed(r, bytes, length, consumed, false);
+}
+efrp_result_t efrp_wire_feed_one(efrp_wire_reader_t *r, const uint8_t *bytes, size_t length, size_t *consumed)
+{
+    return feed(r, bytes, length, consumed, true);
 }
 
 efrp_result_t efrp_wire_finish(const efrp_wire_reader_t *r)
