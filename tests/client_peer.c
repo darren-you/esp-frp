@@ -70,7 +70,7 @@ static void command_wait(char expected)
 }
 int main(int argc, char **argv)
 {
-    assert(argc == 5);
+    assert(argc == 5 || argc == 6);
     unsigned port = (unsigned)strtoul(argv[1], NULL, 10), rounds = (unsigned)strtoul(argv[4], NULL, 10);
     const char *mode = argv[3]; assert(port && port <= 65535 && rounds);
     FILE *f = fopen(argv[2], "rb"); assert(f);
@@ -92,12 +92,14 @@ int main(int argc, char **argv)
         fixture_dns_mode(!strcmp(mode, "dns-pending") ? FIXTURE_DNS_PENDING :
             !strcmp(mode, "dns-retry") ? FIXTURE_DNS_FAIL :
             !strcmp(mode, "no-memory") ? FIXTURE_DNS_NO_MEMORY : FIXTURE_DNS_READY);
+        uint8_t *ca_copy = malloc(n); assert(ca_copy); memcpy(ca_copy, ca, n);
         efrp_config_t config = {.server_hostname = server, .server_port = (uint16_t)port,
-            .ca_pem = ca, .ca_length = n, .token = (const uint8_t *)token, .token_length = strlen(token),
-            .proxy_name = proxy, .local_ipv4 = {127, 0, 0, 1}, .local_port = 1,
+            .ca_pem = ca_copy, .ca_length = n, .token = (const uint8_t *)token, .token_length = strlen(token),
+            .proxy_name = proxy, .local_ipv4 = {127, 0, 0, 1}, .local_port = argc == 6 ? (uint16_t)strtoul(argv[5], NULL, 10) : 1,
             .time_is_trusted = trusted, .on_event = event, .context = &events};
         assert(efrp_create(&config, &events.client) == EFRP_OK);
         assert(efrp_create(&config, &events.client) == EFRP_INVALID_STATE);
+        memset(ca_copy, 0, n); free(ca_copy);
         /* The next attempt must use the copied inputs, not these stack buffers. */
         memset(server, 'x', sizeof server - 1); memset(token, 'x', sizeof token - 1); memset(proxy, 'x', strlen(proxy));
         unsigned before = atomic_load(&events.events); poll(NULL, 0, 2); assert(atomic_load(&events.events) == before);
@@ -134,7 +136,16 @@ int main(int argc, char **argv)
             }
             efrp_status_t s = wait_phase(events.client, EFRP_PHASE_READY, attempts);
             assert(s.ready_sessions == 1 && s.pongs && s.run_id[0]);
-            if (!strcmp(mode, "restart")) {
+            if (!strcmp(mode, "duplex")) {
+                printf("READY %s\n", s.remote_address); fflush(stdout); command_wait('q');
+                uint64_t end = efrp_port_now_ms() + 5000;
+                do {
+                    assert(efrp_get_status(events.client, &s) == EFRP_OK);
+                    assert(efrp_port_now_ms() < end); poll(NULL, 0, 1);
+                } while (s.work.completed != 6 || s.work.active != 2);
+                assert(!s.work.failed && s.work.waiting <= 1);
+                assert(s.work.local_sent == 6 * UINT64_C(300006) && s.work.local_received == 6 * UINT64_C(300002));
+            } else if (!strcmp(mode, "restart")) {
                 printf("READY %s\n", s.remote_address); fflush(stdout); command_wait('r');
                 efrp_status_t b = wait_phase(events.client, EFRP_PHASE_BACKOFF, 1);
                 assert(b.retry_delay_ms >= 500 && b.retry_delay_ms <= 1000);

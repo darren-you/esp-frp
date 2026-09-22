@@ -66,6 +66,7 @@ func clientCase(path, caPath, mode string, port, rounds int, stop, start func())
 func runClient(path string) {
 	withControlledSessionServer(func(port int, caPath, dir string, stop, start func()) {
 		clientCase(path, caPath, "lifecycle", port, 100, stop, start)
+		workDuplexRounds(path, caPath, port, 3, true)
 		for _, mode := range []string{"reuse", "dns-pending", "dns-retry", "no-memory", "untrusted", "wrong-token", "wrong-host", "pause-tls", "pause-login", "pause-register", "pause-ready", "stop-backoff", "trust-lost", "restart"} {
 			clientCase(path, caPath, mode, port, 1, stop, start)
 		}

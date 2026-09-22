@@ -108,11 +108,18 @@ func remoteWork(address string, id uint32) error {
 	return nil
 }
 func workDuplex(path, caPath string, port int) {
+	workDuplexRounds(path, caPath, port, 100, false)
+}
+func workDuplexRounds(path, caPath string, port, rounds int, worker bool) {
 	local := localListener()
 	defer local.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, path, strconv.Itoa(port), caPath, strconv.Itoa(local.Addr().(*net.TCPAddr).Port), "duplex", "200")
+	args := []string{strconv.Itoa(port), caPath, strconv.Itoa(local.Addr().(*net.TCPAddr).Port), "duplex", strconv.Itoa(rounds * 2)}
+	if worker {
+		args = []string{strconv.Itoa(port), caPath, "duplex", "1", strconv.Itoa(local.Addr().(*net.TCPAddr).Port)}
+	}
+	cmd := exec.CommandContext(ctx, path, args...)
 	input, err := cmd.StdinPipe()
 	must(err)
 	output, err := cmd.StdoutPipe()
@@ -126,9 +133,9 @@ func workDuplex(path, caPath string, port int) {
 		panic("work peer missing READY: " + stderr.String())
 	}
 	address := "127.0.0.1" + strings.TrimPrefix(scanner.Text(), "READY ")
-	results := make(chan error, 200)
+	results := make(chan error, rounds*2)
 	go func() {
-		for range 200 {
+		for range rounds * 2 {
 			conn, err := local.Accept()
 			if err != nil {
 				results <- err
@@ -137,7 +144,7 @@ func workDuplex(path, caPath string, port int) {
 			go func() { results <- localWork(conn) }()
 		}
 	}()
-	for round := uint32(0); round < 100; round++ {
+	for round := uint32(0); round < uint32(rounds); round++ {
 		remote := make(chan error, 2)
 		for index := uint32(0); index < 2; index++ {
 			go func(id uint32) { remote <- remoteWork(address, id) }(round*2 + index)
@@ -156,6 +163,18 @@ func workDuplex(path, caPath string, port int) {
 			fmt.Printf("Official FRPS work: %d/100 dual-flow rounds passed\n", round+1)
 		}
 	}
+	if worker {
+		// Two live local sockets must be cancelled by the worker's stop path.
+		for range 2 {
+			remote, err := net.DialTimeout("tcp4", address, 2*time.Second)
+			must(err)
+			defer remote.Close()
+			must(local.(*net.TCPListener).SetDeadline(time.Now().Add(3 * time.Second)))
+			backend, err := local.Accept()
+			must(err)
+			defer backend.Close()
+		}
+	}
 	_, err = input.Write([]byte{'q'})
 	must(err)
 	must(input.Close())
@@ -163,7 +182,7 @@ func workDuplex(path, caPath string, port int) {
 		panic(fmt.Sprintf("work peer: %v\n%s", err, stderr.String()))
 	}
 	fmt.Print(stderr.String())
-	fmt.Println("Official FRPS: 100 dual-flow rounds, 200 fixed-target TCP sockets, 300001 bytes each direction and fd cleanup passed")
+	fmt.Printf("Official FRPS: %d dual-flow rounds, %d fixed-target TCP sockets, 300001 bytes each direction and fd cleanup passed (worker=%v)\n", rounds, rounds*2, worker)
 }
 func runWork(path string, faults bool) {
 	withSessionServer(func(port int, caPath, dir string) {
