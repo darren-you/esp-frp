@@ -11,14 +11,17 @@
 
 struct efrp_session {
     efrp_tls_t *tls;
-    efrp_yamux_t mux;
+    efrp_yamux_t *mux;
     efrp_handshake_t handshake;
     efrp_aead_reader_t reader;
     efrp_aead_writer_t writer;
     efrp_wire_reader_t frames;
     efrp_session_status_t status;
     efrp_work_set_t work;
-    uint8_t aead_rx[EFRP_AEAD_RX_BYTES], aead_tx[4128], json_rx[EFRP_JSON_MAX_BYTES];
+    /* The full authenticated record buffer is separate: C3 Wi-Fi/TLS heap
+     * regions cannot guarantee one contiguous allocation for both objects. */
+    uint8_t *aead_rx;
+    uint8_t aead_tx[4128], json_rx[EFRP_JSON_MAX_BYTES];
     uint8_t transport_rx[4096], control_rx[1024], control_tx[1024];
     uint8_t token[EFRP_AEAD_MAX_TOKEN_BYTES];
     char proxy_name[129];
@@ -36,10 +39,11 @@ static void clear(efrp_session_t *s)
     efrp_handshake_destroy(&s->handshake);
     efrp_aead_reader_destroy(&s->reader); efrp_aead_writer_destroy(&s->writer);
     efrp_crypto_zero(s->token, sizeof s->token);
-    efrp_crypto_zero(s->aead_rx, sizeof s->aead_rx); efrp_crypto_zero(s->aead_tx, sizeof s->aead_tx);
+    if (s->aead_rx) efrp_crypto_zero(s->aead_rx, EFRP_AEAD_RX_BYTES);
+    efrp_crypto_zero(s->aead_tx, sizeof s->aead_tx);
     efrp_crypto_zero(s->control_rx, sizeof s->control_rx); efrp_crypto_zero(s->control_tx, sizeof s->control_tx);
     efrp_crypto_zero(s->transport_rx, sizeof s->transport_rx); efrp_crypto_zero(s->json_rx, sizeof s->json_rx);
-    efrp_crypto_zero(&s->mux, sizeof s->mux);
+    if (s->mux) efrp_crypto_zero(s->mux, sizeof *s->mux);
     s->transport_used = s->transport_offset = s->control_used = s->control_offset = 0;
     s->tx_used = s->tx_offset = s->tls_staged = s->token_length = 0;
     s->ping_pending = false;
@@ -96,15 +100,19 @@ efrp_result_t efrp_session_create(const efrp_session_config_t *c, efrp_tls_t *tl
     if (efrp_tls_status(tls, &status) != EFRP_OK || status.state != EFRP_TLS_OPEN || status.pending_bytes)
         return EFRP_INVALID_STATE;
     efrp_session_t *s = calloc(1, sizeof *s); if (!s) return EFRP_NO_MEMORY;
-    efrp_result_t result = efrp_handshake_init(&s->handshake, &c->login, s->aead_rx, sizeof s->aead_rx, now);
-    if (result != EFRP_OK) { clear(s); free(s); return result; }
+    s->aead_rx = calloc(1, EFRP_AEAD_RX_BYTES);
+    if (!s->aead_rx) { efrp_crypto_zero(s, sizeof *s); free(s); return EFRP_NO_MEMORY; }
+    s->mux = calloc(1, sizeof *s->mux);
+    if (!s->mux) { free(s->aead_rx); efrp_crypto_zero(s, sizeof *s); free(s); return EFRP_NO_MEMORY; }
+    efrp_result_t result = efrp_handshake_init(&s->handshake, &c->login, s->aead_rx, EFRP_AEAD_RX_BYTES, now);
+    if (result != EFRP_OK) { clear(s); free(s->mux); free(s->aead_rx); efrp_crypto_zero(s, sizeof *s); free(s); return result; }
     s->token_length = c->login.token_length; memcpy(s->token, c->login.token, s->token_length);
     memcpy(s->proxy_name, c->proxy_name, name_length + 1); s->remote_port = c->remote_port; s->now = now;
     efrp_work_init(&s->work, c, s->proxy_name);
-    efrp_yamux_init(&s->mux, now); result = efrp_yamux_open(&s->mux, &s->control_stream);
+    efrp_yamux_init(s->mux, now); result = efrp_yamux_open(s->mux, &s->control_stream);
     if (result == EFRP_OK)
         result = efrp_wire_init(&s->frames, s->json_rx, sizeof s->json_rx, false, accept_control, s);
-    if (result != EFRP_OK) { clear(s); free(s); return result; }
+    if (result != EFRP_OK) { clear(s); free(s->mux); free(s->aead_rx); efrp_crypto_zero(s, sizeof *s); free(s); return result; }
     s->tls = tls; s->status.phase = EFRP_SESSION_AUTHENTICATING; *out = s; return EFRP_OK;
 }
 static efrp_result_t finish_login(efrp_session_t *s)
@@ -113,7 +121,7 @@ static efrp_result_t finish_login(efrp_session_t *s)
     efrp_result_t result = efrp_handshake_take_result(&s->handshake, &keys, s->status.run_id);
     if (result != EFRP_OK) return result;
     efrp_handshake_destroy(&s->handshake);
-    result = efrp_aead_reader_init(&s->reader, keys.server_to_client, s->aead_rx, sizeof s->aead_rx);
+    result = efrp_aead_reader_init(&s->reader, keys.server_to_client, s->aead_rx, EFRP_AEAD_RX_BYTES);
     if (result == EFRP_OK) result = efrp_aead_writer_init(&s->writer, keys.client_to_server, s->aead_tx, sizeof s->aead_tx);
     efrp_aead_clear_keys(&keys);
     if (result != EFRP_OK) return result;
@@ -164,13 +172,13 @@ static efrp_result_t control_output(efrp_session_t *s)
     if (s->status.phase == EFRP_SESSION_AUTHENTICATING) {
         result = efrp_handshake_output(&s->handshake, &bytes, &length);
         if (result != EFRP_OK) return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
-        result = efrp_yamux_write(&s->mux, s->control_stream, bytes, length, &used);
+        result = efrp_yamux_write(s->mux, s->control_stream, bytes, length, &used);
         if (result == EFRP_OK) return efrp_handshake_consume_output(&s->handshake, used);
         return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
     }
     result = efrp_aead_output(&s->writer, &bytes, &length);
     if (result == EFRP_OK) {
-        result = efrp_yamux_write(&s->mux, s->control_stream, bytes, length, &used);
+        result = efrp_yamux_write(s->mux, s->control_stream, bytes, length, &used);
         if (result == EFRP_OK) return efrp_aead_consume_output(&s->writer, used);
         return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
     }
@@ -206,7 +214,7 @@ static efrp_result_t control_input(efrp_session_t *s)
         if (result != EFRP_WOULD_BLOCK) return result;
     }
     if (!s->control_used) {
-        result = efrp_yamux_read(&s->mux, s->control_stream, s->control_rx, sizeof s->control_rx, &used);
+        result = efrp_yamux_read(s->mux, s->control_stream, s->control_rx, sizeof s->control_rx, &used);
         if (result == EFRP_EOF) return control_finish(s);
         if (result != EFRP_OK) return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
         s->control_used = used; s->control_offset = 0;
@@ -239,7 +247,7 @@ static efrp_result_t transport_input(efrp_session_t *s)
         if (result != EFRP_OK) return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
         s->transport_used = used; s->transport_offset = 0;
     }
-    result = efrp_yamux_feed(&s->mux, s->transport_rx + s->transport_offset,
+    result = efrp_yamux_feed(s->mux, s->transport_rx + s->transport_offset,
                             s->transport_used - s->transport_offset, &used);
     if (result != EFRP_OK && result != EFRP_WOULD_BLOCK) return result;
     s->transport_offset += used;
@@ -250,7 +258,7 @@ static efrp_result_t transport_output(efrp_session_t *s)
 {
     if (s->tls_staged || s->tls_eof) return EFRP_OK;
     const uint8_t *bytes; size_t length, accepted;
-    efrp_result_t result = efrp_yamux_output(&s->mux, &bytes, &length);
+    efrp_result_t result = efrp_yamux_output(s->mux, &bytes, &length);
     if (result != EFRP_OK) return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
     result = efrp_tls_write(s->tls, s->now, bytes, length, &accepted);
     if (result != EFRP_OK) return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
@@ -260,14 +268,14 @@ static efrp_result_t check_eof(efrp_session_t *s)
 {
     if (!s->tls_eof || s->transport_used || s->control_used) return EFRP_OK;
     efrp_yamux_stream_info_t info;
-    efrp_result_t result = efrp_yamux_info(&s->mux, s->control_stream, &info);
+    efrp_result_t result = efrp_yamux_info(s->mux, s->control_stream, &info);
     if (result != EFRP_OK) return result;
     if (info.readable_bytes) return EFRP_OK;
     if (s->status.phase != EFRP_SESSION_AUTHENTICATING) {
         const uint8_t *plain; size_t length;
         if (efrp_aead_plaintext(&s->reader, &plain, &length) == EFRP_OK) return EFRP_OK;
     }
-    result = efrp_yamux_finish(&s->mux);
+    result = efrp_yamux_finish(s->mux);
     return result == EFRP_OK ? control_finish(s) : result;
 }
 efrp_result_t efrp_session_step(efrp_session_t *s, uint64_t now, int64_t seconds)
@@ -285,11 +293,11 @@ efrp_result_t efrp_session_step(efrp_session_t *s, uint64_t now, int64_t seconds
     efrp_tls_status_t tls_status;
     result = efrp_tls_status(s->tls, &tls_status); if (result != EFRP_OK) return fail(s, result);
     if (s->tls_staged && !tls_status.pending_bytes && tls_status.state == EFRP_TLS_OPEN) {
-        result = efrp_yamux_consume_output(&s->mux, s->tls_staged);
+        result = efrp_yamux_consume_output(s->mux, s->tls_staged);
         if (result != EFRP_OK) return fail(s, result);
         s->tls_staged = 0;
     }
-    result = efrp_yamux_tick(&s->mux, now); if (result != EFRP_OK) return fail(s, result);
+    result = efrp_yamux_tick(s->mux, now); if (result != EFRP_OK) return fail(s, result);
     if (s->status.phase == EFRP_SESSION_AUTHENTICATING) {
         result = efrp_handshake_tick(&s->handshake, now); if (result != EFRP_OK) return fail(s, result);
     }
@@ -302,7 +310,7 @@ efrp_result_t efrp_session_step(efrp_session_t *s, uint64_t now, int64_t seconds
             result = prepare_control(s, seconds); if (result != EFRP_OK) return fail(s, result);
             result = control_output(s); if (result != EFRP_OK) return fail(s, result);
             if (s->status.phase != EFRP_SESSION_AUTHENTICATING) {
-                result = efrp_work_step(&s->work, &s->mux, now, s->status.run_id, s->token, s->token_length, seconds);
+                result = efrp_work_step(&s->work, s->mux, now, s->status.run_id, s->token, s->token_length, seconds);
                 if (result != EFRP_OK) return fail(s, result);
             }
             result = transport_output(s); if (result != EFRP_OK) return fail(s, result);
@@ -323,5 +331,6 @@ efrp_result_t efrp_session_destroy(efrp_session_t **out)
     if (!*out) return EFRP_OK;
     efrp_session_t *s = *out; efrp_session_cancel(s);
     if (!efrp_work_cancel(&s->work)) return EFRP_WOULD_BLOCK;
+    free(s->mux); free(s->aead_rx);
     efrp_crypto_zero(s, sizeof *s); free(s); *out = NULL; return EFRP_OK;
 }

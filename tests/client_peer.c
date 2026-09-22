@@ -80,6 +80,11 @@ static void command_wait(char expected)
 {
     char ch = 0; assert(read(STDIN_FILENO, &ch, 1) == 1 && ch == expected);
 }
+typedef struct { efrp_client_t *client; efrp_result_t result; } stop_thread_t;
+static void *stop_thread(void *context)
+{
+    stop_thread_t *t = context; t->result = efrp_stop(t->client, 5000); return NULL;
+}
 int main(int argc, char **argv)
 {
     assert(argc == 5 || argc == 6);
@@ -96,19 +101,21 @@ int main(int argc, char **argv)
         if (!strcmp(mode, "pause-login")) events.pause_phase = EFRP_PHASE_AUTHENTICATING;
         if (!strcmp(mode, "pause-register")) events.pause_phase = EFRP_PHASE_REGISTERING;
         if (!strcmp(mode, "pause-ready")) events.pause_phase = EFRP_PHASE_READY;
+        if (!strcmp(mode, "pause-stopped")) events.pause_phase = EFRP_PHASE_STOPPED;
         char server[254] = "frp.fixture.invalid", token[] = "public-session-token", proxy[129];
         snprintf(proxy, sizeof proxy, "fixture-client-%s-%u", mode, i);
         if (!strcmp(mode, "wrong-token")) token[0] = 'x';
         if (!strcmp(mode, "wrong-host")) strcpy(server, "wrong.fixture.invalid");
         if (!strcmp(mode, "untrusted")) atomic_store(&events.trusted, false);
         events.fast_backoff = !strcmp(mode, "backoff-matrix");
-        fixture_dns_mode(!strcmp(mode, "dns-pending") ? FIXTURE_DNS_PENDING :
+        fixture_dns_mode((!strcmp(mode, "dns-pending") || !strcmp(mode, "concurrent-stop")) ? FIXTURE_DNS_PENDING :
             (!strcmp(mode, "dns-retry") || events.fast_backoff) ? FIXTURE_DNS_FAIL :
             !strcmp(mode, "no-memory") ? FIXTURE_DNS_NO_MEMORY : FIXTURE_DNS_READY);
         uint8_t *ca_copy = malloc(n); assert(ca_copy); memcpy(ca_copy, ca, n);
         efrp_config_t config = {.server_hostname = server, .server_port = (uint16_t)port,
             .ca_pem = ca_copy, .ca_length = n, .token = (const uint8_t *)token, .token_length = strlen(token),
-            .proxy_name = proxy, .local_ipv4 = {127, 0, 0, 1}, .local_port = argc == 6 ? (uint16_t)strtoul(argv[5], NULL, 10) : 1,
+            .hostname = "fixture-worker-board", .client_id = proxy, .proxy_name = proxy,
+            .local_ipv4 = {127, 0, 0, 1}, .local_port = argc == 6 ? (uint16_t)strtoul(argv[5], NULL, 10) : 1,
             .time_is_trusted = trusted, .on_event = event, .context = &events};
         assert(efrp_create(&config, &events.client) == EFRP_OK);
         assert(efrp_create(&config, &events.client) == EFRP_INVALID_STATE);
@@ -118,7 +125,21 @@ int main(int argc, char **argv)
         unsigned before = atomic_load(&events.events); poll(NULL, 0, 2); assert(atomic_load(&events.events) == before);
         assert(efrp_start(events.client) == EFRP_OK);
         assert(efrp_start(events.client) == EFRP_INVALID_STATE);
-        if (events.fast_backoff) {
+        if (!strcmp(mode, "concurrent-stop") || !strcmp(mode, "pause-stopped")) {
+            bool dns = !strcmp(mode, "concurrent-stop");
+            if (dns) {
+                uint64_t end = efrp_port_now_ms() + 1000;
+                while (!fixture_dns_active()) { assert(efrp_port_now_ms() < end); poll(NULL, 0, 1); }
+            } else (void)wait_phase(events.client, EFRP_PHASE_READY, 1);
+            stop_thread_t t = {.client = events.client}; pthread_t thread;
+            assert(pthread_create(&thread, NULL, stop_thread, &t) == 0);
+            (void)wait_phase(events.client, dns ? EFRP_PHASE_DRAINING : EFRP_PHASE_STOPPED, 1);
+            assert(efrp_start(events.client) == EFRP_WOULD_BLOCK);
+            assert(efrp_stop(events.client, 0) == EFRP_WOULD_BLOCK);
+            if (dns) fixture_dns_complete(true);
+            else atomic_store(&events.release, true);
+            assert(pthread_join(thread, NULL) == 0 && t.result == EFRP_OK);
+        } else if (events.fast_backoff) {
             unsigned turns = 0;
             while (atomic_load(&events.backoffs) < 8) { assert(++turns < 5000); poll(NULL, 0, 1); }
         } else if (!strcmp(mode, "dns-pending")) {
@@ -152,6 +173,7 @@ int main(int argc, char **argv)
             }
             efrp_status_t s = wait_phase(events.client, EFRP_PHASE_READY, attempts);
             assert(s.ready_sessions == 1 && s.pongs && s.run_id[0]);
+            char first_run_id[EFRP_RUN_ID_BYTES]; memcpy(first_run_id, s.run_id, sizeof first_run_id);
             if (!strcmp(mode, "duplex")) {
                 printf("READY %s\n", s.remote_address); fflush(stdout); command_wait('q');
                 uint64_t end = efrp_port_now_ms() + 5000;
@@ -167,6 +189,7 @@ int main(int argc, char **argv)
                 assert(b.retry_delay_ms >= 500 && b.retry_delay_ms <= 1000);
                 printf("BACKOFF\n"); fflush(stdout); command_wait('c');
                 s = wait_phase(events.client, EFRP_PHASE_READY, 2); assert(s.ready_sessions == 2 && s.retries >= 1);
+                assert(!strcmp(first_run_id, s.run_id));
                 printf("RECOVERED %s\n", s.remote_address); fflush(stdout);
             } else if (!strcmp(mode, "stop-backoff")) {
                 fixture_dns_mode(FIXTURE_DNS_FAIL);
@@ -179,7 +202,21 @@ int main(int argc, char **argv)
                 for (unsigned cycle = 0; cycle < 10; ++cycle) {
                     stopped(&events); assert(efrp_start(events.client) == EFRP_OK);
                     s = wait_phase(events.client, EFRP_PHASE_READY, cycle + 2); assert(s.ready_sessions == cycle + 2);
+                    assert(!strcmp(first_run_id, s.run_id));
                 }
+            } else if (!strcmp(mode, "replacement")) {
+                stopped(&events);
+                assert(efrp_destroy(&events.client, 5000) == EFRP_OK && !events.client);
+                assert(open_fds() == baseline); events.has_owner = false;
+                strcpy(server, "frp.fixture.invalid"); strcpy(token, "public-session-token");
+                snprintf(proxy, sizeof proxy, "fixture-client-%s-%u", mode, i);
+                config.ca_pem = ca; config.previous_run_id = first_run_id;
+                assert(efrp_create(&config, &events.client) == EFRP_OK);
+                char expected_run_id[EFRP_RUN_ID_BYTES]; memcpy(expected_run_id, first_run_id, sizeof first_run_id);
+                memset(first_run_id, 'x', strlen(first_run_id));
+                assert(efrp_start(events.client) == EFRP_OK);
+                s = wait_phase(events.client, EFRP_PHASE_READY, 1);
+                assert(s.ready_sessions == 1 && !strcmp(expected_run_id, s.run_id));
             }
         }
         stopped(&events);

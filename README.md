@@ -1,11 +1,22 @@
 # ESP FRP
 
-独立的 ESP-IDF FRP 客户端组件，采用 Apache-2.0。当前实现包含 wire v2 帧、有界 Yamux、Hello/Login、AES-256-GCM 控制记录、严格 TLS、单次 DNS/TCP 建连，以及代理注册、Token 心跳和固定本地目标 TCP 双向转发；完整 worker、重连及实板互操作尚在开发，不能作为已验收 FRPC 发布。
+独立的 ESP-IDF FRP 客户端组件，采用 Apache-2.0。当前实现包含 wire v2 帧、有界 Yamux、Hello/Login、AES-256-GCM 控制记录、严格 TLS、单次 DNS/TCP 建连，以及代理注册、Token 心跳和固定本地目标 TCP 双向转发；单 worker 已组合生命周期与带抖动的重连。独立 C3 sample 已提供，实板互操作尚未完成，不能作为已验收 FRPC 发布。
 
 ## 架构拓扑
 
 ```mermaid
 flowchart LR
+    sample["examples/tcp_proxy：独立 C3 实验应用"] --> owner
+    inputs["仓外输入：RAM Wi-Fi、SNTP、CA 与实验 FRPS"] --> sample
+    sample --> echo["sample_echo.c：固定回环 TCP 目标"]
+    sample --> resources["sample_resources.c：任务、heap、socket 和 esp_timer 观测"]
+    owner["应用控制任务"] -->|"create / start / stop / destroy；有界队列"| client["src/client.c：唯一 worker、清理与退避"]
+    client --> port["client_port_idf.c：FreeRTOS 任务、队列和状态锁"]
+    client --> session
+    client --> tls
+    client --> connect
+    client -->|"阶段事件；只在回调内借用"| owner
+    owner -->|"状态副本"| client
     host["CMake / CTest"] --> wire["src/frame_reader.c：wire v2 增量帧"]
     host --> mux["src/yamux.c：窗口、四流、背压与半关闭"]
     idf["ESP-IDF Component Manager"] --> wire
@@ -55,7 +66,11 @@ flowchart LR
     frps <-->|"真实用户连接与业务字节"| wp
 ```
 
+`esp_frp.h` 是应用入口：create 深拷贝配置并创建一个空闲 worker；start 只表示命令入队，READY 需完成代理注册和首次认证 Pong。stop 等待连接、迟到 DNS 和回调收敛；超时保留句柄和停止请求，destroy 成功后任务及配置均已释放。网络中断使用单个退避截止时刻，证书、认证和协议错误进入 failed。详见[客户端生命周期](docs/design/client-lifecycle.md)。
+
 ## 独立开发
+
+[独立 C3 TCP 样例](examples/tcp_proxy/README.md) 使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。默认空输入只供编译，真实设备必须先核对其分区与恢复基线。
 
 ```bash
 cmake -S . -B build -DBUILD_TESTING=ON
@@ -77,7 +92,7 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_tls.h` 对已连接的非阻塞 transport 提供严格 TLS；证书、身份、日期与 owner 的可信时间条件均须满足，4 KiB 自有发送队列保持 SDK 重试指针稳定，握手/写入/关闭受绝对期限约束。终止后释放会话并停止回调，由外层关闭 socket。它不执行 DNS 或创建任务，详见 [TLS 合同](docs/design/tls-transport.md)。IDF 与显式 `EFRP_MBEDTLS_SOURCE_DIR` host 构建导出 `EFRP_HAS_TLS=1`；默认 OpenSSL/独立 PSA 构建只验证协议核心，导出 0 且不包含 TLS 符号。
 
-`esp_frp_connect.h` 在 IDF 提供一次 IPv4 DNS/TCP 尝试，也支持无需 DNS 的固定 IPv4 本地目标，使用现有 lwIP 任务与非阻塞 socket；必须开启 `CONFIG_LWIP_SO_LINGER=y`。取消后不再建连，已发 DNS 查询仍须等 SDK 回调收敛，destroy 只在资源释放后成功；close_write/finish 提供工作流的正常半关闭和排空路径，不自行重连。详见 [连接生命周期](docs/design/connection-lifecycle.md)。IDF 导出 `EFRP_HAS_CONNECT=1`，正常 host 库为 0；host 网络测试单独链接仅测试解析器。
+`esp_frp_connect.h` 在 IDF 提供一次 IPv4 DNS/TCP 尝试，也支持无需 DNS 的固定 IPv4 本地目标，使用现有 lwIP 任务与非阻塞 socket；必须开启 `CONFIG_LWIP_SO_LINGER=y`。取消后不再建连，已发 DNS 查询仍须等 SDK 回调收敛，destroy 只在资源释放后成功；close_write/finish 提供工作流的正常半关闭和排空路径，不自行重连。详见 [连接生命周期](docs/design/connection-lifecycle.md)。IDF 导出 `EFRP_HAS_CONNECT=1`，正常 host 库为 0；host 网络测试单独链接仅测试解析器。应用客户端同样只在 IDF 导出 `EFRP_HAS_CLIENT=1`；POSIX 调度适配仅供测试。
 
 `esp_frp_session.h` 在已 OPEN 的借用 TLS 上组合控制链路，注册单一 TCP proxy、执行 15 秒 Token 心跳并校验 10 秒响应期限。工作流执行 magic/NewWorkConn/StartWorkConn，向配置的唯一 IPv4/port 转发，最多两条活跃流和一条预备流；对端地址元数据不能更换本地目标。四层背压、握手后尾数据与独立半关闭保持完整，Yamux 信用在 TLS 实际排空后归还。destroy 返回 WOULD_BLOCK 时继续保留句柄，直到本地 socket 清理完成，再销毁 TLS 和外层连接。详见 [控制会话](docs/design/control-session.md) 与[工作流](docs/design/work-streams.md)。该模块在 IDF 或完整 Mbed TLS host 模式编译；host 会话测试显式链接连接测试适配库，不把 DNS fixture 发布为 host runtime。
 

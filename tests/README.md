@@ -36,6 +36,11 @@ flowchart LR
     work <-->|"双业务流及故障"| wp["work_peer.c"]
     wp --> lib
     wp --> fixture
+    cmake --> client["client_peer.c / client_contract_test.c"]
+    client --> worker["实际 client.c + 仅测试 POSIX 调度"]
+    worker --> lib
+    worker --> fixture
+    session <-->|"真实重启与双流"| client
 ```
 
 默认需 C11、CMake >= 3.16、OpenSSL >=3.0 和 cJSON 1.7.19 开发库；在仓库根执行：
@@ -101,3 +106,9 @@ ctest --test-dir build --output-on-failure
 ```
 
 Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回收进程、连接与监听；CTest 有 120 秒总期限。上游测试验证其实际 6 MiB 最大窗口配置与本核心 4 KiB ring 的互操作。该测试没有 TLS、FRP wire 登录或真实 MCU；边界和验收范围见 [Yamux 核心](../docs/design/yamux-core.md)。
+
+完整 Mbed TLS 模式另外运行 `client_upstream`（240 秒）和 `client_contract`。前者使用实际 `client.c`、POSIX 测试调度和实际 FRPS，验证百次创建/注册/停止/销毁、同实例重复 start、双向业务和活动双流取消、真实 FRPS 重启恢复，以及 DNS 迟到、退避、取消、并发调用、回调收敛和信任/认证终止；后者检查配置边界、三个 host 创建分配点失败及配置清零。长退避阶梯通过仅测试单调时钟推进，实际 FRPS 恢复使用真实时钟。测试解析器不发送真实 DNS 查询，pthread 不能代替 FreeRTOS 的实机资源证明。
+
+可以把完整 Mbed TLS 命令中的 `-fsanitize=address,undefined` 替换为 `-fsanitize=thread`，在独立构建目录运行 `ctest --test-dir <目录> -R '^client_' --output-on-failure`，检查 worker、外部 API、状态副本与迟到测试 DNS 的竞争。不可同时开启 TSan 和 ASan。停止和线程退出检查见[客户端生命周期](../docs/design/client-lifecycle.md)。
+
+`session_peer` 将实际 `session.c` 的 allocator 单独替换为测试计数器，TLS、密码与对端保持真实。首轮分别注入对象、完整 AEAD 接收区和 Yamux 分配失败，再验证握手配置拒绝回滚；每次正常/失败会话销毁均检查三块内存已清零且无残留。

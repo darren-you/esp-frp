@@ -34,6 +34,10 @@ typedef struct {
     const uint8_t *ca_pem; size_t ca_length;
     const uint8_t *token; size_t token_length;
     const char *hostname, *user, *client_id; /* optional UTF-8, <=128 bytes each */
+    /* Optional previously verified status.run_id, copied at create. Lets an
+     * owner explicitly replace its instance without racing server retirement.
+     * This is not a credential: strict TLS and Token login always run again. */
+    const char *previous_run_id;
     const char *proxy_name; /* required, exact wire identity, <=128 UTF-8 bytes */
     uint16_t remote_port;
     uint8_t local_ipv4[4]; uint16_t local_port; /* sole fixed allowlist entry */

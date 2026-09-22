@@ -41,7 +41,7 @@ int main(void)
     assert(efrp_create(NULL, &c) == EFRP_INVALID_ARGUMENT && !c);
     assert(efrp_create(&good, NULL) == EFRP_INVALID_ARGUMENT);
     char long_name[255]; memset(long_name, 'x', sizeof long_name - 1); long_name[254] = 0;
-    for (unsigned test = 0; test < 14; ++test) {
+    for (unsigned test = 0; test < 16; ++test) {
         efrp_config_t bad = good;
         switch (test) {
         case 0: bad.server_hostname = long_name; break;
@@ -58,6 +58,8 @@ int main(void)
         case 11: bad.local_ipv4[0] = 224; break;
         case 12: bad.local_port = 0; break;
         case 13: bad.time_is_trusted = NULL; break;
+        case 14: bad.previous_run_id = long_name; break;
+        case 15: bad.previous_run_id = "\xc0\xaf"; break;
         }
         assert(efrp_create(&bad, &c) == EFRP_INVALID_ARGUMENT && !c && !live);
     }

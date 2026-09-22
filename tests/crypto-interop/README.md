@@ -25,6 +25,11 @@ flowchart LR
     root --> work["work.go：实际 FRPS 百轮双流与故障"]
     work <-->|"业务字节与状态"| wp["work_peer.c：固定目标 TCP 转发"]
     wp --> composed
+    root --> client["client.go：单 worker 生命周期与 FRPS 重启"]
+    client --> worker["client_peer.c：esp_frp.h 与 POSIX 测试调度"]
+    worker --> composed
+    client --> control
+    client --> work
     work --> wf["work_fixture.go：官方 API 半关闭与慢流"]
 ```
 
@@ -45,3 +50,5 @@ C peer 经当前 `connect.c` 建连及收发，终止时检查 fd 已释放。�
 随后 `session_fixture.go` 以官方 API 构造 17 个组合边界场景，覆盖尾数据、4096 字节 payload、异常控制消息、截断、篡改、FIN 和期限。单独执行为 `go run -mod=readonly . -session-peer /absolute/path/to/session_peer`。这证明 host 上的控制会话，不是 C3 资源或实板通过，详见 [控制会话](../../docs/design/control-session.md)。
 
 `go run -mod=readonly . -work-peer /absolute/path/to/work_peer` 通过实际 FRPS 完成百轮双流，每流两个方向各 300001 字节，另有应用回执防止服务端 EOF 全关闭语义截断测试载荷。添加 `-work-faults` 则执行四个真实 FRPS 故障用例及 12 个官方 API fixture；覆盖精确目标绑定、容量、半关闭、尾数据、错误字段、期限和慢流恢复。核心只消费已有固定依赖，无自写服务端密码算法；完整边界见 [工作流](../../docs/design/work-streams.md)。
+
+`client.go` 使用同一真实 FRPS 构造器，运行应用层 `esp_frp.h` 生命周期。`session.go` 允许测试显式停止并重新创建同一端口的 FRPS，用于证明 worker 自动重连；不改变既有控制和工作流测试。`work.go` 另以 worker 运行三轮双流，随后保留两条本地连接验证停止清理。配置、信任、回调和调度边界见[客户端生命周期](../../docs/design/client-lifecycle.md)。

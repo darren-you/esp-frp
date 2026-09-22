@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+void fixture_session_check(const efrp_session_config_t *, efrp_tls_t *, uint64_t);
+void fixture_session_released(void);
 static uint64_t now_ms(void)
 {
     struct timespec t; assert(clock_gettime(CLOCK_MONOTONIC, &t) == 0);
@@ -67,6 +69,7 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
     efrp_session_config_t invalid = config;
     invalid.proxy_name = "";
     assert(efrp_session_create(&invalid, tls, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
+    if (!round) fixture_session_check(&config, tls, now_ms());
     assert(efrp_session_create(&config, tls, now_ms(), &session) == EFRP_OK);
     assert(efrp_session_create(&config, tls, now_ms(), &session) == EFRP_INVALID_STATE);
     assert(efrp_session_step(session, 0, (int64_t)time(NULL)) == EFRP_INVALID_ARGUMENT);
@@ -103,6 +106,7 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
     assert(status.work.pending == 0 && !status.work.active && !status.work.waiting && !status.work.cleaning);
     assert(status.phase == ((expected == EFRP_OK || expected == EFRP_CANCELLED) ? EFRP_SESSION_STOPPED : EFRP_SESSION_FAILED));
     assert(efrp_session_destroy(&session) == EFRP_OK && !session); efrp_tls_destroy(tls);
+    fixture_session_released();
     assert(efrp_connect_destroy(&connection) == EFRP_OK && !connection);
     assert(fcntl(fd, F_GETFD) == -1 && errno == EBADF);
 }

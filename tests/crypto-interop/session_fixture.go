@@ -80,7 +80,8 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 	if err = authenticator.VerifyLogin(&login); err != nil {
 		return err
 	}
-	if (work == nil && login.ClientID != "fixture-client-"+mode+"-0") || (work != nil && login.ClientID != "fixture-work-client") {
+	if (work == nil && login.ClientID != "fixture-client-"+mode+"-0") ||
+		(work != nil && !strings.HasPrefix(login.ClientID, "fixture-work-proxy-"+mode+"-")) {
 		return fmt.Errorf("borrowed login configuration")
 	}
 	// Read until owner teardown so FIN/close_notify is actually observed before
@@ -131,7 +132,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 	}
 	validName := proxy.ProxyName == "fixture-control-"+mode+"-0"
 	if work != nil {
-		validName = strings.HasPrefix(proxy.ProxyName, "fixture-work-proxy-"+mode+"-")
+		validName = strings.HasPrefix(proxy.ProxyName, "fixture-work-proxy-"+mode+"-") && proxy.ProxyName == login.ClientID
 	}
 	if !validName || proxy.ProxyType != "tcp" || proxy.UseEncryption || proxy.UseCompression || proxy.RemotePort != 0 {
 		return fmt.Errorf("incorrect or borrowed NewProxy configuration")

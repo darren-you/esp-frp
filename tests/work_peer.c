@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     const char *token = "public-session-token";
     char proxy_name[128]; snprintf(proxy_name, sizeof proxy_name, "fixture-work-proxy-%s-%u", argv[4], local_port);
     efrp_session_config_t config = {.login = {.token = (const uint8_t *)token, .token_length = strlen(token),
-        .hostname = "fixture-work-board", .client_id = "fixture-work-client", .unix_seconds = (int64_t)time(NULL)},
+        .hostname = "fixture-work-board", .client_id = proxy_name, .unix_seconds = (int64_t)time(NULL)},
         .proxy_name = proxy_name, .local_ipv4 = {127, 0, 0, 1}, .local_port = (uint16_t)local_port};
     assert(efrp_session_create(&config, tls, now_ms(), &session) == EFRP_OK);
     memset(config.local_ipv4, 0, sizeof config.local_ipv4); config.local_port = 0;
