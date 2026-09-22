@@ -20,7 +20,10 @@ typedef struct {
     efrp_phase_t pause_phase;
     pthread_t owner;
     bool has_owner;
+    bool fast_backoff;
+    atomic_uint backoffs;
 } events_t;
+void fixture_client_advance(uint64_t ms);
 static bool trusted(void *context) { return atomic_load(&((events_t *)context)->trusted); }
 static void event(void *context, const efrp_status_t *status)
 {
@@ -34,6 +37,15 @@ static void event(void *context, const efrp_status_t *status)
     efrp_client_t *handle = e->client;
     assert(efrp_destroy(&handle, 1) == EFRP_INVALID_STATE && handle == e->client);
     atomic_fetch_add(&e->events, 1);
+    if (e->fast_backoff && status->phase == EFRP_PHASE_BACKOFF) {
+        static const uint32_t ceilings[] = {1000, 2000, 4000, 8000, 16000, 30000, 30000, 30000};
+        unsigned index = atomic_load(&e->backoffs); assert(index < 8);
+        assert(status->error == EFRP_DNS_ERROR && !fixture_dns_active());
+        assert(status->retry_delay_ms >= ceilings[index] / 2 && status->retry_delay_ms <= ceilings[index]);
+        assert(status->attempts == index + 1 && status->retries == index);
+        if (index < 7) fixture_client_advance(status->retry_delay_ms + 1);
+        atomic_fetch_add(&e->backoffs, 1);
+    }
     if (status->phase == e->pause_phase) {
         atomic_store(&e->entered, true);
         while (!atomic_load(&e->release)) poll(NULL, 0, 1);
@@ -89,8 +101,9 @@ int main(int argc, char **argv)
         if (!strcmp(mode, "wrong-token")) token[0] = 'x';
         if (!strcmp(mode, "wrong-host")) strcpy(server, "wrong.fixture.invalid");
         if (!strcmp(mode, "untrusted")) atomic_store(&events.trusted, false);
+        events.fast_backoff = !strcmp(mode, "backoff-matrix");
         fixture_dns_mode(!strcmp(mode, "dns-pending") ? FIXTURE_DNS_PENDING :
-            !strcmp(mode, "dns-retry") ? FIXTURE_DNS_FAIL :
+            (!strcmp(mode, "dns-retry") || events.fast_backoff) ? FIXTURE_DNS_FAIL :
             !strcmp(mode, "no-memory") ? FIXTURE_DNS_NO_MEMORY : FIXTURE_DNS_READY);
         uint8_t *ca_copy = malloc(n); assert(ca_copy); memcpy(ca_copy, ca, n);
         efrp_config_t config = {.server_hostname = server, .server_port = (uint16_t)port,
@@ -105,7 +118,10 @@ int main(int argc, char **argv)
         unsigned before = atomic_load(&events.events); poll(NULL, 0, 2); assert(atomic_load(&events.events) == before);
         assert(efrp_start(events.client) == EFRP_OK);
         assert(efrp_start(events.client) == EFRP_INVALID_STATE);
-        if (!strcmp(mode, "dns-pending")) {
+        if (events.fast_backoff) {
+            unsigned turns = 0;
+            while (atomic_load(&events.backoffs) < 8) { assert(++turns < 5000); poll(NULL, 0, 1); }
+        } else if (!strcmp(mode, "dns-pending")) {
             uint64_t end = efrp_port_now_ms() + 1000;
             while (!fixture_dns_active()) { assert(efrp_port_now_ms() < end); poll(NULL, 0, 1); }
             assert(efrp_stop(events.client, 0) == EFRP_WOULD_BLOCK);

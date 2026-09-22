@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <time.h>
 struct efrp_port {
@@ -17,6 +18,8 @@ struct efrp_port {
     void (*entry)(void *);
     void *context;
 };
+static atomic_uint_fast64_t fixture_clock_offset;
+void fixture_client_advance(uint64_t ms) { atomic_fetch_add(&fixture_clock_offset, ms); }
 static struct timespec deadline(uint32_t ms)
 {
     struct timespec t; assert(clock_gettime(CLOCK_REALTIME, &t) == 0);
@@ -87,7 +90,7 @@ void efrp_port_wait(efrp_port_t *p, uint32_t ms)
 uint64_t efrp_port_now_ms(void)
 {
     struct timespec t; assert(clock_gettime(CLOCK_MONOTONIC, &t) == 0);
-    return (uint64_t)t.tv_sec * 1000u + (uint64_t)t.tv_nsec / 1000000u;
+    return (uint64_t)t.tv_sec * 1000u + (uint64_t)t.tv_nsec / 1000000u + atomic_load(&fixture_clock_offset);
 }
 void efrp_port_destroy(efrp_port_t *p)
 {
