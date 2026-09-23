@@ -51,7 +51,7 @@ USB Serial/JTAG 输入为一行一个精确命令，最多 63 个 ASCII 字符�
 
 回显服务只有两个 1024 字节缓冲，由 main 推进。它只在板内回环监听，不提供未鉴权的局域网实验控制入口。首个 FRP READY 需完成严格 TLS、注册与认证 Pong；业务字节仍应由外部测试客户端逐字节或摘要核对。
 
-状态包含 `failure_phase`、`system_error` 和单调 `time_ms`，用于区分 DNS/TCP、TLS 与协议失败。命令回执记录实际返回值、耗时与句柄是否仍存在；短期限返回不能当作清理完成。
+状态包含 `failure_phase`、`system_error` 和单调 `time_ms`，用于区分 DNS/TCP、TLS 与协议失败；工作流的 `requests`、`rejected`、`pending`、`cleaning` 分别记录请求/拒绝累计数和待处理/清理中数量，可与 `active`、`waiting`、`failed`、`work_error` 一同验证异常隔离和有界容量。命令回执记录实际返回值、耗时与句柄是否仍存在；短期限返回不能当作清理完成。
 
 ## 资源与边界
 

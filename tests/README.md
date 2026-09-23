@@ -32,6 +32,8 @@ flowchart LR
     session <-->|"真实控制会话"| sp["session_peer.c"]
     sp --> lib
     session --> faults["session_fixture.go：官方 API 异常对端"]
+    device["crypto-interop/device_fixture.go：私有单设备场景"] --> faults
+    device <-->|"真实 TCP / TLS"| board["独立 C3 sample"]
     cmake --> work["crypto-interop/work.go / work_fixture.go"]
     work <-->|"双业务流及故障"| wp["work_peer.c"]
     wp --> lib
@@ -97,7 +99,7 @@ ctest --test-dir build-tls --output-on-failure
 
 该模式自动增加 `tls_upstream`，由 Go 标准 TLS 服务端生成临时 CA/证书并启动 C peer；包含 TLS 1.2/1.3、四类证书拒绝、部分 I/O、100 次连接、取消和期限。`MBEDTLS_PLATFORM_MEMORY` 仅为 host 分配失败注入；未开启时不执行分配注入段，其余合同测试仍执行。PSA 的独占输入模式与 SDK 对齐。TLS 测试总期限 180 秒，证书输入和监听均在测试内清理，详见 [TLS 合同](../docs/design/tls-transport.md)。
 
-完整 Mbed TLS 模式也增加 `session_upstream`，总期限 240 秒。它在本机启动实际官方 FRPS，验证百次注册、Token 心跳、工作请求、部分 I/O、拒绝和取消；另外以官方协议 API 构造 17 种尾数据、解析、认证、EOF 和超时场景。所有配置使用公开 fixture，监听仅回环，子进程和临时证书结束后清理；范围见 [控制会话](../docs/design/control-session.md)。
+完整 Mbed TLS 模式也增加 `session_upstream`，总期限 240 秒。它在本机启动实际官方 FRPS，验证百次注册、Token 心跳、工作请求、部分 I/O、拒绝和取消；另有 28 种尾数据、容量、Yamux 非法 header、解析、认证、EOF 和超时场景。host 配置使用公开 fixture，监听仅回环，子进程和临时证书结束后清理；范围见 [控制会话](../docs/design/control-session.md)。[单设备入口](crypto-interop/README.md#单设备协议-fixture) 可用显式私有配置复用协议场景；它不负责刷机，服务端成功也不等于设备验收。
 
 同一模式的 `work_upstream` 用实际 FRPS 验证 100 轮双业务流，共 200 条本地连接，每流双向各 300001 字节；总期限 240 秒。`work_faults_upstream` 总期限 180 秒，包含四个真实 FRPS 拒绝/取消场景和 13 个官方 API 半关闭、尾数据、解析、期限与慢流场景。连接目标是独立回环业务 listener；正常结束与取消均检查 fd 基线，详情见 [工作流](../docs/design/work-streams.md)。
 

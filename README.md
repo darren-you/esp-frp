@@ -39,6 +39,8 @@ flowchart LR
     upstream["tests/interop：固定上游 Yamux"] <-->|"仅回环 TCP 测试"| peer["tests/yamux_peer.c"]
     peer <-->|"增量输入输出、流读写"| mux
     official["tests/crypto-interop：官方 FRP / golib"] <-->|"双向字节与拒绝用例"| cp["tests/aead_peer.c"]
+    device_fixture["crypto-interop/device_fixture.go：显式私有单设备场景"] --> official
+    device_fixture <-->|"真实 TLS / 协议异常输入"| sample
     cp --> aead
     official <-->|"Token 校验与握手后加密数据"| hp["tests/handshake_peer.c"]
     hp --> handshake

@@ -26,7 +26,7 @@ TLS 已复制一段 Yamux 输出并不意味着该段已发完。会话记录暂
 
 完整 Mbed TLS host 模式运行 `session_upstream`：实际官方 FRPS v0.71.0 在随机回环地址启动、启用严格 TLS 和 HeartBeats/NewWorkConns scopes。覆盖百次注册/销毁、真实外部连接触发 ReqWorkConn、连续两次心跳、37/41 字节与交替 WOULD_BLOCK 的 transport、错误 Token、占用端口及登录/注册取消。子进程检查 socket 已释放，测试确认 FRPS 已撤销代理监听。
 
-另外 17 个场景直接调用相同官方 TLS/Yamux/wire/Token/AEAD API，精确构造握手后同包 AEAD、4096 字节控制 payload 跨暂存边界、名称/类型/重复键/未知消息拒绝、重复或失败 Pong、超量工作请求、FIN、TLS close_notify、帧/密文截断、tag 篡改及两类响应超时。这些协议 fixture 不冒充完整 FRPS；两类对端共同验证组合行为。
+另外 28 个场景复用相同官方 TLS/Yamux/wire/Token/AEAD API，并在 TLS 后注入固定非法 Yamux header。覆盖握手后同包 AEAD、4096 字节控制 payload 跨暂存边界、单条 64 KiB AEAD 明文、超长控制帧/AEAD 记录、名称/类型/重复键/未知消息拒绝、重复或失败 Pong、超量工作请求、FIN、TLS close_notify、帧/密文截断、tag 篡改、两类响应超时，以及 Yamux 版本/类型/旗标/信用/窗口/流 ID、RST 与截断。这些协议 fixture 不冒充完整 FRPS；两类对端共同验证组合行为。单设备入口和证据边界见 [crypto-interop](../../tests/crypto-interop/README.md#单设备协议-fixture)。
 
 ESP-IDF v6.1 / C3 的会话分为 24848 字节对象、20912 字节 Yamux 和 65552 字节 AEAD 接收区，合计 111312 字节（不含 allocator 元数据），保持原有完整记录容量。会话保留 1056 字节 AEAD 发送区、四条 Yamux ring、阶段复用的握手/控制区和三个工作槽。实板首次测得 Wi-Fi 在线时最大连续块只有 114688 字节，因此禁止再要求一个 127728 字节的连续分配。首次两块分配在真实 TLS 后仍因堆区分布失败，因此采用三块分配，再移除互斥阶段的重复空间。任一分配失败都回滚；正常销毁和握手配置拒绝均清零三块内存。另需 TLS 对象、SDK 内部内存、cJSON 临时分配和每条连接 56 字节的对象。编译尺寸不是运行峰值或 MCU 泄漏结论；真实 SDK 网络、worker 和双业务流已部分通过，资源与故障缺口见 [C3 问题记录](../issues/c3-loopback-memory-pressure.md)，Base/MQTT 组合仍待验证。
 

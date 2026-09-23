@@ -22,7 +22,10 @@ static efrp_result_t expected_result(const char *mode)
     if (!strcmp(mode, "wrong-token")) return EFRP_LOGIN_REJECTED;
     if (!strcmp(mode, "proxy-error")) return EFRP_PROXY_REJECTED;
     if (!strcmp(mode, "fixture-login-fin") || !strcmp(mode, "fixture-frame-truncated") ||
-        !strcmp(mode, "fixture-aead-truncated")) return EFRP_TRUNCATED;
+        !strcmp(mode, "fixture-aead-truncated") || !strcmp(mode,"fixture-yamux-truncated")) return EFRP_TRUNCATED;
+    if (!strcmp(mode,"fixture-yamux-reset")) return EFRP_STREAM_RESET;
+    if (!strcmp(mode,"fixture-aead-oversized")) return EFRP_PROTOCOL_ERROR;
+    if (!strcmp(mode,"fixture-control-oversized")) return EFRP_CAPACITY_EXCEEDED;
     if (!strcmp(mode, "fixture-fin") || !strcmp(mode, "fixture-tls-fin")) return EFRP_SESSION_CLOSED;
     if (!strcmp(mode, "fixture-pong-error") || !strcmp(mode, "fixture-aead-tamper")) return EFRP_AUTHENTICATION_FAILED;
     if (!strcmp(mode, "fixture-register-timeout") || !strcmp(mode, "fixture-pong-timeout")) return EFRP_TIMEOUT;
@@ -93,7 +96,7 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
             if (!announced) { printf("REGISTERED %s\n", status.remote_address); fflush(stdout); announced = true; }
             unsigned want_pongs = !strcmp(mode, "heartbeat") ? 2 : 1;
             bool need_work = !strcmp(mode, "request") || !strcmp(mode, "fixture-tail") || !strcmp(mode, "fixture-record");
-            bool need_rejection = !strcmp(mode, "fixture-work-overflow");
+            bool need_rejection = !strcmp(mode, "fixture-work-overflow") || !strcmp(mode,"fixture-aead-max");
             if (expected == EFRP_OK && status.pongs >= want_pongs && (!need_work || status.work.requests) &&
                 (!need_rejection || status.work.rejected_requests)) break;
         }

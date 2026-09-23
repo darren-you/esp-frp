@@ -17,7 +17,7 @@ import (
 	"github.com/hashicorp/yamux"
 )
 
-func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, mode string, resume <-chan struct{}, result chan<- error) error {
+func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, mode, token string, resume <-chan struct{}, result chan<- error) error {
 	if err := control.WriteMsg(&msg.ReqWorkConn{}); err != nil {
 		return err
 	}
@@ -26,7 +26,7 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 			return err
 		}
 	}
-	authenticator := auth.NewTokenAuth([]v1.AuthScope{v1.AuthScopeHeartBeats, v1.AuthScopeNewWorkConns}, "public-session-token")
+	authenticator := auth.NewTokenAuth([]v1.AuthScope{v1.AuthScopeHeartBeats, v1.AuthScopeNewWorkConns}, token)
 	controlDone := make(chan error, 1)
 	go func() {
 		for {
@@ -322,8 +322,10 @@ func runWorkFixtures(path, dir string) {
 			raw, err := listener.Accept()
 			if err == nil {
 				accepted <- raw
-				err = serveSessionFixture(raw, cert, mode, func(m *yamux.Session, c *msg.V2ReadWriter, p string) error {
-					return workFixtureProtocol(m, c, p, mode, resume, protocolResult)
+				identity := fmt.Sprintf("fixture-work-proxy-%s-%d", mode, local.Addr().(*net.TCPAddr).Port)
+				err = serveSessionFixture(raw, cert, sessionFixtureOptions{mode: mode, token: "public-session-token",
+					clientID: identity, proxyName: identity, timeout: 18 * time.Second}, func(m *yamux.Session, c *msg.V2ReadWriter, p string) error {
+					return workFixtureProtocol(m, c, p, mode, "public-session-token", resume, protocolResult)
 				})
 			}
 			done <- err

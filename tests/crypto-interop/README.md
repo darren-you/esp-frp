@@ -31,9 +31,14 @@ flowchart LR
     client --> control
     client --> work
     work --> wf["work_fixture.go：官方 API 半关闭与慢流"]
+    private["仓外私有 JSON：精确端点、身份和证书"] --> device["device_fixture.go：单设备、单场景入口"]
+    device --> faults
+    device --> wf
+    faults --> malformed["yamux_fixture.go：固定非法 header"]
+    device <-->|"真实 TCP / TLS；仅指定设备 IP"| c3["独立 C3 sample"]
 ```
 
-Go >=1.25，`go.mod` 与 `go.sum` 固定官方 FRP 及公开传递依赖。模块调用原始上游 API，不复制派生算法，不用相邻 checkout 的 replace。首次运行需要下载模块；fixture Token 与随机 Hello 只用于进程内测试，TLS 模式另外创建回环监听，没有真实凭据或生产 FRPS 连接。
+Go >=1.25，`go.mod` 与 `go.sum` 固定官方 FRP 及公开传递依赖。模块调用原始上游 API，不复制派生算法，不用相邻 checkout 的 replace。首次运行需要下载模块；host 测试的 Token 与随机 Hello 只用于进程内测试，TLS 模式另外创建回环监听。单设备入口仅消费显式私有实验配置，不读取生产配置。
 
 从仓根启用 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON` 后运行 CTest。单独调试可在本目录执行 `go run -mod=readonly . -peer /absolute/path/to/aead_peer`；peer 来自仓根 CMake 构建。CTest 总期限 120 秒，每个 C 子进程期限 10 秒。
 
@@ -47,8 +52,33 @@ C peer 经当前 `connect.c` 建连及收发，终止时检查 fd 已释放。�
 
 `session_upstream` 首次实际启动固定版本的 FRPS `server.NewService`，关闭 Dashboard，transport 与 proxy listener 明确绑定回环；使用临时 CA、证书和公开 fixture Token，启用 HeartBeats/NewWorkConns scopes。100 次注册/销毁、真实请求触发 ReqWorkConn、两个连续心跳、37/41 字节与 WOULD_BLOCK、Token/端口拒绝及两种取消逐项验证；官方返回 `:端口`，测试用已固定的 loopback 补齐连接地址。结束后确认代理监听撤销。
 
-随后 `session_fixture.go` 以官方 API 构造 17 个组合边界场景，覆盖尾数据、4096 字节 payload、异常控制消息、截断、篡改、FIN 和期限。单独执行为 `go run -mod=readonly . -session-peer /absolute/path/to/session_peer`。这证明 host 上的控制会话，不是 C3 资源或实板通过，详见 [控制会话](../../docs/design/control-session.md)。
+随后 `session_fixture.go` 构造 28 个组合边界场景，覆盖尾数据、4096 字节 payload、单条 64 KiB AEAD 明文、超长控制帧/AEAD 记录、异常控制消息、截断、篡改、FIN 和期限。八个 Yamux 场景在真实 TLS 后直接发送固定非法 header，检查版本、类型、旗标、信用、窗口溢出、未打开流、RST 与截断，不另实现服务端复用协议。单独执行为 `go run -mod=readonly . -session-peer /absolute/path/to/session_peer`。这证明 host 上的控制会话，不是 C3 资源或实板通过，详见 [控制会话](../../docs/design/control-session.md)。
 
 `go run -mod=readonly . -work-peer /absolute/path/to/work_peer` 通过实际 FRPS 完成百轮双流，每流两个方向各 300001 字节，另有应用回执防止服务端 EOF 全关闭语义截断测试载荷。添加 `-work-faults` 则执行四个真实 FRPS 故障用例及 13 个官方 API fixture；覆盖精确目标绑定、容量、半关闭、尾数据、错误字段、期限和慢流恢复。核心只消费已有固定依赖，无自写服务端密码算法；完整边界见 [工作流](../../docs/design/work-streams.md)。
 
 `client.go` 使用同一真实 FRPS 构造器，运行应用层 `esp_frp.h` 生命周期。`session.go` 允许测试显式停止并重新创建同一端口的 FRPS，用于证明 worker 自动重连；不改变既有控制和工作流测试。`work.go` 另以 worker 运行三轮双流，随后保留两条本地连接验证停止清理。配置、信任、回调和调度边界见[客户端生命周期](../../docs/design/client-lifecycle.md)。
+
+## 单设备协议 fixture
+
+`go run -mod=readonly . -device-config /private/path/device-fixture.json` 复用上述场景，单次只接收一个明确 IP 的对端。配置必须是至多 16 KiB、无组/其他用户权限的普通 JSON 文件，拒绝未知字段；以下均为文档占位值：
+
+```json
+{
+  "listen_ipv4": "192.0.2.10",
+  "listen_port": 17400,
+  "allowed_peer_ipv4": "192.0.2.20",
+  "certificate_file": "/private/path/server.pem",
+  "private_key_file": "/private/path/server.key",
+  "mode": "fixture-aead-max",
+  "token": "replace-with-isolated-fixture-token",
+  "client_id": "isolated-c3",
+  "proxy_name": "isolated-tcp",
+  "timeout_ms": 25000
+}
+```
+
+端口限定 1024–65535，期限为 1000–90000 ms；证书/私钥使用绝对路径。客户端必须按真实主机名和 CA 校验服务端，fixture 精确验证 Login 的 `client_id`、Token 和 NewProxy 的名称/类型/配置。IP 限定仅收窄实验对象，不能代替协议认证。
+
+`mode` 支持 `sessionFixtureModes` 的 28 项，以及 `work-wrong-name`、`work-error`、`work-oversized`、`work-truncated`、`work-bad-port`、`work-duplicate`、`work-frame-timeout`、`work-idle`。最后一项使用真实 60 秒空闲期限，fixture 应配置 90000 ms；其余工作流场景保留控制通道并响应认证心跳。host 专用的变换回显、暂停与半关闭驱动不接入此入口。
+
+入口没有设备发现、刷机、DNS 服务、代理监听或生产安装操作。`ESP_FRP_DEVICE_FIXTURE_READY` 只说明监听建立，`ESP_FRP_DEVICE_WORK_REJECTED` 说明工作流已在对端结束，`ESP_FRP_DEVICE_FIXTURE_FINISHED` 说明服务端场景结束；三者都不能单独作为实板通过。验收还须核对设备的精确错误、状态/资源回收，以及恢复到官方 FRPS 后的业务字节。私有配置、证书、输入和日志不得提交。

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,14 +32,31 @@ type sessionFixtureIO struct {
 	io.Writer
 }
 
-func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work func(*yamux.Session, *msg.V2ReadWriter, string) error) error {
+type sessionFixtureOptions struct {
+	mode, token, clientID, proxyName string
+	timeout                          time.Duration
+}
+
+var sessionFixtureModes = []string{"fixture-tail", "fixture-record", "fixture-aead-max", "fixture-control-oversized",
+	"fixture-aead-oversized", "fixture-login-fin", "fixture-bad-name", "fixture-bad-type",
+	"fixture-bad-duplicate", "fixture-bad-unknown", "fixture-frame-truncated", "fixture-fin", "fixture-tls-fin",
+	"fixture-aead-truncated", "fixture-aead-tamper", "fixture-pong-error", "fixture-bad-pong", "fixture-work-overflow",
+	"fixture-register-timeout", "fixture-pong-timeout", "fixture-bad-yamux-version", "fixture-bad-yamux-type",
+	"fixture-bad-yamux-flags", "fixture-bad-yamux-credit", "fixture-bad-yamux-window", "fixture-bad-yamux-stream",
+	"fixture-yamux-reset", "fixture-yamux-truncated"}
+
+func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixtureOptions, work func(*yamux.Session, *msg.V2ReadWriter, string) error) error {
+	mode, token := options.mode, options.token
 	defer raw.Close()
-	if err := raw.SetDeadline(time.Now().Add(18 * time.Second)); err != nil {
+	if err := raw.SetDeadline(time.Now().Add(options.timeout)); err != nil {
 		return err
 	}
 	conn := tls.Server(raw, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12})
 	if err := conn.Handshake(); err != nil {
 		return err
+	}
+	if strings.Contains(mode, "yamux-") {
+		return serveYamuxFault(conn, mode)
 	}
 	cfg := yamux.DefaultConfig()
 	cfg.LogOutput = io.Discard
@@ -75,13 +93,11 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 	if err = loginRW.ReadMsgInto(&login); err != nil {
 		return err
 	}
-	token := "public-session-token"
 	authenticator := auth.NewTokenAuth([]v1.AuthScope{v1.AuthScopeHeartBeats}, token)
 	if err = authenticator.VerifyLogin(&login); err != nil {
 		return err
 	}
-	if (work == nil && login.ClientID != "fixture-client-"+mode+"-0") ||
-		(work != nil && !strings.HasPrefix(login.ClientID, "fixture-work-proxy-"+mode+"-")) {
+	if login.ClientID != options.clientID {
 		return fmt.Errorf("borrowed login configuration")
 	}
 	// Read until owner teardown so FIN/close_notify is actually observed before
@@ -130,11 +146,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 	if err = control.ReadMsgInto(&proxy); err != nil {
 		return err
 	}
-	validName := proxy.ProxyName == "fixture-control-"+mode+"-0"
-	if work != nil {
-		validName = strings.HasPrefix(proxy.ProxyName, "fixture-work-proxy-"+mode+"-") && proxy.ProxyName == login.ClientID
-	}
-	if !validName || proxy.ProxyType != "tcp" || proxy.UseEncryption || proxy.UseCompression || proxy.RemotePort != 0 {
+	if proxy.ProxyName != options.proxyName || proxy.ProxyType != "tcp" || proxy.UseEncryption || proxy.UseCompression || proxy.RemotePort != 0 {
 		return fmt.Errorf("incorrect or borrowed NewProxy configuration")
 	}
 	if mode == "fixture-register-timeout" {
@@ -145,6 +157,11 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 		return wire.NewConn(crypto).WriteFrame(&wire.Frame{Type: wire.FrameTypeMessage, Payload: append([]byte{0, id}, payload...)})
 	}
 	switch mode {
+	case "fixture-control-oversized":
+		if err = writeJSON(4, make([]byte, 4095)); err != nil {
+			return err
+		}
+		return awaitStop()
 	case "fixture-bad-name":
 		response.ProxyName = "wrong-proxy"
 	case "fixture-bad-type":
@@ -180,7 +197,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 		return awaitStop()
 	case "fixture-tls-fin":
 		return conn.Close()
-	case "fixture-aead-truncated", "fixture-aead-tamper":
+	case "fixture-aead-truncated", "fixture-aead-tamper", "fixture-aead-oversized":
 		var captured bytes.Buffer
 		duplex.Writer = &captured
 		if err = control.WriteMsg(response); err != nil {
@@ -190,8 +207,13 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 		data := captured.Bytes()
 		if mode == "fixture-aead-truncated" {
 			data = data[:len(data)-1]
-		} else {
+		} else if mode == "fixture-aead-tamper" {
 			data[len(data)-1] ^= 1
+		} else {
+			// Damage only the length of a record produced by the official
+			// writer: 64 KiB plaintext + 16-byte tag is the maximum.
+			binary.BigEndian.PutUint32(data[12:16], 65553)
+			data = data[:16]
 		}
 		if _, err = stream.Write(data); err != nil {
 			return err
@@ -200,7 +222,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 			return err
 		}
 		return awaitStop()
-	case "fixture-record":
+	case "fixture-record", "fixture-aead-max":
 		p, _ := json.Marshal(response)
 		// A 4096-byte wire payload crosses every intermediate 1 KiB staging
 		// boundary; add a second frame in the same authenticated record.
@@ -210,14 +232,35 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 		if err = wire.NewConn(&plaintext).WriteFrame(&wire.Frame{Type: wire.FrameTypeMessage, Payload: append([]byte{0, 4}, p...)}); err != nil {
 			return err
 		}
-		if err = msg.NewV2ReadWriter(&plaintext).WriteMsg(&msg.ReqWorkConn{}); err != nil {
-			return err
+		if mode == "fixture-aead-max" {
+			// Pack legal bounded ReqWorkConn frames into one maximum-sized
+			// authenticated record; overflow requests must remain bounded.
+			for plaintext.Len() < 65536 {
+				n := 65536 - plaintext.Len()
+				if n > 4104 {
+					n = 4104
+				}
+				if n < 12 {
+					return fmt.Errorf("invalid maximum-record fixture tail")
+				}
+				payload := binary.BigEndian.AppendUint16(nil, msg.V2TypeReqWorkConn)
+				payload = append(payload, '{')
+				payload = append(payload, bytes.Repeat([]byte{' '}, n-12)...)
+				payload = append(payload, '}')
+				if err = wire.NewConn(&plaintext).WriteFrame(&wire.Frame{Type: wire.FrameTypeMessage, Payload: payload}); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err = msg.NewV2ReadWriter(&plaintext).WriteMsg(&msg.ReqWorkConn{}); err != nil {
+				return err
+			}
 		}
 		if _, err = crypto.Write(plaintext.Bytes()); err != nil {
 			return err
 		}
 	}
-	if mode != "fixture-record" {
+	if mode != "fixture-record" && mode != "fixture-aead-max" {
 		if err = control.WriteMsg(response); err != nil {
 			return err
 		}
@@ -279,17 +322,15 @@ func runSessionFixtures(path, dir string) {
 	cert, ca := certificate("ok")
 	caPath := filepath.Join(dir, "fixture-ca.pem")
 	must(os.WriteFile(caPath, ca, 0600))
-	modes := []string{"fixture-tail", "fixture-record", "fixture-login-fin", "fixture-bad-name", "fixture-bad-type",
-		"fixture-bad-duplicate", "fixture-bad-unknown", "fixture-frame-truncated", "fixture-fin", "fixture-tls-fin",
-		"fixture-aead-truncated", "fixture-aead-tamper", "fixture-pong-error", "fixture-bad-pong", "fixture-work-overflow",
-		"fixture-register-timeout", "fixture-pong-timeout"}
+	modes := sessionFixtureModes
 	for _, mode := range modes {
 		listener := localListener()
 		result := make(chan error, 1)
 		go func() {
 			raw, err := listener.Accept()
 			if err == nil {
-				err = serveSessionFixture(raw, cert, mode, nil)
+				err = serveSessionFixture(raw, cert, sessionFixtureOptions{mode: mode, token: "public-session-token",
+					clientID: "fixture-client-" + mode + "-0", proxyName: "fixture-control-" + mode + "-0", timeout: 18 * time.Second}, nil)
 			}
 			result <- err
 		}()

@@ -142,7 +142,12 @@ func main() {
 	clientPeer := flag.String("client-peer", "", "C single-worker lifecycle peer")
 	workPeer := flag.String("work-peer", "", "C composed local TCP forwarding peer")
 	workFaults := flag.Bool("work-faults", false, "Run work rejection/half-close fixtures instead of the 100 dual-flow rounds")
+	deviceConfig := flag.String("device-config", "", "仓外 0600 JSON：单次真实设备协议 fixture，不执行刷写")
 	flag.Parse()
+	if *deviceConfig != "" {
+		must(runDeviceFixture(*deviceConfig))
+		return
+	}
 	if *clientPeer != "" {
 		runClient(*clientPeer)
 		return

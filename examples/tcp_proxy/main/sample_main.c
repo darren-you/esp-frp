@@ -121,10 +121,12 @@ static void report(const char *phase)
     bool rssi_valid=esp_wifi_sta_get_ap_info(&access_point)==ESP_OK;
     printf("EFRP_SAMPLE_STATUS cycle=%u client=%u phase=%d error=%d attempts=%" PRIu64 " sessions=%" PRIu64
         " retries=%" PRIu64 " pongs=%" PRIu64 " active=%u waiting=%u completed=%" PRIu64 " failed=%" PRIu64
+        " requests=%" PRIu64 " rejected=%" PRIu64 " pending=%u cleaning=%u"
         " work_error=%d sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32
         " failure_phase=%d system_error=%d time_ms=%" PRIu64 " wifi=%u trusted=%u rssi_valid=%u rssi_dbm=%d remote=%s\n",
         cycle, client != NULL, status.phase, status.error, status.attempts, status.ready_sessions, status.retries,
         status.pongs, status.work.active, status.work.waiting, status.work.completed, status.work.failed,
+        status.work.requests, status.work.rejected_requests, status.work.pending, status.work.cleaning,
         status.work.last_error, status.work.local_sent, status.work.local_received, status.tls_error, status.tls_verify_flags,
         status.failure_phase, status.system_error, (uint64_t)esp_timer_get_time()/1000u,
         atomic_load(&wifi_ready), trusted(NULL), rssi_valid, rssi_valid ? access_point.rssi : 0, status.remote_address);
