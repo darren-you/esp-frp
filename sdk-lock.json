@@ -2,7 +2,7 @@
   "schema_version": 1,
   "idf": {
     "repository": "https://github.com/darren-you/esp-idf.git",
-    "revision": "855937cf9dcee13ee9c423fb0319238cdc8d53fd"
+    "revision": "578cf89c343e388db43ba1f4ddcd602fedcb763c"
   },
   "lwip": {
     "repository": "https://github.com/darren-you/esp-lwip.git",
