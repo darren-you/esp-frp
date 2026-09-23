@@ -183,14 +183,35 @@ int main(int argc, char **argv)
                 } while (s.work.completed != 6 || s.work.active != 2);
                 assert(!s.work.failed && s.work.waiting <= 1);
                 assert(s.work.local_sent == 6 * UINT64_C(300006) && s.work.local_received == 6 * UINT64_C(300002));
-            } else if (!strcmp(mode, "restart")) {
-                printf("READY %s\n", s.remote_address); fflush(stdout); command_wait('r');
+            } else if (!strcmp(mode, "restart") || !strcmp(mode, "restart-active")) {
+                printf("READY %s\n", s.remote_address); fflush(stdout);
+                if (!strcmp(mode, "restart-active")) {
+                    command_wait('a');
+                    uint64_t end = efrp_port_now_ms() + 5000;
+                    do {
+                        assert(efrp_get_status(events.client, &s) == EFRP_OK);
+                        assert(efrp_port_now_ms() < end); poll(NULL, 0, 1);
+                    } while (s.work.active != 2);
+                    printf("ACTIVE\n"); fflush(stdout);
+                }
+                command_wait('r');
                 efrp_status_t b = wait_phase(events.client, EFRP_PHASE_BACKOFF, 1);
                 assert(b.retry_delay_ms >= 500 && b.retry_delay_ms <= 1000);
+                assert(!b.work.active && !b.work.waiting && !b.work.cleaning);
                 printf("BACKOFF\n"); fflush(stdout); command_wait('c');
                 s = wait_phase(events.client, EFRP_PHASE_READY, 2); assert(s.ready_sessions == 2 && s.retries >= 1);
                 assert(!strcmp(first_run_id, s.run_id));
                 printf("RECOVERED %s\n", s.remote_address); fflush(stdout);
+                if (!strcmp(mode, "restart-active")) {
+                    command_wait('v');
+                    uint64_t end = efrp_port_now_ms() + 5000;
+                    do {
+                        assert(efrp_get_status(events.client, &s) == EFRP_OK);
+                        assert(efrp_port_now_ms() < end); poll(NULL, 0, 1);
+                    } while (s.work.completed != 2 || s.work.active);
+                    assert(s.work.local_sent == 2 + 2 * UINT64_C(300006));
+                    assert(s.work.local_received == 2 * UINT64_C(300002));
+                }
             } else if (!strcmp(mode, "stop-backoff")) {
                 fixture_dns_mode(FIXTURE_DNS_FAIL);
                 stopped(&events); assert(efrp_start(events.client) == EFRP_OK);

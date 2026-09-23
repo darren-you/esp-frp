@@ -40,3 +40,9 @@ ctest --test-dir /tmp/esp-frp-p4-04-host-dd9d52a --output-on-failure --parallel 
 | 连接清理与整套回归 | `connect_linger` 验证暂时性 socket option/close 失败后仍持有并最终释放 fd；`session_upstream` 包含官方 FRPS 控制会话和 28 项协议 fixture。完整 CTest 17/17，无失败。 | 通过 |
 
 预备流和活跃空闲的长期限在 host 测试中使用测试 owner 的单调时钟推进；慢读背压使用真实回环 I/O。该矩阵不能给出 ESP32-C3 的 heap、最大连续块、任务栈、socket/计时器资源或弱信号恢复结论。下一步仍需在获准设备上，以同一候选和固定 SDK 完成十轮双流、背压、FIN/RST、预备流、百次释放的统一实板矩阵，并按既有恢复基线收尾；Base/MQTT 组合另由 P4-05 验收。
+
+## 2026-09-24：活动双流下的真实 FRPS 重启补充
+
+原矩阵的 `restart` 在 worker 已 READY、没有活动业务流时停启 FRPS。本次从 `9158b7f2e2c555a14636aed26b5189902152d19e` 扩展 `client_upstream`：先通过官方 FRPS 建立两条活动流，分别向固定回环目标交付一字节；停服后核对两侧旧 socket 已关闭且不是读取超时、worker 清空活动流并退避；同端口重新启动官方 FRPS，沿原 worker 完成重新注册，再让两条新流的两个方向各逐字节核对 300001 字节及应用回执。子进程停止/销毁后检查 fd 回到自身基线。测试只增加断言与驱动，不修改 FRP 库实现。
+
+固定 IDF `855937cf9dcee13ee9c423fb0319238cdc8d53fd` / lwIP `2758df4cd3666b3b2a5b53830148379326425c0d` 的 SDK 守卫通过。使用 Mbed TLS 4.1.0、ASan/UBSan、官方 FRP v0.71.0 的完整主机 CTest 为 **17/17**，总耗时 160.43 秒，其中官方 FRPS 百轮双流 200 条连接同为 160.43 秒。独立 C3 空输入样例完成链接，`esp_frp_sample.bin` 为 `0x1f0c0` 字节，SHA-256 为 `19a2239e79215039e38d91f9ef4e4f3d35811172356e6a4383b62a94eb72af21`。本轮没有刷板或读取设备资源，P4-04 仍需同候选完整实板矩阵。

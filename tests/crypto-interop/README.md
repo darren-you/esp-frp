@@ -58,7 +58,7 @@ C peer 经当前 `connect.c` 建连及收发，终止时检查 fd 已释放。�
 
 `work_peer` 的独立工作流分配钩子验证 4096 字节握手区至多同时存在一份，并在实际 FRPS 与故障场景结束后全部清零释放；这不代替 MCU allocator 峰值采样。
 
-`client.go` 使用同一真实 FRPS 构造器，运行应用层 `esp_frp.h` 生命周期。`session.go` 允许测试显式停止并重新创建同一端口的 FRPS，用于证明 worker 自动重连；不改变既有控制和工作流测试。`work.go` 另以 worker 运行三轮双流，随后保留两条本地连接验证停止清理。配置、信任、回调和调度边界见[客户端生命周期](../../docs/design/client-lifecycle.md)。
+`client.go` 使用同一真实 FRPS 构造器，运行应用层 `esp_frp.h` 生命周期。`session.go` 允许测试显式停止并重新创建同一端口的 FRPS；`restart-active` 在两条活动流各交付一字节后停服，核对旧连接清理、同一 worker 重新注册和两条新流的完整双向字节，不用空闲 READY 代替活动中断恢复。`work.go` 另以 worker 运行三轮双流，随后保留两条本地连接验证停止清理。配置、信任、回调和调度边界见[客户端生命周期](../../docs/design/client-lifecycle.md)。
 
 ## 单设备协议 fixture
 
