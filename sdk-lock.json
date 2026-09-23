@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "idf": {
+    "repository": "https://github.com/espressif/esp-idf.git",
+    "revision": "fff9895c82d744c7237be8847347bdd1b07c6643"
+  },
+  "lwip": {
+    "repository": "https://github.com/darren-you/esp-lwip.git",
+    "revision": "2758df4cd3666b3b2a5b53830148379326425c0d",
+    "path": "components/lwip/lwip"
+  }
+}

@@ -30,6 +30,8 @@ void efrp_work_request(efrp_work_set_t *set)
 static void close_work(efrp_work_set_t *set, efrp_work_stream_t *w, efrp_result_t reason)
 {
     if (w->phase == EFRP_WORK_CLOSING) return;
+    if (w->phase == EFRP_WORK_SENDING || w->phase == EFRP_WORK_WAITING)
+        efrp_crypto_zero(set->handshake_json, sizeof set->handshake_json);
     w->phase = EFRP_WORK_CLOSING; w->result = reason;
     if (reason != EFRP_OK) { ++set->status.failed; set->status.last_error = reason; }
 }
@@ -122,7 +124,7 @@ static efrp_result_t handshake_work(efrp_work_set_t *set, efrp_work_stream_t *w,
     r = efrp_wire_feed_one(&w->reader, w->incoming, used, &w->incoming_offset);
     if (r != EFRP_OK) { close_work(set, w, w->result != EFRP_OK ? w->result : r); return EFRP_OK; }
     if (!w->started) { efrp_crypto_zero(w->incoming, w->incoming_used); w->incoming_used = w->incoming_offset = 0; return EFRP_OK; }
-    efrp_crypto_zero(w->json, sizeof w->json);
+    efrp_crypto_zero(set->handshake_json, sizeof set->handshake_json);
     efrp_work_status_t status; efrp_work_status(set, &status);
     unsigned closing_sockets = 0;
     for (unsigned i = 0; i < 3; ++i)
@@ -208,7 +210,7 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
             if (r != EFRP_OK) return r;
             --set->status.pending; w->proxy_name = set->proxy_name;
             w->phase = EFRP_WORK_SENDING; w->deadline = now + EFRP_SESSION_RESPONSE_MS;
-            r = efrp_wire_init(&w->reader, w->json, sizeof w->json, false, start_work, w);
+            r = efrp_wire_init(&w->reader, set->handshake_json, sizeof set->handshake_json, false, start_work, w);
             if (r == EFRP_OK) r = new_work(w, run_id, token, token_length, seconds);
             if (r != EFRP_OK) close_work(set, w, r);
             break;
@@ -234,10 +236,11 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
 bool efrp_work_cancel(efrp_work_set_t *set)
 {
     bool done = true; set->status.pending = 0;
+    efrp_crypto_zero(set->handshake_json, sizeof set->handshake_json);
     for (unsigned i = 0; i < 3; ++i) {
         efrp_work_stream_t *w = &set->streams[i];
         if (w->local && efrp_connect_destroy(&w->local) == EFRP_WOULD_BLOCK) {
-            efrp_crypto_zero(w->json, sizeof w->json); efrp_crypto_zero(w->incoming, sizeof w->incoming);
+            efrp_crypto_zero(w->incoming, sizeof w->incoming);
             efrp_crypto_zero(w->outgoing, sizeof w->outgoing); w->phase = EFRP_WORK_CLOSING; done = false;
         } else efrp_crypto_zero(w, sizeof *w);
     }

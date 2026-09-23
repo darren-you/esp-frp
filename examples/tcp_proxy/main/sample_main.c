@@ -112,10 +112,10 @@ static void report(const char *phase)
     if (client) (void)efrp_get_status(client, &status);
     printf("EFRP_SAMPLE_STATUS cycle=%u client=%u phase=%d error=%d attempts=%" PRIu64 " sessions=%" PRIu64
         " retries=%" PRIu64 " pongs=%" PRIu64 " active=%u waiting=%u completed=%" PRIu64 " failed=%" PRIu64
-        " sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32 " wifi=%u trusted=%u remote=%s\n",
+        " work_error=%d sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32 " wifi=%u trusted=%u remote=%s\n",
         cycle, client != NULL, status.phase, status.error, status.attempts, status.ready_sessions, status.retries,
         status.pongs, status.work.active, status.work.waiting, status.work.completed, status.work.failed,
-        status.work.local_sent, status.work.local_received, status.tls_error, status.tls_verify_flags,
+        status.work.last_error, status.work.local_sent, status.work.local_received, status.tls_error, status.tls_verify_flags,
         atomic_load(&wifi_ready), trusted(NULL), status.remote_address);
     sample_echo_report(); sample_resources(phase, cycle);
 }

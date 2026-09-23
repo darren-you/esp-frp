@@ -21,7 +21,7 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 	if err := control.WriteMsg(&msg.ReqWorkConn{}); err != nil {
 		return err
 	}
-	if mode == "work-stall" {
+	if mode == "work-stall" || mode == "work-shared" {
 		if err := control.WriteMsg(&msg.ReqWorkConn{}); err != nil {
 			return err
 		}
@@ -106,6 +106,63 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 			prefix.Write(workPattern(41, false))
 		}
 		_, err = stream.Write(prefix.Bytes())
+		if mode == "work-shared" {
+			if err != nil {
+				return err
+			}
+			second, err := mux.AcceptStream()
+			if err != nil {
+				return err
+			}
+			checked, v2, err := wire.CheckMagic(second)
+			if err != nil {
+				return err
+			}
+			if !v2 {
+				return fmt.Errorf("shared handshake magic missing")
+			}
+			rw := msg.NewV2ReadWriter(checked)
+			var next msg.NewWorkConn
+			if err = rw.ReadMsgInto(&next); err != nil {
+				return err
+			}
+			if next.RunID != "fixture-run" {
+				return fmt.Errorf("shared handshake run ID mismatch")
+			}
+			if err = authenticator.VerifyNewWorkConn(&next); err != nil {
+				return err
+			}
+			var frame bytes.Buffer
+			if err = msg.NewV2ReadWriter(&frame).WriteMsg(start); err != nil {
+				return err
+			}
+			payload := frame.Bytes()
+			cut := len(payload) / 2
+			if _, err = second.Write(payload[:cut]); err != nil {
+				return err
+			}
+			// The driver resets the first active local socket while this
+			// next StartWorkConn is only partially received.
+			<-resume
+			if _, err = second.Write(append(payload[cut:], workPattern(41, false)...)); err != nil {
+				return err
+			}
+			if err = second.Close(); err != nil {
+				return err
+			}
+			response, err := io.ReadAll(second)
+			if err != nil {
+				return err
+			}
+			if !bytes.Equal(response, workPattern(41, true)) {
+				return fmt.Errorf("active cleanup corrupted waiting handshake or tail")
+			}
+			var one [1]byte
+			if n, err := stream.Read(one[:]); n != 0 || err == nil {
+				return fmt.Errorf("first stream was not reset")
+			}
+			return nil
+		}
 		if mode == "work-stall" {
 			if err != nil {
 				return err
@@ -253,16 +310,18 @@ func runWorkFixtures(path, dir string) {
 	cert, ca := certificate("ok")
 	caPath := filepath.Join(dir, "work-ca.pem")
 	must(os.WriteFile(caPath, ca, 0600))
-	modes := []string{"work-tail-fin", "work-local-fin", "work-spare", "work-wrong-name", "work-error", "work-oversized", "work-truncated", "work-bad-port", "work-duplicate", "work-frame-timeout", "work-idle", "work-stall"}
+	modes := []string{"work-tail-fin", "work-local-fin", "work-spare", "work-wrong-name", "work-error", "work-oversized", "work-truncated", "work-bad-port", "work-duplicate", "work-frame-timeout", "work-idle", "work-stall", "work-shared"}
 	for _, mode := range modes {
 		listener := localListener()
 		local := localListener()
 		resume := make(chan struct{})
 		protocolResult := make(chan error, 1)
 		done := make(chan error, 1)
+		accepted := make(chan net.Conn, 1)
 		go func() {
 			raw, err := listener.Accept()
 			if err == nil {
+				accepted <- raw
 				err = serveSessionFixture(raw, cert, mode, func(m *yamux.Session, c *msg.V2ReadWriter, p string) error {
 					return workFixtureProtocol(m, c, p, mode, resume, protocolResult)
 				})
@@ -274,11 +333,14 @@ func runWorkFixtures(path, dir string) {
 		localResult := make(chan error, 1)
 		bad := mode == "work-wrong-name" || mode == "work-error" || mode == "work-oversized" || mode == "work-truncated" || mode == "work-bad-port" || mode == "work-duplicate" || mode == "work-frame-timeout"
 		var held net.Conn
-		if mode == "work-idle" || mode == "work-stall" {
+		if mode == "work-idle" || mode == "work-stall" || mode == "work-shared" {
 			must(local.(*net.TCPListener).SetDeadline(time.Now().Add(5 * time.Second)))
 			var err error
 			held, err = local.Accept()
 			must(err)
+			if mode == "work-shared" {
+				go func() { localResult <- localWorkFixture(local, mode) }()
+			}
 			if mode == "work-stall" {
 				go func() {
 					conn, err := local.Accept()
@@ -323,7 +385,16 @@ func runWorkFixtures(path, dir string) {
 			_, err := h.input.Write([]byte{'t'})
 			must(err)
 		}
-		if bad || mode == "work-idle" || mode == "work-stall" {
+		if mode == "work-shared" {
+			h.await(func(s workState) bool { return s.active == 1 && s.waiting == 1 })
+			// Keep the partial frame pending across several owner turns.
+			time.Sleep(200 * time.Millisecond)
+			must(held.(*net.TCPConn).SetLinger(0))
+			must(held.Close())
+			h.await(func(s workState) bool { return s.active == 0 && s.waiting == 1 && s.failed == 1 })
+			close(resume)
+		}
+		if bad || mode == "work-idle" || mode == "work-stall" || mode == "work-shared" {
 			expected := -2
 			switch mode {
 			case "work-error":
@@ -338,12 +409,14 @@ func runWorkFixtures(path, dir string) {
 				expected = -9
 			case "work-stall":
 				expected = -8
+			case "work-shared":
+				expected = -17
 			}
 			s := h.await(func(s workState) bool { return s.failed == 1 && s.active == 0 })
 			if s.reason != expected && !(mode == "work-stall" && s.reason == -9) {
 				panic(fmt.Sprintf("%s unexpected failure: %+v", mode, s))
 			}
-			if mode == "work-stall" {
+			if mode == "work-stall" || mode == "work-shared" {
 				must(<-localResult)
 				h.await(func(s workState) bool { return s.completed == 1 && s.failed == 1 && s.active == 0 })
 			}
@@ -366,6 +439,10 @@ func runWorkFixtures(path, dir string) {
 			panic("work protocol did not finish")
 		}
 		h.finish()
+		// The peer has exited after checking its fd baseline. Closing the
+		// fixture listener alone does not close its accepted TCP connection;
+		// release that owned socket before joining its control reader.
+		_ = (<-accepted).Close()
 		h.cleanup()
 		if held != nil {
 			held.Close()

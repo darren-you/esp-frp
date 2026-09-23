@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #define EFRP_COMMAND_CAPACITY 4u
-#define EFRP_WORKER_STACK_BYTES 12288u
+#define EFRP_WORKER_STACK_BYTES 8192u
 typedef struct efrp_port efrp_port_t;
 typedef enum { EFRP_COMMAND_START, EFRP_COMMAND_STOP, EFRP_COMMAND_EXIT } efrp_command_kind_t;
 typedef struct { efrp_command_kind_t kind; uint64_t ticket; } efrp_command_t;

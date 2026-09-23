@@ -1,6 +1,6 @@
 # C3 TCP Proxy 样例
 
-此样例独立使用 `esp_frp.h`，固定 ESP-IDF v6.1 / ESP32-C3，带 `ESP_FRP_LAB_ONLY TCP_PROXY` 镜像标记。当前用于开发和实机资源验收，不能作为已验收产品固件。
+此样例独立使用 `esp_frp.h`，固定 ESP-IDF v6.1 / ESP32-C3 与 [sdk-lock.json](../../sdk-lock.json) 中的 lwIP 修正提交，带 `ESP_FRP_LAB_ONLY TCP_PROXY` 镜像标记。先按 [SDK 工具说明](../../tools/README.md) 准备独立 SDK；原始 SDK 的零窗口缺陷会被构建守卫拒绝。当前用于开发和实机资源验收，不能作为已验收产品固件。
 
 ## 架构拓扑
 
@@ -55,6 +55,6 @@ USB Serial/JTAG 输入为一行一个精确命令，最多 63 个 ASCII 字符�
 
 样例将 Wi-Fi 静态 RX 数量设为 6（与 RX BA 窗口相同），动态 RX/TX 各 12，TCP 收发窗口各 2880 字节（两个默认 MSS）。这是为 C3 双流约束瞬态队列占用的装配配置，会限制吞吐；不改变 FRP、Yamux 或 AEAD 的协议容量，也不要求使用该库的其他应用照搬。
 
-串口输出和诊断本身消耗资源，实验配置使用 8 KiB main 栈；FRP worker 栈由库定义。完整样例包含 Wi-Fi、TLS、AEAD、四条 Yamux 流、两条 work socket 及回环对端，不能仅以静态对象大小或 host 数据推断内存安全。
+串口输出和诊断本身消耗资源，实验配置使用 4 KiB main 栈，FRP worker 使用 8 KiB；两者根据 C3 高水位采样从较大的初始预算收敛，每次修改仍需实板压力复核。完整样例包含 Wi-Fi、TLS、AEAD、四条 Yamux 流、两条 work socket 及回环对端，不能仅以静态对象大小或 host 数据推断内存安全。
 
 真实验收须覆盖 DNS/TLS/FRPS、双流大载荷和背压、拒绝/错误认证、服务重启、百次完整客户端释放及资源峰值。当前人工断电由维护者明确暂缓，未执行项不计通过；软重启、station 停启或软件注入不能替代断电。

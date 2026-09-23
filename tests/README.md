@@ -41,6 +41,8 @@ flowchart LR
     worker --> lib
     worker --> fixture
     session <-->|"真实重启与双流"| client
+    dependency["esp-lwip/tests/zero-window：依赖独立回归"] --> sdk["显式实际 lwIP 源码"]
+    sdk --> zero["双向零窗口、序号边界与回绕"]
 ```
 
 默认需 C11、CMake >= 3.16、OpenSSL >=3.0 和 cJSON 1.7.19 开发库；在仓库根执行：
@@ -51,6 +53,8 @@ cmake -S . -B build -DBUILD_TESTING=ON \
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+[lwIP 零窗口回环回归](https://github.com/darren-you/esp-lwip/blob/master/tests/zero-window/README.md) 是单独的 SDK 缺陷复现入口，直接编译显式提供的依赖源码，不混入 FRP host 通过结论。原始官方 SDK 会失败；[sdk-lock.json](../sdk-lock.json) 已锁定通过该回归的修正源依赖，不用预期失败规则将原始 SDK 标绿。SDK 身份与脏内容守卫使用 `python3 -m unittest discover -s tools/tests -p 'test_*.py'` 验证。
 
 OpenSSL 不在系统路径时添加 `-DOPENSSL_ROOT_DIR=/absolute/path/to/openssl`；cJSON 不在系统路径时用 `-DCMAKE_PREFIX_PATH=/absolute/path/to/cjson`。ESP-IDF 构建固定使用 SDK PSA API 与 manifest 中精确锁定的 espressif/cjson，不使用 OpenSSL。
 

@@ -12,7 +12,15 @@
 struct efrp_session {
     efrp_tls_t *tls;
     efrp_yamux_t *mux;
-    efrp_handshake_t handshake;
+    /* Login and authenticated control never overlap. take_result releases
+     * handshake storage before the control parser/writer borrow this union. */
+    union {
+        efrp_handshake_t handshake;
+        struct {
+            /* control_tx is at most 1024 plaintext bytes; AEAD adds 32. */
+            uint8_t aead_tx[1024 + 32], json_rx[EFRP_JSON_MAX_BYTES];
+        } control;
+    } storage;
     efrp_aead_reader_t reader;
     efrp_aead_writer_t writer;
     efrp_wire_reader_t frames;
@@ -21,7 +29,6 @@ struct efrp_session {
     /* The full authenticated record buffer is separate: C3 Wi-Fi/TLS heap
      * regions cannot guarantee one contiguous allocation for both objects. */
     uint8_t *aead_rx;
-    uint8_t aead_tx[4128], json_rx[EFRP_JSON_MAX_BYTES];
     uint8_t transport_rx[4096], control_rx[1024], control_tx[1024];
     uint8_t token[EFRP_AEAD_MAX_TOKEN_BYTES];
     char proxy_name[129];
@@ -31,18 +38,18 @@ struct efrp_session {
     uint16_t remote_port;
     uint64_t now, registration_deadline, ping_deadline, next_ping;
     efrp_result_t frame_error;
-    bool proxy_queued, ping_pending, tls_eof;
+    bool proxy_queued, ping_pending, tls_eof, control_ready;
 };
 static void clear(efrp_session_t *s)
 {
     (void)efrp_work_cancel(&s->work);
-    efrp_handshake_destroy(&s->handshake);
+    if (!s->control_ready) efrp_handshake_destroy(&s->storage.handshake);
     efrp_aead_reader_destroy(&s->reader); efrp_aead_writer_destroy(&s->writer);
     efrp_crypto_zero(s->token, sizeof s->token);
     if (s->aead_rx) efrp_crypto_zero(s->aead_rx, EFRP_AEAD_RX_BYTES);
-    efrp_crypto_zero(s->aead_tx, sizeof s->aead_tx);
+    efrp_crypto_zero(&s->storage, sizeof s->storage);
     efrp_crypto_zero(s->control_rx, sizeof s->control_rx); efrp_crypto_zero(s->control_tx, sizeof s->control_tx);
-    efrp_crypto_zero(s->transport_rx, sizeof s->transport_rx); efrp_crypto_zero(s->json_rx, sizeof s->json_rx);
+    efrp_crypto_zero(s->transport_rx, sizeof s->transport_rx);
     if (s->mux) efrp_crypto_zero(s->mux, sizeof *s->mux);
     s->transport_used = s->transport_offset = s->control_used = s->control_offset = 0;
     s->tx_used = s->tx_offset = s->tls_staged = s->token_length = 0;
@@ -104,26 +111,27 @@ efrp_result_t efrp_session_create(const efrp_session_config_t *c, efrp_tls_t *tl
     if (!s->aead_rx) { efrp_crypto_zero(s, sizeof *s); free(s); return EFRP_NO_MEMORY; }
     s->mux = calloc(1, sizeof *s->mux);
     if (!s->mux) { free(s->aead_rx); efrp_crypto_zero(s, sizeof *s); free(s); return EFRP_NO_MEMORY; }
-    efrp_result_t result = efrp_handshake_init(&s->handshake, &c->login, s->aead_rx, EFRP_AEAD_RX_BYTES, now);
+    efrp_result_t result = efrp_handshake_init(&s->storage.handshake, &c->login, s->aead_rx, EFRP_AEAD_RX_BYTES, now);
     if (result != EFRP_OK) { clear(s); free(s->mux); free(s->aead_rx); efrp_crypto_zero(s, sizeof *s); free(s); return result; }
     s->token_length = c->login.token_length; memcpy(s->token, c->login.token, s->token_length);
     memcpy(s->proxy_name, c->proxy_name, name_length + 1); s->remote_port = c->remote_port; s->now = now;
     efrp_work_init(&s->work, c, s->proxy_name);
     efrp_yamux_init(s->mux, now); result = efrp_yamux_open(s->mux, &s->control_stream);
-    if (result == EFRP_OK)
-        result = efrp_wire_init(&s->frames, s->json_rx, sizeof s->json_rx, false, accept_control, s);
     if (result != EFRP_OK) { clear(s); free(s->mux); free(s->aead_rx); efrp_crypto_zero(s, sizeof *s); free(s); return result; }
     s->tls = tls; s->status.phase = EFRP_SESSION_AUTHENTICATING; *out = s; return EFRP_OK;
 }
 static efrp_result_t finish_login(efrp_session_t *s)
 {
     efrp_aead_keys_t keys;
-    efrp_result_t result = efrp_handshake_take_result(&s->handshake, &keys, s->status.run_id);
+    efrp_result_t result = efrp_handshake_take_result(&s->storage.handshake, &keys, s->status.run_id);
     if (result != EFRP_OK) return result;
-    efrp_handshake_destroy(&s->handshake);
+    efrp_handshake_destroy(&s->storage.handshake);
+    s->control_ready = true;
     result = efrp_aead_reader_init(&s->reader, keys.server_to_client, s->aead_rx, EFRP_AEAD_RX_BYTES);
-    if (result == EFRP_OK) result = efrp_aead_writer_init(&s->writer, keys.client_to_server, s->aead_tx, sizeof s->aead_tx);
+    if (result == EFRP_OK) result = efrp_aead_writer_init(&s->writer, keys.client_to_server, s->storage.control.aead_tx, sizeof s->storage.control.aead_tx);
     efrp_aead_clear_keys(&keys);
+    if (result == EFRP_OK)
+        result = efrp_wire_init(&s->frames, s->storage.control.json_rx, sizeof s->storage.control.json_rx, false, accept_control, s);
     if (result != EFRP_OK) return result;
     s->status.phase = EFRP_SESSION_REGISTERING; s->registration_deadline = s->now + EFRP_SESSION_RESPONSE_MS;
     return EFRP_OK;
@@ -170,10 +178,10 @@ static efrp_result_t control_output(efrp_session_t *s)
     const uint8_t *bytes; size_t length, used;
     efrp_result_t result;
     if (s->status.phase == EFRP_SESSION_AUTHENTICATING) {
-        result = efrp_handshake_output(&s->handshake, &bytes, &length);
+        result = efrp_handshake_output(&s->storage.handshake, &bytes, &length);
         if (result != EFRP_OK) return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
         result = efrp_yamux_write(s->mux, s->control_stream, bytes, length, &used);
-        if (result == EFRP_OK) return efrp_handshake_consume_output(&s->handshake, used);
+        if (result == EFRP_OK) return efrp_handshake_consume_output(&s->storage.handshake, used);
         return result == EFRP_WOULD_BLOCK ? EFRP_OK : result;
     }
     result = efrp_aead_output(&s->writer, &bytes, &length);
@@ -194,7 +202,7 @@ static efrp_result_t control_output(efrp_session_t *s)
 static efrp_result_t control_finish(efrp_session_t *s)
 {
     efrp_result_t result = s->status.phase == EFRP_SESSION_AUTHENTICATING ?
-        efrp_handshake_finish(&s->handshake) : efrp_aead_finish(&s->reader);
+        efrp_handshake_finish(&s->storage.handshake) : efrp_aead_finish(&s->reader);
     if (result == EFRP_OK && s->status.phase != EFRP_SESSION_AUTHENTICATING)
         result = efrp_wire_finish(&s->frames);
     return result == EFRP_OK ? EFRP_SESSION_CLOSED : result;
@@ -222,10 +230,10 @@ static efrp_result_t control_input(efrp_session_t *s)
     const uint8_t *bytes = s->control_rx + s->control_offset;
     size_t length = s->control_used - s->control_offset;
     if (s->status.phase == EFRP_SESSION_AUTHENTICATING) {
-        result = efrp_handshake_feed(&s->handshake, bytes, length, &used);
+        result = efrp_handshake_feed(&s->storage.handshake, bytes, length, &used);
         if (result != EFRP_OK) return result;
         s->control_offset += used;
-        if (s->handshake.state == EFRP_HANDSHAKE_DONE) {
+        if (s->storage.handshake.state == EFRP_HANDSHAKE_DONE) {
             result = finish_login(s); if (result != EFRP_OK) return result;
         }
     } else {
@@ -299,7 +307,7 @@ efrp_result_t efrp_session_step(efrp_session_t *s, uint64_t now, int64_t seconds
     }
     result = efrp_yamux_tick(s->mux, now); if (result != EFRP_OK) return fail(s, result);
     if (s->status.phase == EFRP_SESSION_AUTHENTICATING) {
-        result = efrp_handshake_tick(&s->handshake, now); if (result != EFRP_OK) return fail(s, result);
+        result = efrp_handshake_tick(&s->storage.handshake, now); if (result != EFRP_OK) return fail(s, result);
     }
     if ((s->status.phase == EFRP_SESSION_REGISTERING && now >= s->registration_deadline) ||
         (s->ping_pending && now >= s->ping_deadline)) return fail(s, EFRP_TIMEOUT);

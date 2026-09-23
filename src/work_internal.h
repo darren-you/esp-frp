@@ -12,7 +12,7 @@ typedef struct {
     efrp_connect_t *local;
     efrp_wire_reader_t reader;
     const char *proxy_name;
-    uint8_t json[4096], incoming[1024], outgoing[1024];
+    uint8_t incoming[1024], outgoing[1024];
     size_t incoming_used, incoming_offset, outgoing_used, outgoing_offset;
     uint64_t deadline, last_activity, incoming_progress, outgoing_progress, fin_progress;
     efrp_result_t result;
@@ -20,6 +20,10 @@ typedef struct {
 } efrp_work_stream_t;
 typedef struct {
     efrp_work_stream_t streams[3];
+    /* Only one stream can be SENDING/WAITING. Once StartWorkConn completes,
+     * no active stream retains its JSON, so the full 4 KiB parser workspace
+     * belongs to the set rather than being reserved three times. */
+    uint8_t handshake_json[4096];
     efrp_work_status_t status;
     unsigned cursor;
     uint8_t address[4];

@@ -12,7 +12,8 @@ domain_roots:
     - .
 delivery_surfaces:
   - idf-component
-depends_on: []
+depends_on:
+  - esp-lwip
 default_workflows:
   - test-idf-component
 doc_status:
