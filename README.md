@@ -103,7 +103,7 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_session.h` 在已 OPEN 的借用 TLS 上组合控制链路，注册单一 TCP proxy、执行 15 秒 Token 心跳并校验 10 秒响应期限。工作流执行 magic/NewWorkConn/StartWorkConn，向配置的唯一 IPv4/port 转发，最多两条活跃流和一条预备流；对端地址元数据不能更换本地目标。四层背压、握手后尾数据与独立半关闭保持完整，Yamux 信用在 TLS 实际排空后归还。destroy 返回 WOULD_BLOCK 时继续保留句柄，直到本地 socket 清理完成，再销毁 TLS 和外层连接。详见 [控制会话](docs/design/control-session.md) 与[工作流](docs/design/work-streams.md)。该模块在 IDF 或完整 Mbed TLS host 模式编译；host 会话测试显式链接连接测试适配库，不把 DNS fixture 发布为 host runtime。
 
-- [来源](docs/design/source_provenance.md)
-- [客户端合同](docs/design/client_contract.md)
+- [来源](docs/design/source-provenance.md)
+- [客户端合同](docs/design/client-contract.md)
 - [扩展 Roadmap](ROADMAP.md)
 - [FRP 工程标准](https://github.com/darren-you/darren-space/blob/master/harness/docs/workspace/standards/frp/frp_golden_path.md)
