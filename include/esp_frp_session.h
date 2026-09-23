@@ -20,11 +20,25 @@ typedef struct {
     uint8_t local_ipv4[4];
     uint16_t local_port;
 } efrp_session_config_t;
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+typedef enum {
+    EFRP_WORK_TIMEOUT_NONE = 0, EFRP_WORK_TIMEOUT_HANDSHAKE_SEND,
+    EFRP_WORK_TIMEOUT_HANDSHAKE_FRAME, EFRP_WORK_TIMEOUT_INCOMING_LOCAL,
+    EFRP_WORK_TIMEOUT_OUTGOING_YAMUX, EFRP_WORK_TIMEOUT_LOCAL_FIN,
+    EFRP_WORK_TIMEOUT_CLEANUP, EFRP_WORK_TIMEOUT_IDLE
+} efrp_work_timeout_source_t;
+#endif
 typedef struct {
     uint64_t requests, completed, failed, rejected_requests;
     uint64_t local_sent, local_received;
     unsigned pending, waiting, active, cleaning;
     efrp_result_t last_error;
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    /* Lab-only snapshot of the last work timeout. No endpoint or payload. */
+    efrp_work_timeout_source_t timeout_source;
+    uint32_t timeout_stream_id, timeout_age_ms;
+    uint16_t timeout_incoming_bytes, timeout_outgoing_bytes;
+#endif
 } efrp_work_status_t;
 typedef struct {
     efrp_session_phase_t phase;
@@ -33,6 +47,11 @@ typedef struct {
     efrp_work_status_t work;
     char run_id[EFRP_RUN_ID_BYTES];
     char remote_address[257];
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    /* Yamux source IDs match efrp_yamux_timeout_source_t. Control: 1 registration, 2 Pong. */
+    unsigned mux_timeout_source, control_timeout_source;
+    uint32_t mux_timeout_stream_id, mux_timeout_age_ms, mux_timeout_pending_bytes;
+#endif
 } efrp_session_status_t;
 /* Composes Yamux + Hello/Login + control AEAD over an already OPEN strict TLS
  * handle. Inputs are copied; TLS is borrowed until destroy and is cancelled on

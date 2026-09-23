@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -17,7 +18,70 @@ import (
 	"github.com/hashicorp/yamux"
 )
 
-func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, mode, token string, resume <-chan struct{}, result chan<- error) error {
+type workFixtureOptions struct {
+	mode, token        string
+	echo               bool
+	holdLocalFIN       bool
+	sharedResetPayload bool
+	resume             func() error
+	phase              func(string)
+	finished           func(error)
+}
+
+func exchangeWorkTail(stream *yamux.Stream, payload, expected []byte) error {
+	if len(payload) < len(expected) {
+		return fmt.Errorf("work payload shorter than expected response")
+	}
+	// The wire StartWorkConn prefix shares the first write with business data.
+	// Exchange bounded pieces thereafter: a single 300001-byte Yamux Write
+	// can fill both directions' small C3 windows before either peer drains.
+	prefix := len(payload) - len(expected)
+	for offset := 0; offset < len(expected); {
+		end := min(offset+1024, len(expected))
+		start := prefix + offset
+		if offset == 0 {
+			start = 0
+		}
+		piece := payload[start : prefix+end]
+		n, err := stream.Write(piece)
+		if err != nil {
+			return err
+		}
+		if n != len(piece) {
+			return fmt.Errorf("short work fixture write: %d of %d", n, len(piece))
+		}
+		if end == len(expected) {
+			if err := stream.Close(); err != nil {
+				return err
+			}
+		}
+		response := make([]byte, end-offset)
+		if _, err := io.ReadFull(stream, response); err != nil {
+			return err
+		}
+		if !bytes.Equal(response, expected[offset:end]) {
+			return fmt.Errorf("work response mismatch at offset %d", offset)
+		}
+		offset = end
+	}
+	extra, err := io.ReadAll(stream)
+	if err != nil || len(extra) != 0 {
+		return fmt.Errorf("work response after FIN: %d bytes, error %v", len(extra), err)
+	}
+	return nil
+}
+
+func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy string, options workFixtureOptions, result chan<- error) error {
+	mode, token := options.mode, options.token
+	resume := func(phase string) error {
+		if options.phase != nil {
+			options.phase(phase)
+		}
+		if options.resume == nil {
+			return fmt.Errorf("missing explicit fixture resume")
+		}
+		return options.resume()
+	}
 	if err := control.WriteMsg(&msg.ReqWorkConn{}); err != nil {
 		return err
 	}
@@ -69,7 +133,9 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 			return err
 		}
 		if mode == "work-spare" {
-			<-resume
+			if err = resume("waiting-spare"); err != nil {
+				return err
+			}
 		}
 		start := &msg.StartWorkConn{ProxyName: proxy, SrcAddr: "203.0.113.19", DstAddr: "203.0.113.200", SrcPort: 1234, DstPort: 65000}
 		var prefix bytes.Buffer
@@ -101,9 +167,16 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 				return err
 			}
 		}
+		if mode == "work-shared" && options.sharedResetPayload {
+			// The device sample pauses reads on the first local socket. Leave
+			// actual inbound bytes queued before asking it to reset that socket;
+			// an idle lwIP socket may close with FIN despite zero SO_LINGER.
+			prefix.Write(bytes.Repeat([]byte{0x5a}, 1024))
+		}
 		bad := mode == "work-wrong-name" || mode == "work-error" || mode == "work-oversized" || mode == "work-truncated" || mode == "work-bad-port" || mode == "work-duplicate" || mode == "work-frame-timeout"
 		if mode == "work-tail-fin" || mode == "work-spare" {
 			prefix.Write(workPattern(41, false))
+			return exchangeWorkTail(stream, prefix.Bytes(), workPattern(41, !options.echo))
 		}
 		_, err = stream.Write(prefix.Bytes())
 		if mode == "work-shared" {
@@ -143,23 +216,15 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 			}
 			// The driver resets the first active local socket while this
 			// next StartWorkConn is only partially received.
-			<-resume
-			if _, err = second.Write(append(payload[cut:], workPattern(41, false)...)); err != nil {
+			if err = resume("partial-handshake"); err != nil {
 				return err
 			}
-			if err = second.Close(); err != nil {
+			if err = exchangeWorkTail(second, append(payload[cut:], workPattern(41, false)...), workPattern(41, !options.echo)); err != nil {
 				return err
-			}
-			response, err := io.ReadAll(second)
-			if err != nil {
-				return err
-			}
-			if !bytes.Equal(response, workPattern(41, true)) {
-				return fmt.Errorf("active cleanup corrupted waiting handshake or tail")
 			}
 			var one [1]byte
-			if n, err := stream.Read(one[:]); n != 0 || err == nil {
-				return fmt.Errorf("first stream was not reset")
+			if n, err := stream.Read(one[:]); n != 0 || !errors.Is(err, yamux.ErrConnectionReset) {
+				return fmt.Errorf("first stream was not reset: %d bytes, error %v", n, err)
 			}
 			return nil
 		}
@@ -196,6 +261,9 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 			}
 			payload := bytes.Repeat([]byte{0x7b}, 64)
 			if _, err = second.Write(payload); err != nil {
+				return err
+			}
+			if err = second.Close(); err != nil {
 				return err
 			}
 			echo, err := io.ReadAll(second)
@@ -237,19 +305,6 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 			}
 			return nil
 		}
-		if mode == "work-tail-fin" || mode == "work-spare" {
-			if err = stream.Close(); err != nil {
-				return err
-			}
-			response, err := io.ReadAll(stream)
-			if err != nil {
-				return err
-			}
-			if !bytes.Equal(response, workPattern(41, true)) {
-				return fmt.Errorf("response after work FIN mismatch: %d", len(response))
-			}
-			return nil
-		}
 		// The local endpoint sends FIN first. The reverse path must still carry
 		// bytes sent only after the client has delivered that FIN to this peer.
 		response, err := io.ReadAll(stream)
@@ -259,12 +314,30 @@ func workFixtureProtocol(mux *yamux.Session, control *msg.V2ReadWriter, proxy, m
 		if !bytes.Equal(response, workPattern(42, true)) {
 			return fmt.Errorf("local FIN payload mismatch")
 		}
-		if _, err = stream.Write(workPattern(42, false)); err != nil {
+		request := workPattern(42, false)
+		for offset := 0; offset < len(request); {
+			end := min(offset+1024, len(request))
+			n, err := stream.Write(request[offset:end])
+			if err != nil || n != end-offset {
+				return fmt.Errorf("short reverse work write at offset %d: %d bytes, error %v", offset, n, err)
+			}
+			offset = end
+		}
+		if err := stream.Close(); err != nil {
 			return err
 		}
-		return stream.Close()
+		// The board's socket may still be draining the last Yamux frame.
+		// Keep the fixture session alive until the device driver observes the
+		// complete local proof, then let it explicitly release this barrier.
+		if options.holdLocalFIN {
+			return resume("reverse-finished")
+		}
+		return nil
 	}
 	err := run()
+	if options.finished != nil {
+		options.finished(err)
+	}
 	result <- err
 	if err != nil {
 		return err
@@ -294,15 +367,25 @@ func localWorkFixture(listener net.Listener, mode string) error {
 		}
 		return nil
 	}
-	p, err := io.ReadAll(conn)
-	if err != nil {
-		return err
+	request, response := workPattern(41, false), workPattern(41, true)
+	var piece [1024]byte
+	for offset := 0; offset < len(request); {
+		end := min(offset+len(piece), len(request))
+		if _, err := io.ReadFull(conn, piece[:end-offset]); err != nil {
+			return err
+		}
+		if !bytes.Equal(piece[:end-offset], request[offset:end]) {
+			return fmt.Errorf("StartWorkConn tail mismatch at offset %d", offset)
+		}
+		n, err := conn.Write(response[offset:end])
+		if err != nil || n != end-offset {
+			return fmt.Errorf("short local response at offset %d: %d bytes, error %v", offset, n, err)
+		}
+		offset = end
 	}
-	if !bytes.Equal(p, workPattern(41, false)) {
-		return fmt.Errorf("StartWorkConn tail mismatch: %d", len(p))
-	}
-	if _, err = conn.Write(workPattern(41, true)); err != nil {
-		return err
+	var extra [1]byte
+	if n, err := conn.Read(extra[:]); n != 0 || err != io.EOF {
+		return fmt.Errorf("local request did not end after 300001 bytes: %d bytes, error %v", n, err)
 	}
 	return conn.(*net.TCPConn).CloseWrite()
 }
@@ -325,7 +408,8 @@ func runWorkFixtures(path, dir string) {
 				identity := fmt.Sprintf("fixture-work-proxy-%s-%d", mode, local.Addr().(*net.TCPAddr).Port)
 				err = serveSessionFixture(raw, cert, sessionFixtureOptions{mode: mode, token: "public-session-token",
 					clientID: identity, proxyName: identity, timeout: 18 * time.Second}, func(m *yamux.Session, c *msg.V2ReadWriter, p string) error {
-					return workFixtureProtocol(m, c, p, mode, "public-session-token", resume, protocolResult)
+					return workFixtureProtocol(m, c, p, workFixtureOptions{mode: mode, token: "public-session-token",
+						resume: func() error { <-resume; return nil }}, protocolResult)
 				})
 			}
 			done <- err

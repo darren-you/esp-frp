@@ -118,6 +118,10 @@ static void stalled_and_late_data(void)
     assert(efrp_yamux_info(&m, second, &info) == EFRP_OK && !info.readable_bytes);
     assert(efrp_yamux_tick(&m, 2499) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 2500) == EFRP_OK);
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_RING && m.timeout_stream_id == first &&
+        m.timeout_age_ms == 2500 && m.timeout_pending_bytes == EFRP_YAMUX_RING_BYTES);
+#endif
     assert(efrp_yamux_read(&m, first, out, sizeof out, &got) == EFRP_STREAM_RESET);
     assert(efrp_yamux_release(&m, first) == EFRP_OK);
     uint32_t third; assert(efrp_yamux_open(&m, &third) == EFRP_OK && third == 5);
@@ -225,20 +229,35 @@ static void deadlines_and_reuse(void)
     efrp_yamux_init(&m, 0); id = open_stream(&m); frame(h, 0, 0, id, 1);
     assert(efrp_yamux_feed(&m, h, 1, &used) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 4999) == EFRP_OK && efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT);
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_INPUT && m.timeout_age_ms == 5000);
+#endif
     efrp_yamux_init(&m, 0); id = open_stream(&m); frame(h, 0, 0, id, 1);
     assert(efrp_yamux_feed(&m, h, 1, &used) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 4000) == EFRP_OK);
     assert(efrp_yamux_feed(&m, h + 1, 1, &used) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT); // Trickle does not extend header deadline.
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_HEADER && m.timeout_age_ms == 5000);
+#endif
     efrp_yamux_init(&m, 0); assert(efrp_yamux_open(&m, &id) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT);
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_OUTPUT && m.timeout_pending_bytes == EFRP_YAMUX_HEADER_BYTES);
+#endif
     efrp_yamux_init(&m, 0); assert(efrp_yamux_open(&m, &id) == EFRP_OK); flush(&m);
     assert(efrp_yamux_tick(&m, 9999) == EFRP_OK && efrp_yamux_tick(&m, 10000) == EFRP_OK);
     efrp_yamux_stream_info_t info;
     assert(efrp_yamux_info(&m, id, &info) == EFRP_OK && info.reset);
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_OPEN && m.timeout_stream_id == id && m.timeout_age_ms == 10000);
+#endif
     efrp_yamux_init(&m, 1); assert(efrp_yamux_tick(&m, 0) == EFRP_INVALID_ARGUMENT);
     efrp_yamux_init(&m, 0); assert(efrp_yamux_ping(&m, 1) == EFRP_OK); flush(&m);
     assert(efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT);
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_PING && m.timeout_age_ms == 5000);
+#endif
     efrp_yamux_init(&m, 0);
     for (unsigned cycle = 0; cycle < 1000; ++cycle) {
         id = open_stream(&m); assert(id == cycle * 2 + 1);
@@ -267,6 +286,9 @@ static void bounded_discard(void)
     assert(efrp_yamux_tick(&m, 4000) == EFRP_OK);
     assert(efrp_yamux_feed(&m, p + 13, 1, &used) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT); // Absolute bounded drain, even with progress.
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_DISCARD && m.timeout_stream_id == id && m.timeout_age_ms == 5000);
+#endif
     free(p);
 }
 static void continuous_receive_and_send(void)

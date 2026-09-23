@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -36,7 +37,25 @@ type deviceFixtureConfig struct {
 }
 
 var deviceWorkModes = []string{"work-wrong-name", "work-error", "work-oversized", "work-truncated",
-	"work-bad-port", "work-duplicate", "work-frame-timeout", "work-idle"}
+	"work-bad-port", "work-duplicate", "work-frame-timeout", "work-idle",
+	"work-tail-fin", "work-local-fin", "work-spare", "work-stall", "work-shared"}
+
+func waitDeviceResume(ctx context.Context) error {
+	result := make(chan error, 1)
+	go func() {
+		line, err := bufio.NewReaderSize(os.Stdin, 64).ReadSlice('\n')
+		if err == nil && string(line) != "resume\n" {
+			err = fmt.Errorf("expected exactly resume followed by newline")
+		}
+		result <- err
+	}()
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 func loadDeviceFixtureConfig(path string) (deviceFixtureConfig, error) {
 	var c deviceFixtureConfig
@@ -95,6 +114,8 @@ func runDeviceFixture(path string) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	ctx, deadlineCancel := context.WithTimeout(ctx, time.Duration(c.TimeoutMS)*time.Millisecond)
+	defer deadlineCancel()
 	go func() { <-ctx.Done(); _ = listener.Close() }()
 	fmt.Printf("ESP_FRP_DEVICE_FIXTURE_READY mode=%s\n", c.Mode)
 	raw, err := listener.AcceptTCP()
@@ -110,18 +131,16 @@ func runDeviceFixture(path string) error {
 	if slices.Contains(deviceWorkModes, c.Mode) {
 		work = func(m *yamux.Session, control *msg.V2ReadWriter, proxy string) error {
 			result := make(chan error, 1)
-			done := make(chan struct{})
-			defer close(done)
-			go func() {
-				select {
-				case err := <-result:
+			return workFixtureProtocol(m, control, proxy, workFixtureOptions{mode: c.Mode, token: c.Token, echo: true,
+				holdLocalFIN:       c.Mode == "work-local-fin",
+				sharedResetPayload: c.Mode == "work-shared",
+				phase:              func(phase string) { fmt.Printf("ESP_FRP_DEVICE_WORK_PHASE mode=%s phase=%s\n", c.Mode, phase) },
+				resume:             func() error { return waitDeviceResume(ctx) },
+				finished: func(err error) {
 					if err == nil {
-						fmt.Printf("ESP_FRP_DEVICE_WORK_REJECTED mode=%s\n", c.Mode)
+						fmt.Printf("ESP_FRP_DEVICE_WORK_FINISHED mode=%s\n", c.Mode)
 					}
-				case <-done:
-				}
-			}()
-			return workFixtureProtocol(m, control, proxy, c.Mode, c.Token, nil, result)
+				}}, result)
 		}
 	}
 	err = serveSessionFixture(raw, cert, sessionFixtureOptions{mode: c.Mode, token: c.Token,

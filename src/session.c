@@ -310,12 +310,29 @@ efrp_result_t efrp_session_step(efrp_session_t *s, uint64_t now, int64_t seconds
         if (result != EFRP_OK) return fail(s, result);
         s->tls_staged = 0;
     }
-    result = efrp_yamux_tick(s->mux, now); if (result != EFRP_OK) return fail(s, result);
+    result = efrp_yamux_tick(s->mux, now);
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    s->status.mux_timeout_source = (unsigned)s->mux->timeout_source;
+    s->status.mux_timeout_stream_id = s->mux->timeout_stream_id;
+    s->status.mux_timeout_age_ms = s->mux->timeout_age_ms;
+    s->status.mux_timeout_pending_bytes = s->mux->timeout_pending_bytes;
+#endif
+    if (result != EFRP_OK) return fail(s, result);
     if (s->status.phase == EFRP_SESSION_AUTHENTICATING) {
         result = efrp_handshake_tick(&s->storage.handshake, now); if (result != EFRP_OK) return fail(s, result);
     }
-    if ((s->status.phase == EFRP_SESSION_REGISTERING && now >= s->registration_deadline) ||
-        (s->ping_pending && now >= s->ping_deadline)) return fail(s, EFRP_TIMEOUT);
+    if (s->status.phase == EFRP_SESSION_REGISTERING && now >= s->registration_deadline) {
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+        s->status.control_timeout_source = 1;
+#endif
+        return fail(s, EFRP_TIMEOUT);
+    }
+    if (s->ping_pending && now >= s->ping_deadline) {
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+        s->status.control_timeout_source = 2;
+#endif
+        return fail(s, EFRP_TIMEOUT);
+    }
     for (unsigned turn = 0; turn < 8; ++turn) {
         result = control_input(s); if (result != EFRP_OK) return fail(s, result);
         result = transport_input(s); if (result != EFRP_OK) return fail(s, result);

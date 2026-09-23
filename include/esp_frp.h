@@ -20,6 +20,10 @@ typedef struct {
     uint32_t tls_verify_flags;
     efrp_work_status_t work; /* counters across attempts, gauges for this attempt */
     char run_id[EFRP_RUN_ID_BYTES], remote_address[257];
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    unsigned mux_timeout_source, control_timeout_source;
+    uint32_t mux_timeout_stream_id, mux_timeout_age_ms, mux_timeout_pending_bytes;
+#endif
 } efrp_status_t;
 /* Called on the sole worker, outside the status lock. Payload is borrowed only
  * during the callback. Keep callbacks short; get_status is allowed, lifecycle

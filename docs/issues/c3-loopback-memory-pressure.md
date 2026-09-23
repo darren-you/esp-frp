@@ -49,7 +49,9 @@
 
 SDK 最终装配提交为 `2758df4cd3666b3b2a5b53830148379326425c0d`，在根因修正 `3dc581c9584da3b3bd6207d31e17a24bb8ef4033` 上仅补齐回归测试的许可证全文和说明，核心与回归实现未改变。已重新从公开源准备完整 SDK，最终栈预算实板使用这一提交。主机完整 15 项、存储复用后的五项受影响回归、两项 TSan、SDK 八项真实 Git 检查，以及公开 lwIP checkout 两项 ASan/UBSan 的原始日志均保留。两个实板轮次都已完成原应用槽恢复、双份完整回读相等、UUID/revision 5/Wi-Fi/原 Mac Bridge 核验；隔离服务已停止。
 
-## 当前验证与待办
+## 存储复用阶段的验证与待办
+
+以下是当时的阶段记录；后续 DNS/TLS、异常协议与大载荷结果见本文件较新的检查点及[开发检查点](../operations/development-checkpoint.md)。
 
 - 单份工作握手 JSON 与两阶段会话存储复用已实现并完成 host 回归，继续实测资源峰值，不将静态节省值当成实测资源验收。
 - 独立样例已增加工作流错误码，私有诊断制品保留超时方向观测；继续定位间歇截断、补 FRP DNS 故障、异常证书/协议和完整资源矩阵。当前 FRP 目标为局域网 IP，SNTP 域名解析不等于 FRP DNS 故障验收。
@@ -80,3 +82,29 @@ SDK 最终装配提交为 `2758df4cd3666b3b2a5b53830148379326425c0d`，在根因
 本轮最低 heap 46328 字节、采样最小连续块 45056 字节，worker/main 最低栈余量 5088/2044 字节，其他任务至少 1180 字节。分配失败、work 超时诊断、panic 与看门狗均为零。百次销毁后任务/socket 为 7/1，heap 范围 228224–231392、首末十次中位数 228556/231312；100 份计时器 dump 始终包含 18 个 ETSTimer，36 次无额外条目、64 次多一个 phy-track-pll-timer，不随重建次数累加。RSSI -77 至 -63 dBm；20 条 300001 字节业务流回显耗时中位数/最大值 11.53/14.34 秒，不能当作控制时延。
 
 完整原应用槽、双全量回读、UUID/revision 5/Wi-Fi/原 Bridge 已恢复，隔离服务已停止。该轮通过不覆盖 FRP DNS、异常协议完整实板矩阵、Base/MQTT 组合或 72 小时；46328 字节仍低于 48 KiB 目标，P4 不标记完成。
+
+## 按需握手存储与半关闭复测（2026-09-23）
+
+工作握手 JSON 从会话常驻数组改为首段输入时才申请的 4096 字节共享区，完成、失败或取消后清零释放；C3 会话对象由 21776 降至 17688 字节。Yamux 5552 字节和 AEAD 接收区 65552 字节不变，三项常驻对象合计 88792 字节，协议容量未缩减。host 分配钩子验证共享握手区至多同时存在一份，并在工作流退出后释放；实板资源仍须以实际采样为准。
+
+`p4-work-memory-20260923` 使用 8 KiB worker 完成十轮双流、每流各方向 300001 字节压力，最低 heap 为 48296 字节，worker 最低栈余量 5164 字节。`p4-work-memory2-20260923` 将 worker 调为 6 KiB 后再次完成相同轮数和载荷，最低 heap 为 60504 字节、worker 最低栈余量 3104 字节。这两轮是独立实板样本，不能把最低 heap 差值全部归因于栈调整；最新样例负载超过 48 KiB 最低 heap 目标，不等于 Base/MQTT 组合峰值已验收。
+
+`p4-work-stream-20260923` 的 `work-tail-fin` 完成 StartWorkConn 粘连业务、远端先 FIN、两个方向各 300001 字节逐字节核对，以及销毁后官方 FRPS 双流恢复。`work-local-fin` 的该轮远端 fixture 结束，但样例完整交付证明为 `valid=0`，不能计通过；随后单项诊断中，测试端单笔 300001 字节 Yamux 写入发生超时，已改为 1 KiB 分块；该时点实板仍待重测。预备流长期等待、慢流背压，以及旧活动流 RST 与部分握手并存的 MCU 场景在该时点均未验收。上述各轮失败与通过分开保留，结束后均恢复完整原应用槽、双份全量回读及原 Bridge，清理隔离服务和单板网络规则；人工断电继续暂缓，P4 仍在实施中。
+
+## 工作流矩阵与独立恢复（2026-09-23）
+
+`p4-work-matrix-20260923` 的十轮双流压力完成。其后 local-fin 的交付与回显证明均为 `valid=1`，双向各 300001 字节、零 mismatch；spare 在预备流等待期间保持控制 Pong，61 秒后仍可使用；stall 使慢流按预期失败，销毁后其他流和官方 FRPS 双流恢复。tail-fin 也再次通过。整轮停在 shared 的串口证据超时，`complete=false`；不得将先前 local-fin 的 `valid=0` 改写，也不得将四项成功扩展为 shared 成功。
+
+随后 `p4-work-shared-rst-20260923` 未能确认暂停 socket 有未读字节，`p4-work-shared-peek-20260923` 两次前置全量读取间原基座复位新增 PHY/NVS 记录，安全门禁在实验应用写入前拒绝。修正后的 `p4-work-shared-peek-stable-20260923` 才完成单项：部分握手中活动流与预备流同时存在，前者已发 1024 字节；确认暂停 socket 有待读字节后 RST 中断活动流，错误为 `-17`，预备流继续等待，最终 `completed=1`、`failed=1`。完整销毁后恢复官方 FRPS 双流回显；初始与两次销毁采样任务/socket 均为 7/1、分配失败零。stable 单项最低 heap 70260 字节，与此前十轮压力最低 60504 字节属于不同负载，不能用于宣布组合预算通过。
+
+stable 的验收结果为 `complete=true`，第一次 pipeline 的 `restored=false` 同时成立：esptool v5.4 `run --after no-reset` 返回成功却把设备留在 bootloader，状态等待超时。修正脚本后独立恢复原 ota_0，启动前双份全量 Flash 等于本轮新鲜基线，启动后双份一致且与基线只在默认 NVS 有差异；同 UUID、revision 5、Wi-Fi 与原 Mac Bridge 已恢复。单板 PF anchor 清空，全局 NAT 规则未改。独立恢复覆盖了私有 `after-lab.bin` 与 `restore-run.log`，不能用现有同名文件代表初次恢复失败现场；事实边界由私有 `recovery-followup.json` 保留。P4、Base/MQTT 组合及 72 小时长稳仍待验收。
+
+## 新源码初始双流失败（2026-09-23）
+
+`p4-linger-regression-20260923` 由当前 `connect.c` 修正对应的私有源码快照构建，实验应用 867904 字节，SHA-256 为 `9ec884cfbe5e0c999776ccb997e664cdb8ab9599a695dd707932aef92e1309d9`。复测原定 local-fin 与 shared，设备已进入 READY，但初始官方 FRPS 双流回显在任一场景前报 `EOFError: echo truncated`；验收 `complete=false`、`cases=0`。这轮未测到半关闭或 shared 修正的实板效果；当时的 host ASan/UBSan 与 C3 构建不构成实板通过，后续热点复测范围见下。
+
+本轮有效 RSSI -90 至 -83 dBm，低于 stable 的 -73 至 -70 dBm、matrix 的 -69 至 -64 dBm。FRPS 同时出现两条用户连接：一条 work 连接及时 join，另一条等待 10 秒超时，约 0.18 秒后 FRPS 才登记下一条 work 连接。不能凭这一轮将截断归因于 linger，也不能仅凭低 RSSI 判定唯一根因；后续热点成功也无法反推该轮唯一根因。pipeline 显示 `restored=true`、`pf_restored=true`，原 ota_0 恢复，启动前后各两份完整 Flash 均等于本轮新鲜基线，同 UUID、revision 5、Wi-Fi、原 Mac Bridge 恢复；单板 PF anchor 清空、全局 NAT 不变。私有 `after-lab-first.bin` 留存实验现场；失败结果不计 P4 通过。
+
+随后 `p4-hotspot-linger-20260923` 在近距热点上使用当前源码重测，RSSI -45 至 -44 dBm。官方 FRPS 初始单流及双流各 1024 字节双向回显通过；`work-local-fin` 双向各 300001 字节、零 mismatch、两个完整交付证明均为 `valid=1`；`work-shared` 确认暂停 socket 未读字节后 RST 活动流，`work_error=-17`，预备流继续完成，最终 `completed=1`、`failed=1`。两场景销毁后各自的官方 FRPS 双流恢复均通过；最低 heap 66892 字节，销毁后任务/socket 为 7/1、分配失败零。此轮 `acceptance-result.json` 的 `complete=true` 只覆盖初检及两个场景，未重做十轮压力或组合资源验收。此前弱信号失败仍独立保留，不能据热点成功证明其唯一根因。
+
+该热点运行首次准备尝试因分区表文件缺失，在刷写前停止并归档；第二次验收通过，但自动恢复读完 `after-lab` 后依赖未生成的 `verified-lab-app.bin`，原 `pipeline-result.json` 保持 `restored=false`。执行者保存首份实验后 Flash，核对镜像后独立执行恢复；启动前后各双份完整 Flash 等于本轮新鲜基线，原身份、revision 5、Wi-Fi 与 Bridge 恢复，PF 清理收据验证单板规则已清、全局 NAT 未变。私有 `recovery-followup.json` 将独立恢复与首次 pipeline 分开记录。恢复脚本现直接校验固定摘要的 `input-app.bin`；脚本修正后未再刷板。

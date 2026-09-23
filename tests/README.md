@@ -60,7 +60,7 @@ ctest --test-dir build --output-on-failure
 
 OpenSSL 不在系统路径时添加 `-DOPENSSL_ROOT_DIR=/absolute/path/to/openssl`；cJSON 不在系统路径时用 `-DCMAKE_PREFIX_PATH=/absolute/path/to/cjson`。ESP-IDF 构建固定使用 SDK PSA API 与 manifest 中精确锁定的 espressif/cjson，不使用 OpenSSL。
 
-POSIX host 默认另外运行 `connect` 与 `dns_adapter`，需要系统线程库。前者使用真实 socket 与仅测试 DNS 结果；后者直接编译实际 lwIP 适配代码，使用 API fixture 驱动 SDK 回调次序。正常 host 库不包含这些 fixture 或 SDK 连接层。DNS 竞争可单独用 ThreadSanitizer 验证：
+POSIX host 默认另外运行 `connect`、`connect_linger` 与 `dns_adapter`，需要系统线程库。`connect` 使用真实 socket 与仅测试 DNS 结果；`connect_linger` 用 socket 操作注入验证 IDF 正 linger 的暂时性失败与取消所有权，不模拟 SDK TCP/IP 任务或五秒实板时长；`dns_adapter` 直接编译实际 lwIP 适配代码，使用 API fixture 驱动 SDK 回调次序。正常 host 库不包含这些 fixture 或 SDK 连接层。DNS 竞争可单独用 ThreadSanitizer 验证：
 
 ```bash
 cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=thread \

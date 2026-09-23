@@ -4,7 +4,16 @@
 #include "json_internal.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+static void release_handshake(efrp_work_set_t *set)
+{
+    if (!set->handshake_json) return;
+    efrp_crypto_zero(set->handshake_json, EFRP_JSON_MAX_BYTES);
+    free(set->handshake_json);
+    set->handshake_json = NULL;
+}
 
 void efrp_work_status(const efrp_work_set_t *set, efrp_work_status_t *status)
 {
@@ -30,11 +39,27 @@ void efrp_work_request(efrp_work_set_t *set)
 static void close_work(efrp_work_set_t *set, efrp_work_stream_t *w, efrp_result_t reason)
 {
     if (w->phase == EFRP_WORK_CLOSING) return;
-    if (w->phase == EFRP_WORK_SENDING || w->phase == EFRP_WORK_WAITING)
-        efrp_crypto_zero(set->handshake_json, sizeof set->handshake_json);
+    if (w->phase == EFRP_WORK_SENDING || w->phase == EFRP_WORK_WAITING) {
+        release_handshake(set);
+        efrp_crypto_zero(&w->reader, sizeof w->reader);
+    }
     w->phase = EFRP_WORK_CLOSING; w->result = reason;
     if (reason != EFRP_OK) { ++set->status.failed; set->status.last_error = reason; }
 }
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+static void trace_timeout(efrp_work_set_t *set, const efrp_work_stream_t *w,
+    efrp_work_timeout_source_t source, uint64_t age)
+{
+    set->status.timeout_source = source;
+    set->status.timeout_stream_id = w->stream_id;
+    set->status.timeout_age_ms = age > UINT32_MAX ? UINT32_MAX : (uint32_t)age;
+    set->status.timeout_incoming_bytes = (uint16_t)(w->incoming_used - w->incoming_offset);
+    set->status.timeout_outgoing_bytes = (uint16_t)(w->outgoing_used - w->outgoing_offset);
+}
+#define TRACE_TIMEOUT(set, w, source, age) trace_timeout((set), (w), (source), (age))
+#else
+#define TRACE_TIMEOUT(set, w, source, age) ((void)0)
+#endif
 static bool port_value(const cJSON *root, const char *key)
 {
     const cJSON *p = efrp_json_field(root, key);
@@ -79,7 +104,7 @@ static efrp_result_t new_work(efrp_work_stream_t *w, const char *run_id,
     w->outgoing[15] = 0; w->outgoing[16] = 6; w->outgoing_used = length + 17;
     return result;
 }
-static efrp_result_t cleanup_work(efrp_work_set_t *set, efrp_work_stream_t *w, efrp_yamux_t *mux)
+static efrp_result_t cleanup_work(efrp_work_set_t *set, efrp_work_stream_t *w, efrp_yamux_t *mux, uint64_t now)
 {
     if (w->stream_id) {
         efrp_result_t r = w->result == EFRP_OK ? EFRP_OK : efrp_yamux_reset(mux, w->stream_id);
@@ -91,8 +116,14 @@ static efrp_result_t cleanup_work(efrp_work_set_t *set, efrp_work_stream_t *w, e
     if (w->local) {
         if (w->result == EFRP_OK) {
             efrp_result_t r = efrp_connect_finish(w->local);
-            if (r == EFRP_WOULD_BLOCK) return EFRP_OK;
-            if (r != EFRP_OK) { w->result = r; ++set->status.failed; set->status.last_error = r; }
+            if (r == EFRP_WOULD_BLOCK) {
+                if (now < w->deadline) return EFRP_OK;
+                TRACE_TIMEOUT(set, w, EFRP_WORK_TIMEOUT_CLEANUP,
+                    now - (w->deadline - EFRP_YAMUX_IO_TIMEOUT_MS));
+                w->result = EFRP_TIMEOUT; ++set->status.failed; set->status.last_error = EFRP_TIMEOUT;
+                (void)efrp_connect_cancel(w->local);
+            }
+            else if (r != EFRP_OK) { w->result = r; ++set->status.failed; set->status.last_error = r; }
         }
         if (efrp_connect_destroy(&w->local) == EFRP_WOULD_BLOCK) return EFRP_OK;
     }
@@ -103,7 +134,11 @@ static efrp_result_t handshake_work(efrp_work_set_t *set, efrp_work_stream_t *w,
 {
     efrp_result_t r; size_t used;
     if (w->phase == EFRP_WORK_SENDING) {
-        if (now >= w->deadline) { close_work(set, w, EFRP_TIMEOUT); return EFRP_OK; }
+        if (now >= w->deadline) {
+            TRACE_TIMEOUT(set, w, EFRP_WORK_TIMEOUT_HANDSHAKE_SEND,
+                now - (w->deadline - EFRP_SESSION_RESPONSE_MS));
+            close_work(set, w, EFRP_TIMEOUT); return EFRP_OK;
+        }
         r = efrp_yamux_write(mux, w->stream_id, w->outgoing + w->outgoing_offset,
             w->outgoing_used - w->outgoing_offset, &used);
         if (r == EFRP_WOULD_BLOCK) return EFRP_OK;
@@ -115,16 +150,27 @@ static efrp_result_t handshake_work(efrp_work_set_t *set, efrp_work_stream_t *w,
     /* A pooled spare may wait indefinitely without a local socket. Only a
      * started wire frame has a deadline: expiring a healthy spare leaves a dead
      * entry in the official pool and would break the next user connection. */
-    if (w->partial_header && now >= w->deadline) { close_work(set, w, EFRP_TIMEOUT); return EFRP_OK; }
+    if (w->partial_header && now >= w->deadline) {
+        TRACE_TIMEOUT(set, w, EFRP_WORK_TIMEOUT_HANDSHAKE_FRAME,
+            now - (w->deadline - EFRP_SESSION_RESPONSE_MS));
+        close_work(set, w, EFRP_TIMEOUT); return EFRP_OK;
+    }
     r = efrp_yamux_read(mux, w->stream_id, w->incoming, sizeof w->incoming, &used);
     if (r == EFRP_WOULD_BLOCK) return EFRP_OK;
     if (r != EFRP_OK) { close_work(set, w, r == EFRP_EOF ? EFRP_TRUNCATED : r); return EFRP_OK; }
+    if (!set->handshake_json) {
+        set->handshake_json = calloc(1, EFRP_JSON_MAX_BYTES);
+        if (!set->handshake_json) { close_work(set, w, EFRP_NO_MEMORY); return EFRP_OK; }
+        r = efrp_wire_init(&w->reader, set->handshake_json, EFRP_JSON_MAX_BYTES, false, start_work, w);
+        if (r != EFRP_OK) { close_work(set, w, r); return EFRP_OK; }
+    }
     if (!w->partial_header) { w->partial_header = true; w->deadline = now + EFRP_SESSION_RESPONSE_MS; }
     w->incoming_used = used;
     r = efrp_wire_feed_one(&w->reader, w->incoming, used, &w->incoming_offset);
     if (r != EFRP_OK) { close_work(set, w, w->result != EFRP_OK ? w->result : r); return EFRP_OK; }
     if (!w->started) { efrp_crypto_zero(w->incoming, w->incoming_used); w->incoming_used = w->incoming_offset = 0; return EFRP_OK; }
-    efrp_crypto_zero(set->handshake_json, sizeof set->handshake_json);
+    release_handshake(set);
+    efrp_crypto_zero(&w->reader, sizeof w->reader);
     efrp_work_status_t status; efrp_work_status(set, &status);
     unsigned closing_sockets = 0;
     for (unsigned i = 0; i < 3; ++i)
@@ -144,9 +190,16 @@ static efrp_result_t forward_work(efrp_work_set_t *set, efrp_work_stream_t *w, e
         if (r != EFRP_OK) { close_work(set, w, r); return EFRP_OK; }
         w->phase = EFRP_WORK_ACTIVE; w->last_activity = now;
     }
-    if (now - w->last_activity >= EFRP_WORK_IDLE_MS ||
-        (w->incoming_used > w->incoming_offset && now - w->incoming_progress >= EFRP_YAMUX_STALL_MS) ||
-        (w->outgoing_used > w->outgoing_offset && now - w->outgoing_progress >= EFRP_YAMUX_STALL_MS)) {
+    if (now - w->last_activity >= EFRP_WORK_IDLE_MS) {
+        TRACE_TIMEOUT(set, w, EFRP_WORK_TIMEOUT_IDLE, now - w->last_activity);
+        close_work(set, w, EFRP_TIMEOUT); return EFRP_OK;
+    }
+    if (w->incoming_used > w->incoming_offset && now - w->incoming_progress >= EFRP_YAMUX_STALL_MS) {
+        TRACE_TIMEOUT(set, w, EFRP_WORK_TIMEOUT_INCOMING_LOCAL, now - w->incoming_progress);
+        close_work(set, w, EFRP_TIMEOUT); return EFRP_OK;
+    }
+    if (w->outgoing_used > w->outgoing_offset && now - w->outgoing_progress >= EFRP_YAMUX_STALL_MS) {
+        TRACE_TIMEOUT(set, w, EFRP_WORK_TIMEOUT_OUTGOING_YAMUX, now - w->outgoing_progress);
         close_work(set, w, EFRP_TIMEOUT); return EFRP_OK;
     }
     if (w->incoming_used == w->incoming_offset) {
@@ -169,6 +222,8 @@ static efrp_result_t forward_work(efrp_work_set_t *set, efrp_work_stream_t *w, e
         r = efrp_connect_close_write(w->local);
         if (r == EFRP_OK) w->local_fin = true;
         else if (r != EFRP_WOULD_BLOCK || now - w->fin_progress >= EFRP_YAMUX_STALL_MS) {
+            if (r == EFRP_WOULD_BLOCK)
+                TRACE_TIMEOUT(set, w, EFRP_WORK_TIMEOUT_LOCAL_FIN, now - w->fin_progress);
             close_work(set, w, r == EFRP_WOULD_BLOCK ? EFRP_TIMEOUT : r); return EFRP_OK;
         }
     }
@@ -194,6 +249,7 @@ static efrp_result_t forward_work(efrp_work_set_t *set, efrp_work_stream_t *w, e
         else if (r != EFRP_WOULD_BLOCK) { close_work(set, w, r); return EFRP_OK; }
     }
     if (w->remote_eof && w->local_fin && w->local_eof && w->mux_fin) {
+        w->deadline = now + EFRP_YAMUX_IO_TIMEOUT_MS;
         close_work(set, w, EFRP_OK);
     }
     return EFRP_OK;
@@ -210,8 +266,7 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
             if (r != EFRP_OK) return r;
             --set->status.pending; w->proxy_name = set->proxy_name;
             w->phase = EFRP_WORK_SENDING; w->deadline = now + EFRP_SESSION_RESPONSE_MS;
-            r = efrp_wire_init(&w->reader, set->handshake_json, sizeof set->handshake_json, false, start_work, w);
-            if (r == EFRP_OK) r = new_work(w, run_id, token, token_length, seconds);
+            r = new_work(w, run_id, token, token_length, seconds);
             if (r != EFRP_OK) close_work(set, w, r);
             break;
         }
@@ -228,7 +283,7 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
         }
         if (w->phase == EFRP_WORK_SENDING || w->phase == EFRP_WORK_WAITING) r = handshake_work(set, w, mux, now);
         if (r == EFRP_OK && (w->phase == EFRP_WORK_CONNECTING || w->phase == EFRP_WORK_ACTIVE)) r = forward_work(set, w, mux, now);
-        if (r == EFRP_OK && w->phase == EFRP_WORK_CLOSING) r = cleanup_work(set, w, mux);
+        if (r == EFRP_OK && w->phase == EFRP_WORK_CLOSING) r = cleanup_work(set, w, mux, now);
         if (r != EFRP_OK) return r;
     }
     set->cursor = (set->cursor + 1) % 3; return EFRP_OK;
@@ -236,7 +291,7 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
 bool efrp_work_cancel(efrp_work_set_t *set)
 {
     bool done = true; set->status.pending = 0;
-    efrp_crypto_zero(set->handshake_json, sizeof set->handshake_json);
+    release_handshake(set);
     for (unsigned i = 0; i < 3; ++i) {
         efrp_work_stream_t *w = &set->streams[i];
         if (w->local && efrp_connect_destroy(&w->local) == EFRP_WOULD_BLOCK) {

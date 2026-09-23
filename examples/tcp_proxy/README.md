@@ -11,7 +11,7 @@ flowchart LR
     main --> client["本仓 esp_frp.h：唯一 FRP worker"]
     client <-->|"DNS / TCP / 严格 TLS / FRP"| frps["隔离的官方 FRPS v0.71.0"]
     test["外部测试 TCP 客户端"] <-->|"双向业务"| frps
-    client <-->|"固定 127.0.0.1 / port，最多两条连接"| echo["main/sample_echo.c：有界回显服务"]
+    client <-->|"固定 127.0.0.1 / port，最多两条连接"| echo["main/sample_echo.c：有界回显、半关闭与背压实验"]
     main -->|"推进两个 socket，不增加任务"| echo
     main --> resource["main/sample_resources.c：heap / 栈 / socket / esp_timer"]
     usb["USB：仅实验命令"] --> main
@@ -48,8 +48,11 @@ USB Serial/JTAG 输入为一行一个精确命令，最多 63 个 ASCII 字符�
 - `cycle`：保存已验证 run_id，完整 destroy，报告销毁后资源，再 create/start 并重新鉴权；统计 cycle 必须逐次确认，不能把命令写入当作成功。
 - `wifi_down`、`wifi_up`：停止/启动本板 station，让已有 FRP worker 处理网络中断与恢复；不代表外部 AP 或人工断电验收。
 - `echo_off`、`echo_on`：取消/恢复板内 listener，用于本地拒绝与连接中断。
+- `echo_local_fin`：仅在没有活动连接和待用实验模式时，为下一条连接准备半关闭实验。先增量发送 300001 字节固定模式并关闭写方向，再逐字节校验对端随后发送的 300001 字节，最后报告 `EFRP_SAMPLE_ECHO_PROOF`；完整长度、零 mismatch、双方 EOF 和未取消共同决定 `valid=1`。
+- `echo_stall`：同样只影响下一条连接，暂停其读取；第二条连接仍正常回显。`echo_resume` 只恢复唯一暂停连接，供故障结束后的目标 socket 清理使用。
+- `echo_reset`：仅有一条活动本地连接时，请求零 linger 关闭该连接；仅在 fd 已关闭时返回成功，关闭失败保留 fd，由主循环继续清理。`work-shared` 实验须先用 `echo_stall` 暂停该连接并等待 `pending_read=1`，再核对命令成功、远端 RST 与 work 失败状态；命令回执本身不是 RST 证明。
 
-回显服务只有两个 1024 字节缓冲，由 main 推进。它只在板内回环监听，不提供未鉴权的局域网实验控制入口。首个 FRP READY 需完成严格 TLS、注册与认证 Pong；业务字节仍应由外部测试客户端逐字节或摘要核对。
+回显服务只有两个 1024 字节缓冲，由 main 推进；半关闭模式也用原缓冲增量生成/校验，不分配完整载荷。实验模式仅消费一次，`echo_off` 清除未使用的模式。它只在板内回环监听，不提供未鉴权的局域网实验控制入口。首个 FRP READY 需完成严格 TLS、注册与认证 Pong；业务字节仍应由外部测试客户端逐字节或摘要核对。
 
 状态包含 `failure_phase`、`system_error` 和单调 `time_ms`，用于区分 DNS/TCP、TLS 与协议失败；工作流的 `requests`、`rejected`、`pending`、`cleaning` 分别记录请求/拒绝累计数和待处理/清理中数量，可与 `active`、`waiting`、`failed`、`work_error` 一同验证异常隔离和有界容量。命令回执记录实际返回值、耗时与句柄是否仍存在；短期限返回不能当作清理完成。
 
@@ -59,6 +62,6 @@ USB Serial/JTAG 输入为一行一个精确命令，最多 63 个 ASCII 字符�
 
 样例将 Wi-Fi 静态 RX 数量设为 6（与 RX BA 窗口相同），动态 RX/TX 各 12，TCP 收发窗口各 2880 字节（两个默认 MSS）。这是为 C3 双流约束瞬态队列占用的装配配置，会限制吞吐；不改变 FRP、Yamux 或 AEAD 的协议容量，也不要求使用该库的其他应用照搬。
 
-串口输出和诊断本身消耗资源，实验配置使用 4 KiB main 栈，FRP worker 使用 8 KiB；两者根据 C3 高水位采样从较大的初始预算收敛，每次修改仍需实板压力复核。完整样例包含 Wi-Fi、TLS、AEAD、四条 Yamux 流、两条 work socket 及回环对端，不能仅以静态对象大小或 host 数据推断内存安全。
+串口输出和诊断本身消耗资源，实验配置使用 4 KiB main 栈，FRP worker 使用 6 KiB；两者根据 C3 高水位采样从较大的初始预算收敛。当前 6 KiB worker 的同板十轮双流压力采样中，最低栈余量为 3104 字节；每次修改仍需实板压力复核。完整样例包含 Wi-Fi、TLS、AEAD、四条 Yamux 流、两条 work socket 及回环对端，不能仅以静态对象大小或 host 数据推断内存安全。
 
 真实验收须覆盖 DNS/TLS/FRPS、双流大载荷和背压、拒绝/错误认证、服务重启、百次完整客户端释放及资源峰值。当前人工断电由维护者明确暂缓，未执行项不计通过；软重启、station 停启或软件注入不能替代断电。

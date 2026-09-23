@@ -56,6 +56,8 @@ C peer 经当前 `connect.c` 建连及收发，终止时检查 fd 已释放。�
 
 `go run -mod=readonly . -work-peer /absolute/path/to/work_peer` 通过实际 FRPS 完成百轮双流，每流两个方向各 300001 字节，另有应用回执防止服务端 EOF 全关闭语义截断测试载荷。添加 `-work-faults` 则执行四个真实 FRPS 故障用例及 13 个官方 API fixture；覆盖精确目标绑定、容量、半关闭、尾数据、错误字段、期限和慢流恢复。核心只消费已有固定依赖，无自写服务端密码算法；完整边界见 [工作流](../../docs/design/work-streams.md)。
 
+`work_peer` 的独立工作流分配钩子验证 4096 字节握手区至多同时存在一份，并在实际 FRPS 与故障场景结束后全部清零释放；这不代替 MCU allocator 峰值采样。
+
 `client.go` 使用同一真实 FRPS 构造器，运行应用层 `esp_frp.h` 生命周期。`session.go` 允许测试显式停止并重新创建同一端口的 FRPS，用于证明 worker 自动重连；不改变既有控制和工作流测试。`work.go` 另以 worker 运行三轮双流，随后保留两条本地连接验证停止清理。配置、信任、回调和调度边界见[客户端生命周期](../../docs/design/client-lifecycle.md)。
 
 ## 单设备协议 fixture
@@ -79,6 +81,16 @@ C peer 经当前 `connect.c` 建连及收发，终止时检查 fd 已释放。�
 
 端口限定 1024–65535，期限为 1000–90000 ms；证书/私钥使用绝对路径。客户端必须按真实主机名和 CA 校验服务端，fixture 精确验证 Login 的 `client_id`、Token 和 NewProxy 的名称/类型/配置。IP 限定仅收窄实验对象，不能代替协议认证。
 
-`mode` 支持 `sessionFixtureModes` 的 28 项，以及 `work-wrong-name`、`work-error`、`work-oversized`、`work-truncated`、`work-bad-port`、`work-duplicate`、`work-frame-timeout`、`work-idle`。最后一项使用真实 60 秒空闲期限，fixture 应配置 90000 ms；其余工作流场景保留控制通道并响应认证心跳。host 专用的变换回显、暂停与半关闭驱动不接入此入口。
+`mode` 支持 `sessionFixtureModes` 的 28 项，以及 `work-wrong-name`、`work-error`、`work-oversized`、`work-truncated`、`work-bad-port`、`work-duplicate`、`work-frame-timeout`、`work-idle`、`work-tail-fin`、`work-local-fin`、`work-spare`、`work-stall`、`work-shared`。`work-idle` 使用真实 60 秒空闲期限，fixture 应配置 90000 ms；工作流场景保留控制通道并响应认证心跳。
 
-入口没有设备发现、刷机、DNS 服务、代理监听或生产安装操作。`ESP_FRP_DEVICE_FIXTURE_READY` 只说明监听建立，`ESP_FRP_DEVICE_WORK_REJECTED` 说明工作流已在对端结束，`ESP_FRP_DEVICE_FIXTURE_FINISHED` 说明服务端场景结束；三者都不能单独作为实板通过。验收还须核对设备的精确错误、状态/资源回收，以及恢复到官方 FRPS 后的业务字节。私有配置、证书、输入和日志不得提交。
+host 和 device 使用相同工作协议；前者的本地目标变换测试字节，后者按 C3 样例回显原字节。`work-tail-fin` 将 StartWorkConn 与首段业务粘连，此后每次写入至多 1 KiB 业务字节并读取等量回显，末段写入后发送 FIN；`work-local-fin` 先收齐本地载荷和 FIN，再按至多 1 KiB 分块发送反向载荷及 FIN。两种交换均避免测试端点以单次 300001 字节 Yamux 写入填满小窗口并互相等待。半关闭的每个方向各 300001 字节，不能只用 EOF 证明完整交付。
+
+- `work-tail-fin`：StartWorkConn 紧随业务，远端先 FIN，核对返回数据。
+- `work-local-fin`：启动前向样例发送 `echo_local_fin`；先核对本地数据与 FIN，随后才发送反向载荷，并与样例的完整逐字节证明联合验收。
+- `work-spare`：打印 `phase=waiting-spare` 后等待标准输入的一行精确 `resume`；控制心跳继续。实板驱动应观察超过 60 秒的等待和没有本地 socket，再恢复握手与传输，使用 90000 ms 总期限。
+- `work-shared`：启动 fixture 前先对空闲样例执行 `echo_stall`，使第一条本地连接保持暂停读取。fixture 给第一条流发送 1024 字节后打印 `phase=partial-handshake` 并等待 `resume`；驱动先验证一条 active、一条 waiting，再执行 `echo_reset`，只在命令成功且日志显示 `paused=1 pending_read=1` 后恢复。最后确认旧流 RST、第二条流完整双向字节及资源回收。若尚无待读字节，稍后重试 `echo_reset`，不能把命令已写入当成 RST 已发生。
+- `work-stall`：启动前执行 `echo_stall`，向第一条流写入足以产生背压的数据，第二条流独立核对 64 字节回显；观察慢流结束后执行 `echo_resume`，回收样例目标端的 fd。
+
+恢复输入最多 64 字节，非法行、EOF、信号或总期限终止场景；等待恢复不绕过 fixture 的连接期限。输入动作本身不访问设备，刷机和样例命令仍由外部驱动执行。
+
+入口没有设备发现、刷机、DNS 服务、代理监听或生产安装操作。`ESP_FRP_DEVICE_FIXTURE_READY` 只说明监听建立，`ESP_FRP_DEVICE_WORK_FINISHED` 说明工作场景按其断言结束，`ESP_FRP_DEVICE_FIXTURE_FINISHED` 说明服务端场景结束；三者都不能单独作为实板通过。验收还须核对设备的精确错误、状态/资源回收，以及恢复到官方 FRPS 后的业务字节。私有配置、证书、输入和日志不得提交。

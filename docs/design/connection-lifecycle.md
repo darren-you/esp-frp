@@ -1,6 +1,6 @@
 # DNS 与 TCP 建连生命周期
 
-`esp_frp_connect.h` 负责一次 IPv4 DNS→TCP 连接尝试，向 TLS 提供非阻塞 send/recv 回调；`create_ipv4` 则复制明确的四字节地址，跳过 DNS，在 step 中连接固定本地目标。后者拒绝 0 与 >=224 的首字节、零端口。IDF 使用 SDK lwIP；每个句柄至多持有一个 DNS 请求与一个 socket，不创建附加任务、定时器、备用地址列表或重连器。已接入组合会话与工作流，完整 worker 仍待实现。
+`esp_frp_connect.h` 负责一次 IPv4 DNS→TCP 连接尝试，向 TLS 提供非阻塞 send/recv 回调；`create_ipv4` 则复制明确的四字节地址，跳过 DNS，在 step 中连接固定本地目标。后者拒绝 0 与 >=224 的首字节、零端口。IDF 使用 SDK lwIP；每个句柄至多持有一个 DNS 请求与一个 socket，不创建附加任务、定时器、备用地址列表或重连器。已接入组合会话、工作流和单 worker。
 
 ## DNS 所有权与取消
 
@@ -20,18 +20,19 @@ DNS 成功后释放请求，创建唯一 IPv4 TCP socket，固定 `O_NONBLOCK`�
 
 取消和未完成的 destroy 使用取消关闭语义，不承诺排空或 FIN：在 connect **之前**固定 `SO_LINGER={1,0}`，避免在已拒绝连接上才设置选项而失败，也避免 lwIP 默认最长 20 秒的 FIN 分配重试等待。IDF 必须开启 `CONFIG_LWIP_SO_LINGER=y`，否则编译拒绝。
 
-正常工作流先把该方向业务字节交给 send，再调用 `close_write` 发出 SHUT_WR，接收方向仍可使用；成功后拒绝新 send，重复 close_write 幂等。临时错误可重试。只有同时观察到接收 EOF 和成功的写半关闭才允许 `finish`，它关闭 abortive linger，并把已排队字节与 FIN 的后续发送交给 TCP 栈，再释放 fd；这不等于远端业务已处理。
+正常工作流先把该方向业务字节交给 send，再调用 `close_write` 发出 SHUT_WR，接收方向仍可使用；成功后拒绝新 send，重复 close_write 幂等。临时错误可重试。IDF 在半关闭前设置 5 秒正 linger；`finish` 仅在同时观察到接收 EOF 和成功的写半关闭后尝试关闭，复用已经设置的 linger。若尚有未确认的本地 TCP 尾数据，lwIP 非阻塞 close 返回 WOULD_BLOCK 并保留 fd，工作流在独立的 5 秒单调时钟窗口内重试。窗口到期转取消，工作流结果记为 TIMEOUT；这不等于远端业务已处理，也不承诺 5 秒时 fd 必然释放。
 
-macOS 实测在两端均关闭后设置 SO_LINGER 会返回 EINVAL，因此 POSIX 在 SHUT_WR **之前**关闭 abortive linger；之后若发生错误/取消则尽力恢复 RST 设置并始终清理 fd，不因已失效选项持续等待。IDF 半关闭期间仍保留零 linger，正常 finish 才取消该设置；已核对固定 lwIP 的 `tcp_close_shutdown_fin` 在 FIN 分配不足时交由 TF_CLOSEPEND 重试。两平台使用各自正常关闭路径，SDK 内存压力下的实际时长仍待实板验证。
+macOS 实测在两端均关闭后设置 SO_LINGER 会返回 EINVAL，因此 POSIX 在 SHUT_WR **之前**关闭 abortive linger；之后若发生错误/取消则尽力恢复 RST 设置并始终清理 fd，不因已失效选项持续等待。IDF 半关闭前设置正 linger，避免 finish 时重复设置选项遇到暂时性 mailbox 失败而丢弃尾数据；临时 ENOMEM/ENOBUFS 返回 WOULD_BLOCK 并保留 OPEN 状态供下轮重试。两平台使用各自正常关闭路径，SDK 内存压力下的实际时长仍待实板验证。
 
-lwIP 关闭失败时仍持有 fd（例如内部消息分配失败），句柄保持 DRAINING，后续 step 重试且不报资源释放成功。POSIX 测试侧不重复 close 可能已释放的 fd。SDK socket API 仍需 TCP/IP 任务调度，不把非阻塞网络 I/O 宣称为硬实时执行上限。
+取消正 linger 时先尝试恢复零 linger。lwIP 的 `setsockopt` 或 close 若因 mailbox/内存暂时失败，每次调用只尝试一次，返回 WOULD_BLOCK，保留 fd 与句柄所有权；后续 step/destroy 重试，只有真实 close 成功才进入 CLOSED，destroy 才释放对象。状态中的 `system_error` 记录当次暂时失败，取消最终成功后清零。若底层持续拒绝操作，清理可超过正常排空窗口；不能通过释放仍持有 fd 的对象伪造完成。POSIX 测试侧不重复 close 可能已释放的 fd。SDK socket API 仍需 TCP/IP 任务调度，不把非阻塞网络 I/O 宣称为硬实时执行上限。
 
 ## 测试边界
 
 - `dns_test.c` 直接编译真实 `dns_lwip.c`，以最小 API fixture 驱动提交失败、缓存命中、异步错误、IPv6/空地址拒绝、提交前取消和迟到结果；修改调用方输入后验证仍使用原主机名。1000 次 pthread 完成/取消竞争通过 ASan/UBSan 及单独 ThreadSanitizer，包含完成发布后先释放再 join。
 - `connect_test.c` 对接真实回环 TCP：100 次双向二进制传输和 fd 释放，接收 EOF 后继续发送，另外覆盖真正发送背压、RST、拒绝连接、CONNECTING 取消/期限，以及 100 次 pending DNS 取消/期限。DNS 在该测试由确定性 fixture 提供；不得把它计作宿主或 MCU 的实际 DNS 网络验收。
 - 新增 100 次固定 IPv4 连接，修改输入后仍使用原目标，不调用 DNS；接收 EOF 后写入多段二进制，在对端尚未读取应用数据时执行 close_write/finish，随后验证完整尾数据与正常 EOF。覆盖 finish 前置条件、重复半关闭、半关闭后 send 拒绝及 fd 释放。
+- `connect_linger_test.c` 只在 host 编译连接层的 IDF linger 分支并注入暂时性选项/close 失败，验证半关闭重试、finish 不重复设置正 linger、取消在真实 close 前保留所有权，以及成功关闭后可销毁。它不模拟 SDK TCP/IP 任务调度、实际 TCP ACK 或实板清理时长。
 - `tls_peer.c` 的 113 条 Go TLS 网络连接改用当前 TCP 连接层；拆分 I/O、证书拒绝、取消和期限继续验证。该链路包含真实 TCP/TLS，解析仍是仅测试回环 fixture。
-- IDF v6.1 / C3 分别验证缺少 SO_LINGER 的编译拒绝与启用后的链接；未执行设备写入。SDK DNS 收敛时长、真实 Wi-Fi 故障、内存压力下的 socket 关闭、完整 worker 停止与 MCU 资源矩阵仍需实板验证。
+- IDF v6.1 / C3 已验证缺少 SO_LINGER 的编译拒绝与启用后的链接；独立 C3 工作流已有实板场景。持续内存压力下的 `setsockopt` / close 失败与五秒窗口到期后的真实清理时长仍需实板验证，host 注入不能替代。
 
-host 正常库不包含 SDK DNS/连接层，导出 `EFRP_HAS_CONNECT=0`；IDF 为 1。host 的 `connect_host_test`、DNS fixture 和 lwIP API fixture 只用于测试，不安装进公开库或固件，不提供生产目标回退。命令见 [测试入口](../../tests/README.md)。
+host 正常库不包含 SDK DNS/连接层，导出 `EFRP_HAS_CONNECT=0`；IDF 为 1。host 的 `connect_host_test`、linger 注入、DNS fixture 和 lwIP API fixture 只用于测试，不安装进公开库或固件，不提供生产目标回退。命令见 [测试入口](../../tests/README.md)。

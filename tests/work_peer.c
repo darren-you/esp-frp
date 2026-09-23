@@ -22,6 +22,7 @@ static unsigned open_fds(void)
     for (int fd = 0; fd < 1024; ++fd) if (fcntl(fd, F_GETFD) >= 0) ++count;
     return count;
 }
+void fixture_work_released(void);
 int main(int argc, char **argv)
 {
     assert(argc == 6);
@@ -91,6 +92,7 @@ int main(int argc, char **argv)
     do { result = efrp_session_destroy(&session); if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1); } while (result == EFRP_WOULD_BLOCK);
     assert(result == EFRP_OK && !session); efrp_tls_destroy(tls);
     assert(efrp_connect_destroy(&connection) == EFRP_OK);
+    fixture_work_released();
     assert(open_fds() == baseline);
     fprintf(stderr, "Work peer: mode=%s completed=%" PRIu64 " failed=%" PRIu64 " peak=%u sent=%" PRIu64 " received=%" PRIu64 " fd baseline restored\n",
         argv[4], status.work.completed, status.work.failed, peak, status.work.local_sent, status.work.local_received);

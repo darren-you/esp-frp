@@ -1,6 +1,6 @@
 # ESP FRP
 
-独立的 ESP-IDF FRP 客户端组件，采用 Apache-2.0。当前实现包含 wire v2 帧、有界 Yamux、Hello/Login、AES-256-GCM 控制记录、严格 TLS、单次 DNS/TCP 建连，以及代理注册、Token 心跳和固定本地目标 TCP 双向转发；单 worker 已组合生命周期与带抖动的重连。独立 C3 sample 已提供，实板互操作尚未完成，不能作为已验收 FRPC 发布。
+独立的 ESP-IDF FRP 客户端组件，采用 Apache-2.0。当前实现包含 wire v2 帧、有界 Yamux、Hello/Login、AES-256-GCM 控制记录、严格 TLS、单次 DNS/TCP 建连，以及代理注册、Token 心跳和固定本地目标 TCP 双向转发；单 worker 已组合生命周期与带抖动的重连。独立 C3 sample 已通过官方 FRPS 双流、DNS/TLS、部分异常协议及 `work-tail-fin` 实板互操作；完整工作流、Base/MQTT 组合资源与长稳尚未验收，不能作为已验收 FRPC 发布。
 
 ## 架构拓扑
 
@@ -73,7 +73,7 @@ flowchart LR
 
 `esp_frp.h` 是应用入口：create 深拷贝配置并创建一个空闲 worker；start 只表示命令入队，READY 需完成代理注册和首次认证 Pong。stop 等待连接、迟到 DNS 和回调收敛；超时保留句柄和停止请求，destroy 成功后任务及配置均已释放。网络中断使用单个退避截止时刻，证书、认证和协议错误进入 failed。详见[客户端生命周期](docs/design/client-lifecycle.md)。
 
-ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 与公开 ESP lwIP 修正提交；准备及验证见 [SDK 工具](tools/README.md)。原 SDK 存在已实板复现的双向零窗口 ACK 循环，构建会拒绝原始 lwIP、版本漂移或外部组件替换。修正不改变 FRP/TLS 容量；内存预算和完整实板矩阵仍未通过，详见 [C3 问题记录](docs/issues/c3-loopback-memory-pressure.md)。
+ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 与公开 ESP lwIP 修正提交；准备及验证见 [SDK 工具](tools/README.md)。原 SDK 存在已实板复现的双向零窗口 ACK 循环，构建会拒绝原始 lwIP、版本漂移或外部组件替换。修正不改变 FRP/TLS 容量；最新独立样例双流压力测试的最低 heap 已超过 48 KiB，但 Base/MQTT 组合预算和完整实板矩阵仍待验收，详见 [C3 问题记录](docs/issues/c3-loopback-memory-pressure.md)。
 
 ## 独立开发
 

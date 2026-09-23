@@ -19,6 +19,14 @@ extern "C" {
 #define EFRP_YAMUX_STALL_MS 2500u
 #define EFRP_YAMUX_IO_TIMEOUT_MS 5000u
 #define EFRP_YAMUX_OPEN_TIMEOUT_MS 10000u
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+typedef enum {
+    EFRP_YAMUX_TIMEOUT_NONE = 0, EFRP_YAMUX_TIMEOUT_OUTPUT,
+    EFRP_YAMUX_TIMEOUT_INPUT, EFRP_YAMUX_TIMEOUT_HEADER,
+    EFRP_YAMUX_TIMEOUT_DISCARD, EFRP_YAMUX_TIMEOUT_PING,
+    EFRP_YAMUX_TIMEOUT_RING, EFRP_YAMUX_TIMEOUT_OPEN
+} efrp_yamux_timeout_source_t;
+#endif
 
 /* Private storage layout is exposed only for caller-owned/static allocation.
  * One owner; no callbacks, allocation, timers, sockets or retained input pointers.
@@ -48,6 +56,11 @@ typedef struct {
     uint32_t ping_id;
     bool frame_active, frame_discard, local_goaway, remote_goaway, ping_pending, prefer_data;
     efrp_result_t failure;
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    /* Last timeout decision; read-only diagnostic, never consulted by flow control. */
+    efrp_yamux_timeout_source_t timeout_source;
+    uint32_t timeout_stream_id, timeout_age_ms, timeout_pending_bytes;
+#endif
 } efrp_yamux_t;
 
 typedef struct {

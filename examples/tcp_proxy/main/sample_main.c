@@ -130,6 +130,15 @@ static void report(const char *phase)
         status.work.last_error, status.work.local_sent, status.work.local_received, status.tls_error, status.tls_verify_flags,
         status.failure_phase, status.system_error, (uint64_t)esp_timer_get_time()/1000u,
         atomic_load(&wifi_ready), trusted(NULL), rssi_valid, rssi_valid ? access_point.rssi : 0, status.remote_address);
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    printf("EFRP_SAMPLE_TIMEOUT work_source=%u stream_id=%" PRIu32 " age_ms=%" PRIu32
+        " incoming_pending_bytes=%u outgoing_pending_bytes=%u mux_source=%u mux_stream_id=%" PRIu32
+        " mux_age_ms=%" PRIu32 " mux_pending_bytes=%" PRIu32 " control_source=%u\n",
+        (unsigned)status.work.timeout_source, status.work.timeout_stream_id, status.work.timeout_age_ms,
+        (unsigned)status.work.timeout_incoming_bytes, (unsigned)status.work.timeout_outgoing_bytes,
+        status.mux_timeout_source, status.mux_timeout_stream_id, status.mux_timeout_age_ms,
+        status.mux_timeout_pending_bytes, status.control_timeout_source);
+#endif
     sample_echo_report(); sample_resources(phase, cycle);
 }
 static void command(const char *text)
@@ -163,6 +172,10 @@ static void command(const char *text)
     else if (!strcmp(text,"wifi_up")) { wifi_wanted=true; result=(efrp_result_t)esp_wifi_start(); }
     else if (!strcmp(text,"echo_off")) sample_echo_stop();
     else if (!strcmp(text,"echo_on")) result=sample_echo_start(sample_frp_config.local_port) ? EFRP_OK : EFRP_NETWORK_ERROR;
+    else if (!strcmp(text,"echo_local_fin")) result=sample_echo_arm(SAMPLE_ECHO_LOCAL_FIN) ? EFRP_OK : EFRP_INVALID_STATE;
+    else if (!strcmp(text,"echo_stall")) result=sample_echo_arm(SAMPLE_ECHO_PAUSED) ? EFRP_OK : EFRP_INVALID_STATE;
+    else if (!strcmp(text,"echo_resume")) result=sample_echo_resume() ? EFRP_OK : EFRP_INVALID_STATE;
+    else if (!strcmp(text,"echo_reset")) result=sample_echo_reset() ? EFRP_OK : EFRP_INVALID_STATE;
     else { puts("EFRP_SAMPLE command_error=unknown"); return; }
     printf("EFRP_SAMPLE command=%s error=%d cycle=%u client=%u elapsed_ms=%" PRIu64 "\n",
         text,result,cycle,client!=NULL,(uint64_t)esp_timer_get_time()/1000u-started);

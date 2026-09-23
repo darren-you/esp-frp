@@ -20,10 +20,10 @@ typedef struct {
 } efrp_work_stream_t;
 typedef struct {
     efrp_work_stream_t streams[3];
-    /* Only one stream can be SENDING/WAITING. Once StartWorkConn completes,
-     * no active stream retains its JSON, so the full 4 KiB parser workspace
-     * belongs to the set rather than being reserved three times. */
-    uint8_t handshake_json[4096];
+    /* Only one stream can be SENDING/WAITING. Allocate its full 4 KiB parser
+     * workspace on first input, then release it after StartWorkConn or abort.
+     * A healthy pooled spare does not retain an unused parser buffer. */
+    uint8_t *handshake_json;
     efrp_work_status_t status;
     unsigned cursor;
     uint8_t address[4];

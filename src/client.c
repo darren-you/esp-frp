@@ -43,6 +43,13 @@ static void session_status(efrp_client_t *c)
     efrp_session_status_t s;
     if (!c->session || efrp_session_status(c->session, &s) != EFRP_OK) return;
     c->current.work = s.work;
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+    c->current.mux_timeout_source = s.mux_timeout_source;
+    c->current.control_timeout_source = s.control_timeout_source;
+    c->current.mux_timeout_stream_id = s.mux_timeout_stream_id;
+    c->current.mux_timeout_age_ms = s.mux_timeout_age_ms;
+    c->current.mux_timeout_pending_bytes = s.mux_timeout_pending_bytes;
+#endif
 #define ADD_COUNTER(field) c->current.work.field += c->totals.field
     ADD_COUNTER(requests); ADD_COUNTER(completed); ADD_COUNTER(failed);
     ADD_COUNTER(rejected_requests); ADD_COUNTER(local_sent); ADD_COUNTER(local_received);

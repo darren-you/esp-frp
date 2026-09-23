@@ -35,11 +35,13 @@ efrp_result_t efrp_connect_recv(void *connection, uint8_t *bytes, size_t capacit
 /* Half-close only after all application output has been accepted. EOF on recv
  * remains independent. A transient FIN allocation failure requires retry. */
 efrp_result_t efrp_connect_close_write(efrp_connect_t *connection);
-/* Only after recv EOF and successful close_write: ordinary TCP close preserves
- * queued bytes/FIN in the stack. WOULD_BLOCK retains the handle for cleanup. */
+/* Only after recv EOF and successful close_write: normal close retains queued
+ * bytes/FIN while the stack drains them. IDF reuses the positive linger chosen
+ * by close_write; WOULD_BLOCK retains the handle for another attempt. */
 efrp_result_t efrp_connect_finish(efrp_connect_t *connection);
-/* Cancels logical work and aborts TCP. In-flight SDK DNS must still drain;
- * WOULD_BLOCK means keep stepping and retain the handle. No new work starts. */
+/* Cancels logical work and requests abortive TCP close. In-flight SDK DNS and
+ * transient socket-option/close failures can delay actual fd release;
+ * WOULD_BLOCK retains ownership until a later retry succeeds. */
 efrp_result_t efrp_connect_cancel(efrp_connect_t *connection);
 efrp_result_t efrp_connect_status(const efrp_connect_t *connection, efrp_connect_status_t *status);
 /* Cancels if necessary; WOULD_BLOCK while DNS/socket cleanup remains.

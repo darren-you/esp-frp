@@ -19,6 +19,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
+#if defined(ESP_PLATFORM) || defined(EFRP_CONNECT_TEST_LINGER)
+#define EFRP_CONNECT_BOUNDED_LINGER 1
+#else
+#define EFRP_CONNECT_BOUNDED_LINGER 0
+#endif
 
 struct efrp_connect {
     efrp_dns_request_t *dns;
@@ -29,6 +34,7 @@ struct efrp_connect {
     uint8_t address[4];
     bool write_closed, read_eof, graceful_linger;
 };
+enum { EFRP_CONNECT_LINGER_SECONDS = 5 };
 static bool transient(int error) { return error == EAGAIN || error == EWOULDBLOCK || error == EINTR; }
 static efrp_result_t drain(efrp_connect_t *c)
 {
@@ -38,8 +44,22 @@ static efrp_result_t drain(efrp_connect_t *c)
     }
     c->status.pending_dns = false;
     if (c->fd >= 0) {
+        if (c->status.result != EFRP_OK && c->graceful_linger) {
+            struct linger abort_now = {.l_onoff = 1, .l_linger = 0};
+            /* An ESP socket option can fail while the tcpip mailbox is full.
+             * Retry on every drain until cancellation no longer inherits the
+             * positive linger used by a normal completed work stream. */
+            if (setsockopt(c->fd, SOL_SOCKET, SO_LINGER, &abort_now, sizeof abort_now) == 0)
+                c->graceful_linger = false;
+#if EFRP_CONNECT_BOUNDED_LINGER
+            else if (transient(errno) || errno == ENOMEM || errno == ENOBUFS) {
+                c->status.system_error = errno;
+                return EFRP_WOULD_BLOCK;
+            }
+#endif
+        }
         int closed = close(c->fd);
-#ifdef ESP_PLATFORM
+#if EFRP_CONNECT_BOUNDED_LINGER
         /* lwIP retains its socket on close failure, e.g. API message ENOMEM. */
         if (closed != 0) { c->status.system_error = errno; return EFRP_WOULD_BLOCK; }
 #else
@@ -47,18 +67,14 @@ static efrp_result_t drain(efrp_connect_t *c)
         if (closed != 0) c->status.system_error = errno;
 #endif
         c->fd = -1;
+        if (closed == 0 && (c->status.result == EFRP_OK || c->status.result == EFRP_CANCELLED))
+            c->status.system_error = 0;
     }
     c->status.owns_socket = false; c->status.state = EFRP_CONNECT_CLOSED;
     return c->status.result;
 }
 static efrp_result_t stop(efrp_connect_t *c, efrp_result_t result, int error)
 {
-    if (result != EFRP_OK && c->fd >= 0 && c->graceful_linger) {
-        struct linger abort_now = {.l_onoff = 1, .l_linger = 0};
-        /* A fully disconnected POSIX socket may reject options; still close
-         * its fd rather than retrying a configuration that can no longer apply. */
-        (void)setsockopt(c->fd, SOL_SOCKET, SO_LINGER, &abort_now, sizeof abort_now);
-    }
     c->status.result = result; c->status.system_error = error; c->status.state = EFRP_CONNECT_DRAINING;
     return drain(c);
 }
@@ -201,17 +217,29 @@ efrp_result_t efrp_connect_close_write(efrp_connect_t *c)
     if (!c) return EFRP_INVALID_ARGUMENT;
     if (c->status.state != EFRP_CONNECT_OPEN) return EFRP_INVALID_STATE;
     if (c->write_closed) return EFRP_OK;
-#ifndef ESP_PLATFORM
+#if !EFRP_CONNECT_BOUNDED_LINGER
     /* macOS may reject SO_LINGER once both halves have closed. POSIX close
      * queues FIN without lwIP's API-message memory wait; set it before SHUT_WR. */
-    struct linger linger = {0};
-    if (setsockopt(c->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger) != 0)
-        return stop(c, EFRP_NETWORK_ERROR, errno);
-    c->graceful_linger = true;
+    if (!c->graceful_linger) {
+        struct linger linger = {0};
+        if (setsockopt(c->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger) != 0) {
+            if (transient(errno) || errno == ENOMEM || errno == ENOBUFS) return EFRP_WOULD_BLOCK;
+            return stop(c, EFRP_NETWORK_ERROR, errno);
+        }
+        c->graceful_linger = true;
+    }
+#else
+    /* The socket starts with abortive linger for cancellation. Set bounded
+     * graceful linger before either half-close or final close can run. */
+    if (!c->graceful_linger) {
+        struct linger linger = {.l_onoff = 1, .l_linger = EFRP_CONNECT_LINGER_SECONDS};
+        if (setsockopt(c->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger) != 0) {
+            if (transient(errno) || errno == ENOMEM || errno == ENOBUFS) return EFRP_WOULD_BLOCK;
+            return stop(c, EFRP_NETWORK_ERROR, errno);
+        }
+        c->graceful_linger = true;
+    }
 #endif
-    /* Keep zero linger for this half-close: lwIP reports FIN memory shortage
-     * immediately instead of waiting in the sole owner. It does not abort the
-     * still-readable PCB. Normal final close below disables abortive linger. */
     if (shutdown(c->fd, SHUT_WR) == 0) { c->write_closed = true; return EFRP_OK; }
     if (transient(errno) || errno == ENOMEM || errno == ENOBUFS) return EFRP_WOULD_BLOCK;
     stop(c, EFRP_NETWORK_ERROR, errno); return EFRP_NETWORK_ERROR;
@@ -222,12 +250,9 @@ efrp_result_t efrp_connect_finish(efrp_connect_t *c)
     if (c->status.state == EFRP_CONNECT_CLOSED) return c->status.result;
     if (c->status.state == EFRP_CONNECT_DRAINING) return drain(c);
     if (c->status.state != EFRP_CONNECT_OPEN || !c->write_closed || !c->read_eof) return EFRP_INVALID_STATE;
-#ifdef ESP_PLATFORM
-    struct linger linger = {0};
-    if (setsockopt(c->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger) != 0)
-        return stop(c, EFRP_NETWORK_ERROR, errno);
-    c->graceful_linger = true;
-#endif
+    /* close_write already selected graceful linger before SHUT_WR. A second
+     * setsockopt here could fail under transient lwIP mailbox pressure and
+     * incorrectly abort a successfully half-closed stream. */
     /* FIN is already queued (or lwIP owns TF_CLOSEPEND), and inbound EOF was
      * consumed. The stack, not this object, retains retransmission ownership. */
     return stop(c, EFRP_OK, 0);
@@ -236,7 +261,11 @@ efrp_result_t efrp_connect_cancel(efrp_connect_t *c)
 {
     if (!c) return EFRP_INVALID_ARGUMENT;
     if (c->status.state == EFRP_CONNECT_CLOSED) return c->status.result;
-    if (c->status.state == EFRP_CONNECT_DRAINING) return drain(c);
+    if (c->status.state == EFRP_CONNECT_DRAINING) {
+        /* Cancellation supersedes a pending graceful linger wait. */
+        if (c->status.result == EFRP_OK) return stop(c, EFRP_CANCELLED, 0);
+        return drain(c);
+    }
     return stop(c, EFRP_CANCELLED, 0);
 }
 efrp_result_t efrp_connect_status(const efrp_connect_t *c, efrp_connect_status_t *status)

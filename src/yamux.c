@@ -30,6 +30,19 @@ static efrp_result_t fail(efrp_yamux_t *m, efrp_result_t error)
     m->failure = error;
     return error;
 }
+#if defined(EFRP_LAB_TIMEOUT_TRACE)
+static void trace_timeout(efrp_yamux_t *m, efrp_yamux_timeout_source_t source,
+    uint32_t stream_id, uint64_t age, size_t pending)
+{
+    m->timeout_source = source;
+    m->timeout_stream_id = stream_id;
+    m->timeout_age_ms = age > UINT32_MAX ? UINT32_MAX : (uint32_t)age;
+    m->timeout_pending_bytes = pending > UINT32_MAX ? UINT32_MAX : (uint32_t)pending;
+}
+#define TRACE_TIMEOUT(m, source, id, age, pending) trace_timeout((m), (source), (id), (age), (pending))
+#else
+#define TRACE_TIMEOUT(m, source, id, age, pending) ((void)0)
+#endif
 static efrp_yamux_stream_t *stream(efrp_yamux_t *m, uint32_t id)
 {
     if (id) for (size_t i = 0; i < EFRP_YAMUX_STREAMS; ++i)
@@ -367,16 +380,38 @@ efrp_result_t efrp_yamux_tick(efrp_yamux_t *m, uint64_t now)
     if (ready(m) != EFRP_OK) return ready(m);
     if (now < m->now_ms) return fail(m, EFRP_INVALID_ARGUMENT);
     m->now_ms = now;
-    if (((m->output_used || m->control_count) && now - m->output_progress_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) ||
-        ((m->header_used || m->frame_active) && now - m->input_progress_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) ||
-        (!m->frame_active && m->header_used && now - m->header_started_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) ||
-        (m->frame_active && m->frame_discard && now - m->drain_started_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) ||
-        (m->ping_pending && now - m->ping_started_ms >= EFRP_YAMUX_IO_TIMEOUT_MS)) return fail(m, EFRP_TIMEOUT);
+    if ((m->output_used || m->control_count) && now - m->output_progress_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) {
+        TRACE_TIMEOUT(m, EFRP_YAMUX_TIMEOUT_OUTPUT, 0, now - m->output_progress_ms,
+            m->output_used - m->output_offset + m->control_count * EFRP_YAMUX_HEADER_BYTES);
+        return fail(m, EFRP_TIMEOUT);
+    }
+    if ((m->header_used || m->frame_active) && now - m->input_progress_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) {
+        TRACE_TIMEOUT(m, EFRP_YAMUX_TIMEOUT_INPUT, m->frame_active ? m->frame_id : 0,
+            now - m->input_progress_ms, m->frame_active ? m->frame_remaining : m->header_used);
+        return fail(m, EFRP_TIMEOUT);
+    }
+    if (!m->frame_active && m->header_used && now - m->header_started_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) {
+        TRACE_TIMEOUT(m, EFRP_YAMUX_TIMEOUT_HEADER, 0, now - m->header_started_ms, m->header_used);
+        return fail(m, EFRP_TIMEOUT);
+    }
+    if (m->frame_active && m->frame_discard && now - m->drain_started_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) {
+        TRACE_TIMEOUT(m, EFRP_YAMUX_TIMEOUT_DISCARD, m->frame_id,
+            now - m->drain_started_ms, m->frame_remaining);
+        return fail(m, EFRP_TIMEOUT);
+    }
+    if (m->ping_pending && now - m->ping_started_ms >= EFRP_YAMUX_IO_TIMEOUT_MS) {
+        TRACE_TIMEOUT(m, EFRP_YAMUX_TIMEOUT_PING, 0, now - m->ping_started_ms, 0);
+        return fail(m, EFRP_TIMEOUT);
+    }
     for (size_t i = 0; i < EFRP_YAMUX_STREAMS; ++i) {
         efrp_yamux_stream_t *s = &m->streams[i];
         if (!s->id || s->reset) continue;
         if ((s->blocked && now - s->blocked_ms >= EFRP_YAMUX_STALL_MS) ||
             (!s->acknowledged && now - s->opened_ms >= EFRP_YAMUX_OPEN_TIMEOUT_MS)) {
+            if (s->blocked)
+                TRACE_TIMEOUT(m, EFRP_YAMUX_TIMEOUT_RING, s->id, now - s->blocked_ms, s->used);
+            else
+                TRACE_TIMEOUT(m, EFRP_YAMUX_TIMEOUT_OPEN, s->id, now - s->opened_ms, 0);
             if (efrp_yamux_reset(m, s->id) != EFRP_OK) return fail(m, EFRP_CAPACITY_EXCEEDED);
         }
     }

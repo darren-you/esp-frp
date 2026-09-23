@@ -1,6 +1,24 @@
 # 开发检查点
 
+2026-09-23 P4 热点复测：`p4-hotspot-linger-20260923` 使用当前 FRP 源码构建 867888 字节 C3 实验应用，SHA-256 为 `50c001c2634e6487b34a7cfbd03f5364ff3dfb26134afc971a9f370898412d80`。设备经近距手机热点接入，本轮验收状态采样 RSSI 为 -45 至 -44 dBm。官方 FRPS 初检先完成单流 1024 字节双向回显，再完成双流各 1024 字节双向回显；未放宽 FRPS 固定 10 秒 work 等待。`work-local-fin` 的交付与回显两个方向各 300001 字节、零 mismatch，完整交付证明均为 `valid=1`；`work-shared` 在活动流与预备流并存时确认暂停 socket 有未读字节，RST 后活动流 `work_error=-17`、预备流继续完成，最终 `completed=1`、`failed=1`。两场景各自销毁后均重新连接官方 FRPS 并通过双流回显；`acceptance-result.json` 为 `complete=true`，不代表十轮压力、Base/MQTT 组合或 P4 总验收完成。
+
+首次准备尝试在两份一致的完整 Flash 回读后因私有收据缺少 `partition-table.bin` 停于写入前，原基座已复启，现场归档于 `preflight-attempt-1/`。第二次热点运行的验收虽通过，原自动 pipeline 的 `restored=false`：恢复脚本完成首次 `after-lab` 全量回读后仍要求未生成的 `verified-lab-app.bin`。执行者保留 `after-lab-first.bin`，核对实验应用摘要并补齐副本后独立执行恢复；`recovery-followup.json` 明确区分这两次动作，不修改原 `pipeline-result.json`。独立恢复的启动前后各双份 4 MiB Flash 均逐字节等于本轮新鲜基线，同 UUID、revision 5、Wi-Fi、原 Mac Bridge 恢复；PF 清理收据验证临时 anchor 为空且全局 NAT 未变。私有恢复脚本现直接校验 `input-app.bin` 与准备/目标双重固定摘要，修正后未再次刷板。
+
+2026-09-23 P4 较早的新源码实板复测失败：`p4-linger-regression-20260923` 用当前 `src/connect.c` 修正对应的私有源快照构建 867904 字节 C3 实验应用。计划复测 local-fin 与 shared，但初始官方 FRPS 双流回显即报 `EOFError: echo truncated`，`complete=false`、`cases=0`，没有进入任一工作流场景。该失败轮本身不能证明当前 connect 修正已实板通过，也不能覆盖下面 stable 轮针对先前源码的单项成功；后续热点轮次的通过范围见上。
+
+本轮有效 RSSI 为 -90 至 -83 dBm；此前 stable 为 -73 至 -70 dBm、matrix 为 -69 至 -64 dBm。FRPS 同时接入两条用户连接，仅第一条 work 连接及时 join；第二条等待 10 秒超时，约 0.18 秒后 FRPS 才登记下一条 work 连接。此观察不能归因于 linger，也不能仅凭 RSSI 判定唯一根因；上方热点复测成功亦不能反证该轮的唯一根因。私有 pipeline 的 `restored=true`、`pf_restored=true`，原应用槽和启动前后各双份完整 Flash 均恢复到本轮新鲜基线；同 UUID、revision 5、Wi-Fi 与原 Mac Bridge 已核对，单板 PF anchor 清空、全局 NAT 未变。私有 `after-lab-first.bin` 保留首次实验现场。
+
+2026-09-23 P4 工作流实板矩阵检查点：`p4-work-matrix-20260923` 已完成十轮双流压力及 `work-tail-fin`、`work-local-fin`、`work-spare`、`work-stall` 四项。local-fin 的双向 300001 字节完整交付证明均为 `valid=1`；预备流等待 61 秒期间 Pong 继续推进，随后可使用；慢流按预期报告失败，其他流与官方 FRPS 双流恢复。每项均有销毁及恢复后的双流回显。整轮在 `work-shared` 等待串口证据时超时，`complete=false`，不能把前四项通过写成整组通过。更早 local-fin 的 `valid=0` 与单笔大载荷测试端超时仍是独立失败记录。
+
+`p4-work-shared-rst-20260923` 因暂停 socket 没有确认未读字节而失败；`p4-work-shared-peek-20260923` 两次前置全量读取间原基座复位新增 PHY/NVS 记录，安全门禁在实验应用写入前拒绝，均不计通过。`p4-work-shared-peek-stable-20260923` 的单项验收随后为 `complete=true`：部分握手时活动流与预备流并存，活动流已发送 1024 字节；暂停 socket 的 `pending_read=1` 后触发 RST，活动流失败且 `work_error=-17`，预备流继续等待，最终 `completed=1`、`failed=1`。销毁后重新接入官方 FRPS 的双流回显通过；初始、场景销毁、恢复后销毁的任务/socket 均为 7/1，分配失败零；该单项最低 heap 70260 字节，不替代此前十轮压力最低 60504 字节，更不代表 Base/MQTT 组合资源验收。
+
+stable 单项首次 pipeline 记录验收 `complete=true` 但 `restored=false`：esptool v5.4 执行 `run --after no-reset` 后设备留在 bootloader，原状态等待超时。修正后独立运行恢复脚本，原 ota_0、启动前等于本轮新鲜基线的双份完整 Flash、启动后差异仅在默认 NVS 的一致双份回读，以及同 UUID、revision 5、Wi-Fi 与原 Mac Bridge 均已核对。单板 PF anchor 清空、全局 NAT 规则未变。私有 `recovery-followup.json` 明确记录独立恢复覆盖了 `after-lab.bin` 和 `restore-run.log`，这两个现有文件不是首轮失败现场。四轮各自的结果及可用恢复证据保存在 ESP Tool 忽略的 private receipts；P4、Base/MQTT 组合和 72 小时长稳仍未完成。
+
 2026-09-22 执行约束：按维护者最新要求，后续需人工断电的测试全部暂缓，直到维护者明确通知具备条件；不重复请求拔插，未执行项不计通过。其余开发、自动化和无需人工断电的实板验证继续。
+
+2026-09-23 P4 按需工作握手与半关闭检查点：工作握手 4096 字节 JSON 区只在首段输入时分配，退出时清零释放；C3 会话对象由 21776 降至 17688 字节，Yamux 与 AEAD 接收区保持 5552/65552 字节。8 KiB worker 的同板十轮双流、每流各方向 300001 字节压力最低 heap 为 48296 字节；改用 6 KiB worker 后，同类十轮压力最低 heap 为 60504 字节、worker 最低栈余量 3104 字节。两轮不能合并成一次测试，也不能把数值差全部归因于栈调整。最新独立样例负载超过 48 KiB 最低 heap 目标，Base/MQTT 组合峰值仍待实测。
+
+`work-tail-fin` 已在 C3 验证 StartWorkConn 粘连业务、远端先 FIN、双向完整载荷与随后官方 FRPS 双流恢复。该轮 `work-local-fin` 的样例完整交付证明为 `valid=0`，单项诊断又遇到测试端单笔大载荷 Yamux 写入超时；当时 fixture 刚改用 1 KiB 分块，local-fin、spare、stall、shared 均未计通过。后续结果以本文件顶部的新矩阵为准。该轮完成原应用槽、双份全量 Flash 与原 Bridge 恢复，并清理隔离服务和单板网络规则。详细阶段与失败证据见 [C3 回环与内存问题](../issues/c3-loopback-memory-pressure.md)。
 
 2026-09-23 P4 异常协议检查点：共享官方协议 fixture 新增单设备入口，精确校验端点、身份、Token 与代理名；控制组合扩展为 28 项，另复用 8 项工作流负例。受影响的 host session/work fault ASan/UBSan 回归通过；超长 AEAD 的初次判据与既有合同不符，已修正测试并保留失败证据。固件仅增加工作请求、拒绝、待处理与清理计数，FRP 库和 SDK 实现未改。
 
@@ -10,7 +28,7 @@
 
 首轮 `p4-protocol-20260923` 因时间源不响应，客户端保持未启动；最终轮使用已核对宿主实时钟的隔离 SNTP 服务，设备仍经真实网络同步回调建立可信时间，严格证书校验不变。两轮完整原槽、双份全量 Flash、同 UUID/revision 5/Wi-Fi/Bridge 均恢复，隔离进程与单板 PF 规则清理，全局 NAT 和原系统 SDK 不变。细节见 [C3 协议验收](c3-protocol-acceptance.md)。
 
-完整工作流半关闭、DATA 附 FIN、预备流/慢流/排空及活跃 RST 与部分握手并存的 MCU 组合仍需补齐；Base/MQTT 组合、资源峰值与 72 小时长稳未完成，P4 保持实施中，人工断电继续暂缓。
+此协议矩阵结束时，完整工作流半关闭、DATA 附 FIN、预备流/慢流/排空及活跃 RST 与部分握手并存的 MCU 组合仍需补齐；后续单项结果见顶部检查点。Base/MQTT 组合、资源峰值与 72 小时长稳未完成，P4 保持实施中，人工断电继续暂缓。
 
 2026-09-23 P4 DNS/TLS 检查点：真实域名验收暴露样例用 `esp_netif_set_dns_info` 清空备用 DNS 会被锁定 SDK 的零地址校验拒绝。现由 lwIP 线程同步清空备用位置，完成后才启动 SNTP；没有增加 SDK 补丁。样例补充 0/50 ms stop、50 ms/30 秒 destroy、错误阶段、SDK 错误和命令实际耗时，支持直接复核迟到 DNS 生命周期。
 
