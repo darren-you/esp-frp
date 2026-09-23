@@ -12,7 +12,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lwip/inet.h"
+#include "lwip/dns.h"
 #include "lwip/sockets.h"
+#include "lwip/tcpip.h"
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdatomic.h>
@@ -85,6 +87,13 @@ static esp_err_t start_wifi(void)
         (error=esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, wifi_event, NULL)) != ESP_OK) return error;
     return esp_wifi_start();
 }
+static void clear_backup_dns(void *context)
+{
+    (void)context;
+    /* esp_netif_set_dns_info rejects the zero address. Clearing is a raw lwIP
+     * operation and must finish on its owner before SNTP/FRP can query. */
+    for (u8_t i=1;i<DNS_MAX_SERVERS;++i) dns_setserver(i,NULL);
+}
 static esp_err_t set_dns(void)
 {
     if (!sample_dns_ipv4[0]) return ESP_OK;
@@ -93,10 +102,8 @@ static esp_err_t set_dns(void)
         return ESP_ERR_INVALID_ARG;
     esp_err_t error=esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns);
     if (error != ESP_OK) return error;
-    dns.ip.u_addr.ip4.addr=0;
-    error=esp_netif_set_dns_info(netif, ESP_NETIF_DNS_BACKUP, &dns);
-    if (error != ESP_OK) return error;
-    return esp_netif_set_dns_info(netif, ESP_NETIF_DNS_FALLBACK, &dns);
+    err_t cleared=tcpip_callback_wait(clear_backup_dns,NULL);
+    return cleared == ERR_OK ? ESP_OK : (cleared == ERR_MEM ? ESP_ERR_NO_MEM : ESP_FAIL);
 }
 static efrp_result_t create_client(void)
 {
@@ -114,41 +121,49 @@ static void report(const char *phase)
     bool rssi_valid=esp_wifi_sta_get_ap_info(&access_point)==ESP_OK;
     printf("EFRP_SAMPLE_STATUS cycle=%u client=%u phase=%d error=%d attempts=%" PRIu64 " sessions=%" PRIu64
         " retries=%" PRIu64 " pongs=%" PRIu64 " active=%u waiting=%u completed=%" PRIu64 " failed=%" PRIu64
-        " work_error=%d sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32 " wifi=%u trusted=%u rssi_valid=%u rssi_dbm=%d remote=%s\n",
+        " work_error=%d sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32
+        " failure_phase=%d system_error=%d time_ms=%" PRIu64 " wifi=%u trusted=%u rssi_valid=%u rssi_dbm=%d remote=%s\n",
         cycle, client != NULL, status.phase, status.error, status.attempts, status.ready_sessions, status.retries,
         status.pongs, status.work.active, status.work.waiting, status.work.completed, status.work.failed,
         status.work.last_error, status.work.local_sent, status.work.local_received, status.tls_error, status.tls_verify_flags,
+        status.failure_phase, status.system_error, (uint64_t)esp_timer_get_time()/1000u,
         atomic_load(&wifi_ready), trusted(NULL), rssi_valid, rssi_valid ? access_point.rssi : 0, status.remote_address);
     sample_echo_report(); sample_resources(phase, cycle);
 }
 static void command(const char *text)
 {
     efrp_result_t result=EFRP_OK;
+    uint64_t started=(uint64_t)esp_timer_get_time()/1000u;
     if (!strcmp(text,"stats")) { report("requested"); return; }
-    if (!strcmp(text,"cycle")) {
+    if (!strcmp(text,"cycle") || !strcmp(text,"destroy") || !strcmp(text,"destroy_short")) {
         if (client) {
             efrp_status_t status; (void)efrp_get_status(client, &status);
             if (status.run_id[0]) memcpy(previous_run_id,status.run_id,sizeof previous_run_id);
         }
-        result=efrp_destroy(&client,30000);
+        result=efrp_destroy(&client,!strcmp(text,"destroy_short") ? 50 : 30000);
         if (result == EFRP_OK) {
-            ++cycle;
+            bool recreate=!strcmp(text,"cycle");
+            if (recreate) ++cycle;
             /* app_main also owns the echo side. Let it close connections whose
              * matching work sockets were cancelled before measuring baseline. */
             for (unsigned i=0;i<10;++i) { sample_echo_step(); vTaskDelay(1); }
-            report("destroyed"); result=create_client();
+            report("destroyed");
+            if (recreate) result=create_client();
         }
     } else if (!strcmp(text,"restart")) {
         result=client ? efrp_stop(client,30000) : EFRP_INVALID_STATE;
         if (result == EFRP_OK) result=efrp_start(client);
     } else if (!strcmp(text,"stop")) result=client ? efrp_stop(client,30000) : EFRP_OK;
+    else if (!strcmp(text,"stop_poll")) result=client ? efrp_stop(client,0) : EFRP_OK;
+    else if (!strcmp(text,"stop_short")) result=client ? efrp_stop(client,50) : EFRP_OK;
     else if (!strcmp(text,"start")) result=client ? efrp_start(client) : create_client();
     else if (!strcmp(text,"wifi_down")) { wifi_wanted=false; result=(efrp_result_t)esp_wifi_stop(); }
     else if (!strcmp(text,"wifi_up")) { wifi_wanted=true; result=(efrp_result_t)esp_wifi_start(); }
     else if (!strcmp(text,"echo_off")) sample_echo_stop();
     else if (!strcmp(text,"echo_on")) result=sample_echo_start(sample_frp_config.local_port) ? EFRP_OK : EFRP_NETWORK_ERROR;
     else { puts("EFRP_SAMPLE command_error=unknown"); return; }
-    printf("EFRP_SAMPLE command=%s error=%d cycle=%u\n", text,result,cycle);
+    printf("EFRP_SAMPLE command=%s error=%d cycle=%u client=%u elapsed_ms=%" PRIu64 "\n",
+        text,result,cycle,client!=NULL,(uint64_t)esp_timer_get_time()/1000u-started);
 }
 static void serial_input(void)
 {

@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
     input["仓外 inputs.h：Wi-Fi / FRP / CA / NTP / 可选 DNS"] --> main["main/sample_main.c：控制任务"]
-    sdk["官方 ESP-IDF Wi-Fi / SNTP"] <-->|"RAM 配置、IP 与可信时间"| main
+    sdk["官方 ESP-IDF Wi-Fi / DNS / SNTP"] <-->|"RAM 配置、唯一解析器、IP 与可信时间"| main
     main --> client["本仓 esp_frp.h：唯一 FRP worker"]
     client <-->|"DNS / TCP / 严格 TLS / FRP"| frps["隔离的官方 FRPS v0.71.0"]
     test["外部测试 TCP 客户端"] <-->|"双向业务"| frps
@@ -31,7 +31,7 @@ idf.py -C examples/tcp_proxy -B /private/path/frp-build \
 
 从 `inputs.example.h` 开始，填写自己的 Wi-Fi、NTP、唯一 FRPS 域名/端口、CA、Token 和代理身份。样例只允许 `127.0.0.1` 作为本地目标，port 指定回显 listener；库本身仍支持配置中的单一固定 IPv4 目标。`remote_port=0` 让隔离 FRPS 分配端口，成功状态中的 `remote=` 用于本轮连接。这里不读取相邻 ESP Base、私有工作区配置或生产 FRPS catalog。
 
-`sample_dns_ipv4` 为空时使用 DHCP 提供的正常 DNS；填入明确 IPv4 时，每次获得 IP 后将其设置为唯一主 DNS，并清空备用位置，适合本机隔离 DNS fixture。证书身份仍是 `server_hostname`，不能用绕过身份校验替代 DNS。NTP 应是可信且可达的时间来源；收到实际同步后才启动 FRP，超过两小时未再次同步则可信条件失效。
+`sample_dns_ipv4` 为空时使用 DHCP 提供的正常 DNS；填入明确 IPv4 时，每次获得 IP 后将其设置为唯一主 DNS，并清空备用位置，适合本机隔离 DNS fixture。SDK 的 `esp_netif_set_dns_info` 拒绝零地址，因此备用位置通过 `tcpip_callback_wait` 在 lwIP 线程清空，完成后才启动 SNTP。证书身份仍是 `server_hostname`，不能用绕过身份校验替代 DNS。NTP 应是可信且可达的时间来源；收到实际同步后才启动 FRP，超过两小时未再次同步则可信条件失效。
 
 默认仅指定 C3 / 4 MiB，使用 SDK 默认分区，并不等于某块既有设备的可刷布局。给已有板测试时，在仓外准备其已核对的完整 sdkconfig/分区表或额外 `SDKCONFIG_DEFAULTS`；样例不导入其他仓的分区文件。编译不执行 flash。必须重新枚举、验证芯片/Flash/UUID和活动分区，保存两份一致的完整基线，再单独决定应用槽写入。测试后恢复整个原应用槽并核对非应用分区及身份；禁止照抄 build 输出里的全盘写入命令。
 
@@ -43,11 +43,15 @@ USB Serial/JTAG 输入为一行一个精确命令，最多 63 个 ASCII 字符�
 
 - `stats`：状态、回显计数、任务栈、socket 和 esp_timer。
 - `restart`：同一实例 stop/start；`stop`、`start` 单独控制。
+- `stop_poll`、`stop_short`：分别以零等待和 50 ms 调用 stop；迟到 DNS 尚未收敛时，应分别返回 WOULD_BLOCK / TIMEOUT，并保留句柄与停止请求。之后仍须等 `stop` 成功。
+- `destroy_short`、`destroy`：分别以 50 ms / 30 秒调用 destroy；只有成功才释放并清空句柄，报告销毁后资源，不自动新建。使用 `start` 可重新创建。
 - `cycle`：保存已验证 run_id，完整 destroy，报告销毁后资源，再 create/start 并重新鉴权；统计 cycle 必须逐次确认，不能把命令写入当作成功。
 - `wifi_down`、`wifi_up`：停止/启动本板 station，让已有 FRP worker 处理网络中断与恢复；不代表外部 AP 或人工断电验收。
 - `echo_off`、`echo_on`：取消/恢复板内 listener，用于本地拒绝与连接中断。
 
 回显服务只有两个 1024 字节缓冲，由 main 推进。它只在板内回环监听，不提供未鉴权的局域网实验控制入口。首个 FRP READY 需完成严格 TLS、注册与认证 Pong；业务字节仍应由外部测试客户端逐字节或摘要核对。
+
+状态包含 `failure_phase`、`system_error` 和单调 `time_ms`，用于区分 DNS/TCP、TLS 与协议失败。命令回执记录实际返回值、耗时与句柄是否仍存在；短期限返回不能当作清理完成。
 
 ## 资源与边界
 
