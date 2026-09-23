@@ -11,6 +11,8 @@ flowchart LR
     sample --> echo["sample_echo.c：固定回环 TCP 目标"]
     sample --> resources["sample_resources.c：任务、heap、socket 和 esp_timer 观测"]
     owner["应用控制任务"] -->|"create / start / stop / destroy；有界队列"| client["src/client.c：唯一 worker、清理与退避"]
+    qemu["官方 ESP32-C3 QEMU"] --> lifecycle["tests/c3-lifecycle：不可信时间与百次回收"]
+    lifecycle --> client
     sdk_lock["sdk-lock.json / tools/sdk.py：精确 SDK 源依赖"] --> idf
     sdk_lock --> fixed_lwip["公开 esp-lwip：零窗口 ACK 根因修正"]
     fixed_lwip --> lwip
@@ -78,6 +80,8 @@ ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公
 ## 独立开发
 
 [独立 C3 TCP 样例](examples/tcp_proxy/README.md) 使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。默认空输入只供编译，真实设备必须先核对其分区与恢复基线。
+
+[C3 生命周期故障探针](tests/c3-lifecycle/README.md)使用公开占位输入，在官方 QEMU 检查真实 FreeRTOS worker 的不可信时间拒绝和百次销毁回收；验证范围与实板边界见[运行记录](docs/operations/p4-c3-qemu-lifecycle.md)。
 
 ```bash
 cmake -S . -B build -DBUILD_TESTING=ON

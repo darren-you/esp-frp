@@ -1,4 +1,4 @@
-# 协议核心测试
+# ESP FRP 测试
 
 ## 架构拓扑
 
@@ -43,11 +43,15 @@ flowchart LR
     worker --> lib
     worker --> fixture
     session <-->|"真实重启与双流"| client
+    qemu["官方 ESP32-C3 QEMU"] --> lifecycle["c3-lifecycle：真实 FreeRTOS worker 失败与回收"]
+    lifecycle --> lib
     dependency["esp-lwip/tests/zero-window：依赖独立回归"] --> sdk["显式实际 lwIP 源码"]
     sdk --> zero["双向零窗口、序号边界与回绕"]
 ```
 
-默认需 C11、CMake >= 3.16、OpenSSL >=3.0 和 cJSON 1.7.19 开发库；在仓库根执行：
+[C3 生命周期故障探针](c3-lifecycle/README.md)使用相同的 `esp-frp` 设备源码与 FreeRTOS port，在官方 QEMU 检验不可信时间拒绝和百次回收；这条设备软件路径不依赖 host POSIX 调度，结果见[运行记录](../docs/operations/p4-c3-qemu-lifecycle.md)。
+
+默认 host 测试需 C11、CMake >= 3.16、OpenSSL >=3.0 和 cJSON 1.7.19 开发库；在仓库根执行：
 
 ```bash
 cmake -S . -B build -DBUILD_TESTING=ON \
