@@ -110,13 +110,15 @@ static void report(const char *phase)
 {
     efrp_status_t status={0};
     if (client) (void)efrp_get_status(client, &status);
+    wifi_ap_record_t access_point={0};
+    bool rssi_valid=esp_wifi_sta_get_ap_info(&access_point)==ESP_OK;
     printf("EFRP_SAMPLE_STATUS cycle=%u client=%u phase=%d error=%d attempts=%" PRIu64 " sessions=%" PRIu64
         " retries=%" PRIu64 " pongs=%" PRIu64 " active=%u waiting=%u completed=%" PRIu64 " failed=%" PRIu64
-        " work_error=%d sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32 " wifi=%u trusted=%u remote=%s\n",
+        " work_error=%d sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32 " wifi=%u trusted=%u rssi_valid=%u rssi_dbm=%d remote=%s\n",
         cycle, client != NULL, status.phase, status.error, status.attempts, status.ready_sessions, status.retries,
         status.pongs, status.work.active, status.work.waiting, status.work.completed, status.work.failed,
         status.work.last_error, status.work.local_sent, status.work.local_received, status.tls_error, status.tls_verify_flags,
-        atomic_load(&wifi_ready), trusted(NULL), status.remote_address);
+        atomic_load(&wifi_ready), trusted(NULL), rssi_valid, rssi_valid ? access_point.rssi : 0, status.remote_address);
     sample_echo_report(); sample_resources(phase, cycle);
 }
 static void command(const char *text)

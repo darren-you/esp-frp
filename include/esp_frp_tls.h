@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 #define EFRP_TLS_MAX_CA_BYTES 16384u
-#define EFRP_TLS_TX_BYTES 4096u
+/* One 1 KiB application chunk plus its serialized 12-byte Yamux header. */
+#define EFRP_TLS_TX_BYTES (1024u + 12u)
 #define EFRP_TLS_HANDSHAKE_MS UINT64_C(10000)
 #define EFRP_TLS_IO_MS UINT64_C(5000)
 typedef struct efrp_tls efrp_tls_t;
@@ -48,7 +49,8 @@ efrp_result_t efrp_tls_create(const efrp_tls_config_t *config, uint64_t now_ms, 
  * Call step while writes are pending; keep the same handle until they drain. */
 efrp_result_t efrp_tls_step(efrp_tls_t *tls, uint64_t now_ms);
 efrp_result_t efrp_tls_read(efrp_tls_t *tls, uint64_t now_ms, uint8_t *bytes, size_t capacity, size_t *received);
-/* Copies a prefix into a 4 KiB queue; accepted is not a delivery receipt. */
+/* Copies a prefix into a 1036-byte queue; accepted is not a delivery receipt.
+ * This staging bound does not limit incoming TLS record lengths. */
 efrp_result_t efrp_tls_write(efrp_tls_t *tls, uint64_t now_ms, const uint8_t *bytes, size_t length, size_t *accepted);
 /* Drain queued bytes and send close_notify within 5 seconds via step.
  * CLOSED frees TLS resources but does not close caller's socket. */

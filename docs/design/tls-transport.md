@@ -17,7 +17,7 @@ create 初始化 PSA、解析 CA、创建 SDK TLS 对象，但不执行网络 I/
 
 `step` 每次最多推进一次 SDK 握手、发送或关闭操作。`WOULD_BLOCK` 配合 `want` 告诉 owner 等待读/写就绪；`WANT_NONE` 表示内部推进，可以再次调度。回调必须为真正非阻塞 I/O，`OK` 只能报告 1..请求长度字节，`WOULD_BLOCK` 和接收 EOF 必须报告零；越界、空成功或发送 EOF 会使会话永久失败。该接口不保证密码计算的硬实时执行上限。
 
-write 把最多 4096 字节复制到自有队列，调用方可立即复用输入；accepted 只代表入队。owner 必须调用 step 排空。Mbed TLS 的 WANT 重试始终使用相同指针与长度；只有 SDK 确认发送后才清零并移动偏移。队列非空时拒绝新写入并对 read 返回背压，外层负责公平调度及完整双向转发验收。
+发送队列只限制单次入队前缀，不是 TLS record 上限；SDK 仍接收完整 16 KiB TLS record。队列容纳一块 1 KiB 数据及 12 字节 Yamux 帧头，避免每块拆出额外 TLS 写入。write 把最多 1036 字节复制到自有队列，调用方可立即复用输入；accepted 只代表入队。owner 必须调用 step 排空。Mbed TLS 的 WANT 重试始终使用相同指针与长度；只有 SDK 确认发送后才清零并移动偏移。队列非空时拒绝新写入并对 read 返回背压，外层负责公平调度及完整双向转发验收。
 
 所有期限使用 owner 传入的单调毫秒，拒绝倒退和加法溢出：握手从 create 起 10 秒；每次写入从入队起 5 秒；close 从首次请求起 5 秒，不因局部进度延长。close 先排空已入队数据再发送 close_notify；它不等待对方通知。无待发送数据的 OPEN 状态没有独立空闲计时器，后续 worker/Yamux 负责连接活性；owner 必须持续调用 API 才能裁决期限。
 

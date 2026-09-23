@@ -82,9 +82,9 @@ static void window_and_output(void)
     flush(&m);
     /* Data is permitted before ACK, as in the protocol's zero-RTT stream open. */
     for (size_t total = 0; total < EFRP_YAMUX_INITIAL_WINDOW; total += written) {
-        assert(efrp_yamux_write(&m, id, payload, sizeof payload, &written) == EFRP_OK && written == 4096);
-        assert(efrp_yamux_output(&m, &p, &n) == EFRP_OK && n == 4108);
-        assert(p[1] == 0 && word(p + 4) == id && word(p + 8) == 4096 && !memcmp(p + 12, payload, 4096));
+        assert(efrp_yamux_write(&m, id, payload, sizeof payload, &written) == EFRP_OK && written == EFRP_YAMUX_RING_BYTES);
+        assert(efrp_yamux_output(&m, &p, &n) == EFRP_OK && n == EFRP_YAMUX_HEADER_BYTES + written);
+        assert(p[1] == 0 && word(p + 4) == id && word(p + 8) == written && !memcmp(p + 12, payload, written));
         flush(&m);
     }
     assert(efrp_yamux_write(&m, id, payload, 1, &written) == EFRP_WOULD_BLOCK);
@@ -113,7 +113,7 @@ static void stalled_and_late_data(void)
     uint8_t input[8192 + 25], out[8]; size_t used, got;
     frame(input, 0, 4, first, 8192); memset(input + 12, 0xa7, 8192);
     frame(input + 8204, 0, 0, second, 1); input[8216] = 0x42;
-    assert(efrp_yamux_feed(&m, input, sizeof input, &used) == EFRP_WOULD_BLOCK && used == 4108);
+    assert(efrp_yamux_feed(&m, input, sizeof input, &used) == EFRP_WOULD_BLOCK && used == 12 + EFRP_YAMUX_RING_BYTES);
     efrp_yamux_stream_info_t info;
     assert(efrp_yamux_info(&m, second, &info) == EFRP_OK && !info.readable_bytes);
     assert(efrp_yamux_tick(&m, 2499) == EFRP_OK);
@@ -128,7 +128,7 @@ static void stalled_and_late_data(void)
     frame(input, 0, 0, first, 3); memcpy(input + 12, "old", 3);
     assert(efrp_yamux_feed(&m, input, 15, &used) == EFRP_OK && used == 15);
     assert(efrp_yamux_info(&m, third, &info) == EFRP_OK && !info.readable_bytes);
-    assert(m.discarded_bytes == 4099);
+    assert(m.discarded_bytes == 8192 - EFRP_YAMUX_RING_BYTES + 3);
 }
 static void control_and_capacity(void)
 {
@@ -269,10 +269,55 @@ static void bounded_discard(void)
     assert(efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT); // Absolute bounded drain, even with progress.
     free(p);
 }
+static void continuous_receive_and_send(void)
+{
+    efrp_yamux_t m; efrp_yamux_init(&m, 0);
+    uint32_t ids[2] = {open_stream(&m), open_stream(&m)};
+    uint8_t input[76], out[64];
+    unsigned data_frames = 0, grants[2] = {0};
+    /* Every scheduling turn makes more receive credit available. A sender
+     * must still make progress, and both receivers must get their credit. */
+    for (unsigned turn = 0; turn < 1024; ++turn) {
+        assert(efrp_yamux_tick(&m, turn * 10u) == EFRP_OK);
+        for (unsigned i = 0; i < 2; ++i) {
+            frame(input, 0, 0, ids[i], sizeof out);
+            memset(input + 12, (int)i, sizeof out);
+            size_t used;
+            assert(efrp_yamux_feed(&m, input, sizeof input, &used) == EFRP_OK && used == sizeof input);
+            assert(efrp_yamux_read(&m, ids[i], out, sizeof out, &used) == EFRP_OK && used == sizeof out);
+        }
+        size_t written, length; const uint8_t *bytes;
+        efrp_result_t result = efrp_yamux_write(&m, ids[1], (const uint8_t *)"x", 1, &written);
+        assert(result == EFRP_OK || result == EFRP_WOULD_BLOCK);
+        assert(efrp_yamux_output(&m, &bytes, &length) == EFRP_OK);
+        if (bytes[1] == 0) {
+            assert(result == EFRP_OK && written == 1 && word(bytes + 4) == ids[1]);
+            ++data_frames;
+        } else {
+            assert(bytes[1] == 1 && result == EFRP_WOULD_BLOCK && !written);
+            unsigned index = word(bytes + 4) == ids[0] ? 0 : 1;
+            assert(word(bytes + 4) == ids[index]); ++grants[index];
+        }
+        assert(efrp_yamux_consume_output(&m, length) == EFRP_OK);
+    }
+    printf("Continuous receive/send: DATA=%u grants=%u/%u\n", data_frames, grants[0], grants[1]);
+    fflush(stdout);
+    assert(data_frames >= 512 && grants[0] >= 256 && grants[1] >= 256);
+    flush(&m);
+    for (unsigned i = 0; i < 2; ++i)
+        assert(m.streams[i].receive_credit == EFRP_YAMUX_INITIAL_WINDOW);
+    /* Even after a credit grant yielded a DATA slot, queued protocol controls
+     * must precede application data (including SYN before a new stream). */
+    assert(efrp_yamux_ping(&m, 0x1234) == EFRP_OK);
+    size_t written, length; const uint8_t *bytes;
+    assert(efrp_yamux_write(&m, ids[1], (const uint8_t *)"x", 1, &written) == EFRP_WOULD_BLOCK && !written);
+    assert(efrp_yamux_output(&m, &bytes, &length) == EFRP_OK && bytes[1] == 2 && word(bytes + 8) == 0x1234);
+    assert(efrp_yamux_consume_output(&m, length) == EFRP_OK);
+}
 int main(void)
 {
     large_frames(); window_and_output(); stalled_and_late_data(); control_and_capacity();
-    invalid_frames(); combined_flags(); deadlines_and_reuse(); bounded_discard();
+    invalid_frames(); combined_flags(); deadlines_and_reuse(); bounded_discard(); continuous_receive_and_send();
     printf("Yamux host checks passed; caller-owned session bytes: %zu\n", sizeof(efrp_yamux_t));
     return 0;
 }

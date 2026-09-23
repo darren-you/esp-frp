@@ -108,13 +108,16 @@ efrp_result_t efrp_yamux_output(efrp_yamux_t *m, const uint8_t **bytes, size_t *
             --m->control_count;
             m->output_used = EFRP_YAMUX_HEADER_BYTES;
         } else for (size_t i = 0; i < EFRP_YAMUX_STREAMS; ++i) {
-            efrp_yamux_stream_t *s = &m->streams[i];
+            unsigned slot = (m->credit_cursor + i) % EFRP_YAMUX_STREAMS;
+            efrp_yamux_stream_t *s = &m->streams[slot];
             if (s->id && !s->reset && !s->remote_fin && s->return_credit) {
                 header(m->output, WINDOW, 0, s->id, s->return_credit);
                 m->output_grant_id = s->id; m->output_grant_bytes = s->return_credit;
                 s->return_credit = 0;
                 m->output_used = EFRP_YAMUX_HEADER_BYTES;
                 m->output_progress_ms = m->now_ms;
+                m->credit_cursor = (slot + 1) % EFRP_YAMUX_STREAMS;
+                m->prefer_data = true;
                 break;
             }
         }
@@ -156,13 +159,18 @@ efrp_result_t efrp_yamux_write(efrp_yamux_t *m, uint32_t id,
     if (s->local_fin) return EFRP_INVALID_STATE;
     if (!length) return EFRP_OK;
     const uint8_t *pending; size_t pending_length;
-    if (efrp_yamux_output(m, &pending, &pending_length) == EFRP_OK || !s->send_credit)
+    /* Mandatory control frames keep priority. Automatic credit grants yield
+     * one free output slot to DATA; otherwise steady reads can forever create
+     * another WindowUpdate before any application write gets accepted. */
+    if (((m->output_used || m->control_count || !m->prefer_data) &&
+         efrp_yamux_output(m, &pending, &pending_length) == EFRP_OK) || !s->send_credit)
         return EFRP_WOULD_BLOCK;
     size_t n = length < EFRP_YAMUX_RING_BYTES ? length : EFRP_YAMUX_RING_BYTES;
     if (n > s->send_credit) n = s->send_credit;
     header(m->output, DATA, 0, id, (uint32_t)n);
     memcpy(m->output + EFRP_YAMUX_HEADER_BYTES, bytes, n);
     m->output_used = EFRP_YAMUX_HEADER_BYTES + n; m->output_progress_ms = m->now_ms;
+    m->prefer_data = false;
     s->send_credit -= (uint32_t)n; *written = n;
     return EFRP_OK;
 }

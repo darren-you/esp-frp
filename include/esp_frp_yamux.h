@@ -10,7 +10,8 @@ extern "C" {
 #endif
 
 #define EFRP_YAMUX_STREAMS 4u
-#define EFRP_YAMUX_RING_BYTES 4096u
+/* Incremental staging, not a DATA or receive-credit limit. */
+#define EFRP_YAMUX_RING_BYTES 1024u
 #define EFRP_YAMUX_HEADER_BYTES 12u
 #define EFRP_YAMUX_INITIAL_WINDOW 262144u
 #define EFRP_YAMUX_CONTROL_SLOTS 8u
@@ -37,6 +38,7 @@ typedef struct {
     uint8_t output[EFRP_YAMUX_HEADER_BYTES + EFRP_YAMUX_RING_BYTES];
     size_t output_used, output_offset;
     uint32_t output_grant_id, output_grant_bytes;
+    unsigned credit_cursor;
     uint8_t header[EFRP_YAMUX_HEADER_BYTES];
     size_t header_used;
     uint32_t frame_id, frame_remaining, next_id, peer_last_id, discarded_bytes;
@@ -44,7 +46,7 @@ typedef struct {
     uint64_t now_ms, input_progress_ms, output_progress_ms, ping_started_ms;
     uint64_t header_started_ms, drain_started_ms;
     uint32_t ping_id;
-    bool frame_active, frame_discard, local_goaway, remote_goaway, ping_pending;
+    bool frame_active, frame_discard, local_goaway, remote_goaway, ping_pending, prefer_data;
     efrp_result_t failure;
 } efrp_yamux_t;
 

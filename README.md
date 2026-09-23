@@ -87,7 +87,7 @@ ctest --test-dir build --output-on-failure
 
 `efrp_wire_init` 借用调用者缓冲区，输入指针不被保留。feed 支持拆帧与粘帧，只有完整帧才回调；EOF 用 finish 检查截断。最大 wire payload 为 65536 字节；header 与 payload 独立计数，非法输入后 reader 永久失败，必须重建连接再初始化。回调 payload 只在回调期间有效，不允许回调重入。该 parser 不是 TLS、Yamux 或 AEAD parser，不能将未经认证的 AEAD 明文直接交给它。
 
-`esp_frp_yamux.h` 提供单 owner、无分配、无 socket 的客户端核心。四流各用 4 KiB ring，协议初始窗口保持 256 KiB；可增量接收大于 ring 的 DATA。调用方定期 tick，显式消费串流和输出；仅当完整 WindowUpdate 已交给 transport 才归还接收信用。慢流超时 RST、释放后数据有界排空、半关闭与 PING/GOAWAY 均有 host 回归。完整合同和限制见 [Yamux 核心](docs/design/yamux-core.md)。
+`esp_frp_yamux.h` 提供单 owner、无分配、无 socket 的客户端核心。四流各用 1 KiB ring，协议初始窗口保持 256 KiB；可增量接收大于 ring 的 DATA。调用方定期 tick，显式消费串流和输出；仅当完整 WindowUpdate 已交给 transport 才归还接收信用。慢流超时 RST、释放后数据有界排空、半关闭与 PING/GOAWAY 均有 host 回归。完整合同和限制见 [Yamux 核心](docs/design/yamux-core.md)。
 
 `esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生；接收端必须提供 65552 字节工作区，在完整 GCM tag 验证前不暴露明文，失败后清零并永久拒绝复用。发送端支持小记录与部分输出，nonce 来自密码随机源，单方向限制 2^32 条记录。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)。
 
@@ -95,7 +95,7 @@ ctest --test-dir build --output-on-failure
 
 可选上游 Yamux 互操作检查需要 POSIX 宿主和 Go >= 1.23，以 `-DEFRP_TEST_UPSTREAM_YAMUX=ON` 配置后运行 CTest。AEAD 官方交叉验证使用 Go >=1.25 与 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON`。两者各自固定公开 Go 依赖，不读取相邻仓或生产 FRPS；默认 host 检查不依赖 Go 或外网，POSIX 连接测试会使用回环 TCP。具体命令见[测试入口](tests/README.md)。
 
-`esp_frp_tls.h` 对已连接的非阻塞 transport 提供严格 TLS；证书、身份、日期与 owner 的可信时间条件均须满足，4 KiB 自有发送队列保持 SDK 重试指针稳定，握手/写入/关闭受绝对期限约束。终止后释放会话并停止回调，由外层关闭 socket。它不执行 DNS 或创建任务，详见 [TLS 合同](docs/design/tls-transport.md)。IDF 与显式 `EFRP_MBEDTLS_SOURCE_DIR` host 构建导出 `EFRP_HAS_TLS=1`；默认 OpenSSL/独立 PSA 构建只验证协议核心，导出 0 且不包含 TLS 符号。
+`esp_frp_tls.h` 对已连接的非阻塞 transport 提供严格 TLS；证书、身份、日期与 owner 的可信时间条件均须满足，1036 字节自有发送队列保持 SDK 重试指针稳定，握手/写入/关闭受绝对期限约束。终止后释放会话并停止回调，由外层关闭 socket。它不执行 DNS 或创建任务，详见 [TLS 合同](docs/design/tls-transport.md)。IDF 与显式 `EFRP_MBEDTLS_SOURCE_DIR` host 构建导出 `EFRP_HAS_TLS=1`；默认 OpenSSL/独立 PSA 构建只验证协议核心，导出 0 且不包含 TLS 符号。
 
 `esp_frp_connect.h` 在 IDF 提供一次 IPv4 DNS/TCP 尝试，也支持无需 DNS 的固定 IPv4 本地目标，使用现有 lwIP 任务与非阻塞 socket；必须开启 `CONFIG_LWIP_SO_LINGER=y`。取消后不再建连，已发 DNS 查询仍须等 SDK 回调收敛，destroy 只在资源释放后成功；close_write/finish 提供工作流的正常半关闭和排空路径，不自行重连。详见 [连接生命周期](docs/design/connection-lifecycle.md)。IDF 导出 `EFRP_HAS_CONNECT=1`，正常 host 库为 0；host 网络测试单独链接仅测试解析器。应用客户端同样只在 IDF 导出 `EFRP_HAS_CLIENT=1`；POSIX 调度适配仅供测试。
 

@@ -202,7 +202,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, mode string, work f
 		return awaitStop()
 	case "fixture-record":
 		p, _ := json.Marshal(response)
-		// A 4096-byte wire payload crosses every intermediate 1/4 KiB staging
+		// A 4096-byte wire payload crosses every intermediate 1 KiB staging
 		// boundary; add a second frame in the same authenticated record.
 		p = append(p[:len(p)-1], []byte(strings.Repeat(" ", 4094-len(p)))...)
 		p = append(p, '}')

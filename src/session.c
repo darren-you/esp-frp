@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+_Static_assert(EFRP_TLS_TX_BYTES >= EFRP_YAMUX_HEADER_BYTES + EFRP_YAMUX_RING_BYTES,
+    "session TLS staging must hold one complete Yamux output frame");
+
 struct efrp_session {
     efrp_tls_t *tls;
     efrp_yamux_t *mux;
@@ -29,7 +32,9 @@ struct efrp_session {
     /* The full authenticated record buffer is separate: C3 Wi-Fi/TLS heap
      * regions cannot guarantee one contiguous allocation for both objects. */
     uint8_t *aead_rx;
-    uint8_t transport_rx[4096], control_rx[1024], control_tx[1024];
+    /* All readers retain and resume partial input. Match the work transfer
+     * chunk without reducing any TLS, Yamux, AEAD or JSON frame limit. */
+    uint8_t transport_rx[1024], control_rx[1024], control_tx[1024];
     uint8_t token[EFRP_AEAD_MAX_TOKEN_BYTES];
     char proxy_name[129];
     size_t token_length, transport_used, transport_offset, control_used, control_offset;

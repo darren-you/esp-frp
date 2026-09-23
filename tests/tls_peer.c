@@ -126,7 +126,9 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_n, const char
     for (size_t offset = 0; offset < 200001;) {
         size_t count = 200001 - offset; if (count > sizeof buffer) count = sizeof buffer;
         for (size_t i = 0; i < count; ++i) buffer[i] = (uint8_t)((offset + i) * 31u);
-        assert(efrp_tls_write(tls, now_ms(), buffer, count, &used) == EFRP_OK && used == count);
+        size_t expected = count < EFRP_TLS_TX_BYTES ? count : EFRP_TLS_TX_BYTES;
+        assert(efrp_tls_write(tls, now_ms(), buffer, count, &used) == EFRP_OK && used == expected);
+        count = used; /* Retry the unaccepted suffix on the next iteration. */
         memset(buffer, 0xee, sizeof buffer); /* Queue must own accepted bytes. */
         assert(efrp_tls_write(tls, now_ms(), buffer, 1, &used) == EFRP_WOULD_BLOCK && !used);
         do {
