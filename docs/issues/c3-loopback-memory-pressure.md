@@ -21,7 +21,7 @@
 
 最小修正只将空报文分支改为：零窗口比较 `seqno == rcv_nxt`，非零窗口保留既有范围判断。没有 ACK 限流、丢包绕路或看门狗例外。独立回归直接编译真实 lwIP，覆盖两端窗口填满/恢复、空包边界、错误序号拒绝和序号回绕；原始 `c6f2f878e7b0f86033214b85547d579be43351e3` 的两项用例均失败，修正后的两项 ASan/UBSan 用例均通过。
 
-维护者已明确允许纳管最小 SDK 根因修正并继续验收。公开源依赖 [esp-lwip](https://github.com/darren-you/esp-lwip) 保留 Espressif 上游历史与 BSD 许可，精确修正提交为 `3dc581c9584da3b3bd6207d31e17a24bb8ef4033`。ESP-IDF 仍固定 v6.1 提交 `fff9895c82d744c7237be8847347bdd1b07c6643`，组合由本仓 `sdk-lock.json` 和 `tools/sdk.py` 唯一声明；全新公开 checkout 已准备成功。CMake 拒绝原始 lwIP、其他 SDK 修改和外部 lwIP 组件覆盖。原系统 SDK 保持未修改。
+维护者已明确允许纳管最小 SDK 根因修正并继续验收。公开源依赖 [esp-lwip](https://github.com/esp-space/esp-lwip) 保留 Espressif 上游历史与 BSD 许可，精确修正提交为 `3dc581c9584da3b3bd6207d31e17a24bb8ef4033`。ESP-IDF 仍固定 v6.1 提交 `fff9895c82d744c7237be8847347bdd1b07c6643`，组合由本仓 `sdk-lock.json` 和 `tools/sdk.py` 唯一声明；全新公开 checkout 已准备成功。CMake 拒绝原始 lwIP、其他 SDK 修改和外部 lwIP 组件覆盖。原系统 SDK 保持未修改。
 
 隔离修正版实板对照已完成：
 

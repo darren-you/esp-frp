@@ -1,4 +1,4 @@
-module github.com/darren-you/esp-frp/tests/crypto-interop
+module github.com/esp-space/esp-frp/tests/crypto-interop
 
 go 1.25.0
 

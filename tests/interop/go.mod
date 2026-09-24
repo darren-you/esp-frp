@@ -1,4 +1,4 @@
-module github.com/darren-you/esp-frp/tests/interop
+module github.com/esp-space/esp-frp/tests/interop
 
 go 1.23.0
 

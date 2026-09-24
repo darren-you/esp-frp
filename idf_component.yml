@@ -1,7 +1,7 @@
 version: "0.1.0"
 description: "ESP FRP protocol implementation under development"
-url: "https://github.com/darren-you/esp-frp"
-repository: "https://github.com/darren-you/esp-frp.git"
+url: "https://github.com/esp-space/esp-frp"
+repository: "https://github.com/esp-space/esp-frp.git"
 license: "Apache-2.0"
 dependencies:
   idf: "==6.1.0"
