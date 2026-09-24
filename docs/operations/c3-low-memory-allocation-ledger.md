@@ -21,15 +21,25 @@
 
 会话创建次序先申请会话对象，再申请 65,552 字节 AEAD 接收区，最后申请 Yamux；严格 TLS 已完成后才进入此路径。完整合法控制记录的 GCM tag 验证成功前，`src/aead.c` 不将明文交给 wire parser。当前合同接受 64 KiB AEAD 明文，不能因常见控制 JSON 较小而把接收区改为小包上限。减小搬运块、Yamux ring 或 worker 栈只影响上表其余部分，无法消除这一完整记录的存储需求；更改申请次序也不改变同时存活的总量。
 
-## 最新五组件 QEMU 对照
+## 当前五组件 QEMU 对照
 
-[Container 五组件 QEMU 容量复测](https://github.com/darren-you/esp-container/blob/77155349795f3b6564e6f6fbbacb61e884e583ad/docs/operations/five-component-qemu-capacity-probe.md) 使用 Base `31f5ebc`、FRP `c5fbe40`、MQTT `5bff093`、OTA `3c3f72b`、Container `00c788e` 与同一固定 SDK。64 KiB guest 在 `ESP_BASE_READY` 后存活且完成事件调用时，8-bit free heap 为 **11,328 字节**，最大连续块为 **7,680 字节**。此时 FRP／MQTT／OTA 入口只被链接，尚未建立网络会话。
+[Base 第二轮 C3 内存复测](https://github.com/esp-space/esp-base/blob/fa4d622f7824924184039a9f365be5548241e3aa/docs/operations/c3-low-memory-base-probe.md)使用 Base `fa4d622`、FRP `c56a0f3`、MQTT `ccf81df`、OTA `3c3f72b`、Container `60b65d2` 与固定 WAMR／ESP-IDF。测试键签名的五组件 QEMU 镜像在**未建立 Wi-Fi、FRPS、Broker 或 OTA 下载会话**时，`ESP_BASE_READY` 的 8-bit free heap／最大连续块为 **152,124／114,688 字节**；64 KiB guest 存活并完成事件调用时为 **61,736／40,960 字节**。FRP、MQTT、OTA 仅被链接，QEMU 专用 ADC2 校准空实现使镜像不能刷写实板。该探针尚未使用下文 Container `bbc186e` 的按节装载实现。
 
-单次 AEAD 申请比该时点空闲总量多 **54,224 字节**，比最大连续块多 **57,872 字节**；即使其余 FRP 对象和 TLS 均不占内存，也无法在此 QEMU 状态创建当前 FRP 会话。`ESP_BASE_READY` 空闲 101,716 字节；同一 WAMR 版本已观测到的 69,632 字节线性内存申请与 AEAD 接收区之和为 135,184 字节，单这两块就比 READY 空闲多 **33,468 字节**，还未计 guest 的其他分配和 FRP 网络资源。
+在 guest 存活的这个时点，单次 **65,552 字节** AEAD 接收区申请已分别超过空闲总量 **3,816 字节**、最大连续块 **24,592 字节**；因此现有调用顺序无法再创建 FRP 会话。上表 FRP 显式并存对象总计 **100,496 字节**，比该时点的剩余空闲堆多 **38,760 字节**，尚未计 CA、Mbed TLS／PSA、lwIP、Wi-Fi 或其他动态申请。不能把这些缺口解释为调整分配次序即可消除，也不能据此声称真实板上的最终并发容量。
 
-同一 QEMU 镜像在 **没有 guest、没有网络连接**的 `ESP_BASE_READY` 时点，free heap 为 **101,716 字节**，最大连续块为 **90,112 字节**。上表 FRP 显式并存对象合计 **100,496 字节**，与这个时点的 free heap 相差仅 **1,220 字节**；这还是未计 CA、Mbed TLS／PSA 动态内存、lwIP、连接与工作流临时申请的静态下界。此处只把预计同时存活的 FRP 对象与**同一无 guest 时点**的 free heap 比较，没有把 guest 存活后的 11,328 字节再与 READY 数值相加；单次 65,552 字节申请虽然小于 READY 时的最大连续块，也不能证明后续 TLS 握手和会话能分配成功。因此，即使改为 FRP 与 guest 互斥，也必须先在完整五组件镜像中完成真实 FRPS 连接及资源测量，不能把互斥作为已经可行的 C3 设计。
+同一镜像在**没有 guest、没有网络连接**的 READY 时点，即使先扣除 FRP 已知显式对象，也只剩 **51,628 字节**；真实 TLS 握手、CA、网络栈、MQTT 与工作流尚未支付。此时最大连续块 114,688 字节虽大于单次 AEAD 申请，仍不能证明 FRP 会话能完成创建、认证并持续运行。FRP 与 guest 互斥目前也只是待验证的容量假设，不是已经可行的 C3 设计。
 
-因此，本分支不以削减合法记录容量、跳过 GCM 认证、削弱 TLS／CA／SNI 或未经实测缩减栈来制造并发通过。需先裁决 FRP 会话与 guest 是否必须同时保持活跃，再在真实目标板及实际 Wi-Fi、FRPS、MQTT、OTA 负载下测量可用总堆、最大连续块与失败路径。上述 QEMU 数据只证明本次软件切片的并发容量冲突，并提示无 guest 时 FRP 仍未验收；它不是实板最终预算，也不授权设备写入或改变 4 MiB 分区。
+## Container 按节装载与代码容量边界
+
+[Container `bbc186e` 的 C3 检查点](https://github.com/esp-space/esp-container/blob/bbc186ed97fc6c6e8ea4f2b71189560679100caf/docs/operations/c3-low-memory-profile.md)已用 WAMR Classic/Normal 按节装载替代完整 Wasm 常驻可写副本，只在模块卸载前持有代码节和数据节的可写副本。它的**另一组**五组件无网络 QEMU 使用 Base `c51c60b`，READY free／最大连续块为 **136,936／114,688 字节**：在 437 字节 counter 中增加 39 KiB 未调用的真实代码节，得到 **40,383 字节**模块，guest 存活时只余 **5,520／1,920 字节**；增加 40 KiB 后的 **41,407 字节**模块在 READY 后 `open` 失败。这个边界只适用于该代码形状和该内存组合，不能写成所有业务 Wasm 的通用上限，也不能把 Base `fa4d622` 的空闲值直接套算成 `bbc186e` 的新运行峰值。
+
+Container 的宿主只读 `mmap→open→munmap→run` 验证了新装载器的输入持有期；现有设备包槽 provider 仍只提供 `esp_partition_read`，没有从已验签 `product.pkg` 包槽到运行期的 `esp_partition_mmap`、槽保护与解除映射接线。此前推导的 **373 KiB Wasm** 只是候选三包槽的 Flash 几何上界，填充自定义节可加载不代表同长度真实代码可运行，也不代表包槽安装或实板已验收。
+
+## 历史组合（不作为当前容量对照）
+
+[旧五组件 QEMU 容量复测](https://github.com/esp-space/esp-container/blob/77155349795f3b6564e6f6fbbacb61e884e583ad/docs/operations/five-component-qemu-capacity-probe.md)使用 Base `31f5ebc`、FRP `c5fbe40`、MQTT `5bff093`、OTA `3c3f72b`、Container `00c788e`。其无网络 READY free／最大连续块为 **101,716／90,112 字节**，64 KiB guest 存活时为 **11,328／7,680 字节**；当时还对完整 Wasm 做可写副本，并观测到 69,632 字节的单页线性内存申请。当前按节装载已改变 Wasm 字节的持有方式，旧组合的空闲量只保留为优化前历史基线，不能再作为最新组合的唯一容量论据。
+
+本分支不以削减合法记录容量、跳过 GCM 认证、削弱 TLS／CA／SNI 或未经实测缩减栈来制造并发通过。FRP 会话与 guest 是否必须同时活跃仍需维护者裁决；真实 C3 上的 Wi-Fi、FRPS、MQTT、OTA、包槽映射和失败路径尚未联合测量。上述 QEMU 数据既不证明互斥可行，也不授权设备写入或改变 4 MiB 分区。
 
 ## 核对方法
 
