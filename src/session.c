@@ -65,9 +65,8 @@ struct efrp_session {
     efrp_wire_reader_t frames;
     efrp_session_status_t status;
     efrp_work_set_t work;
-    /* Login borrows this 4 KiB block. Authenticated records instead allocate
-     * actual-sized AEAD chunks as ciphertext arrives after a valid header. */
-    uint8_t *handshake_rx;
+    /* Login receives into handshake.output after its bytes have been copied
+     * into Yamux. Authenticated records allocate actual-sized AEAD chunks. */
     /* All readers retain and resume partial input. Match the work transfer
      * chunk without reducing any TLS, Yamux, AEAD or JSON frame limit. */
     uint8_t transport_rx[1024], control_rx[1024], control_tx[1024];
@@ -90,10 +89,6 @@ static void clear(efrp_session_t *s)
     if (!s->control_ready) efrp_handshake_destroy(&s->storage.handshake);
     efrp_aead_reader_destroy(&s->reader); efrp_aead_writer_destroy(&s->writer);
     efrp_crypto_zero(s->token, sizeof s->token);
-    if (s->handshake_rx) {
-        efrp_crypto_zero(s->handshake_rx, EFRP_HANDSHAKE_RX_BYTES);
-        free(s->handshake_rx); s->handshake_rx = NULL;
-    }
     efrp_crypto_zero(&s->storage, sizeof s->storage);
     efrp_crypto_zero(s->control_rx, sizeof s->control_rx); efrp_crypto_zero(s->control_tx, sizeof s->control_tx);
 #if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
@@ -157,11 +152,10 @@ efrp_result_t efrp_session_create(const efrp_session_config_t *c, efrp_tls_t *tl
     if (efrp_tls_status(tls, &status) != EFRP_OK || status.state != EFRP_TLS_OPEN || status.pending_bytes)
         return EFRP_INVALID_STATE;
     efrp_session_t *s = calloc(1, sizeof *s); if (!s) return EFRP_NO_MEMORY;
-    s->handshake_rx = calloc(1, EFRP_HANDSHAKE_RX_BYTES);
-    if (!s->handshake_rx) { efrp_crypto_zero(s, sizeof *s); free(s); return EFRP_NO_MEMORY; }
     s->mux = calloc(1, sizeof *s->mux);
     if (!s->mux) { clear(s); efrp_crypto_zero(s, sizeof *s); free(s); return EFRP_NO_MEMORY; }
-    efrp_result_t result = efrp_handshake_init(&s->storage.handshake, &c->login, s->handshake_rx, EFRP_HANDSHAKE_RX_BYTES, now);
+    efrp_result_t result = efrp_handshake_init(&s->storage.handshake, &c->login,
+        s->storage.handshake.output, sizeof s->storage.handshake.output, now);
     if (result != EFRP_OK) { clear(s); free(s->mux); efrp_crypto_zero(s, sizeof *s); free(s); return result; }
     s->token_length = c->login.token_length; memcpy(s->token, c->login.token, s->token_length);
     memcpy(s->proxy_name, c->proxy_name, name_length + 1); s->remote_port = c->remote_port; s->now = now;
@@ -176,8 +170,6 @@ static efrp_result_t finish_login(efrp_session_t *s)
     efrp_result_t result = efrp_handshake_take_result(&s->storage.handshake, &keys, s->status.run_id);
     if (result != EFRP_OK) return result;
     efrp_handshake_destroy(&s->storage.handshake);
-    efrp_crypto_zero(s->handshake_rx, EFRP_HANDSHAKE_RX_BYTES);
-    free(s->handshake_rx); s->handshake_rx = NULL;
     s->control_ready = true;
 #if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
     result = efrp_aead_reader_init_words(&s->reader, keys.server_to_client,

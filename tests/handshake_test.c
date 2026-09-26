@@ -83,6 +83,47 @@ static void split_and_tail(void)
         for (size_t i = 0; i < sizeof rx; ++i) assert(rx[i] == 0x5a);
     }
 }
+static void in_place_receive(void)
+{
+    uint8_t wire[2048];
+    size_t wire_length = frame(wire, EFRP_SERVER_HELLO, hello);
+    wire_length += frame(wire + wire_length, EFRP_MESSAGE, login);
+    memset(wire + wire_length, 0xa5, 8);
+    for (unsigned mode = 0; mode < 3; ++mode) {
+        efrp_handshake_t h = {0};
+        efrp_handshake_config_t c = config();
+        assert(efrp_handshake_init(&h, &c, h.output, sizeof h.output, 100) == EFRP_OK);
+        const uint8_t *output; size_t length, used;
+        assert(efrp_handshake_output(&h, &output, &length) == EFRP_OK);
+        assert(output == h.output && length > 200);
+        assert(efrp_handshake_consume_output(&h, length / 2) == EFRP_OK);
+        assert(efrp_handshake_feed(&h, wire, wire_length, &used) == EFRP_WOULD_BLOCK && !used);
+        if (mode == 2) {
+            assert(efrp_handshake_finish(&h) == EFRP_TRUNCATED);
+            zero(h.output, sizeof h.output);
+            efrp_handshake_destroy(&h); zero(&h, sizeof h);
+            continue;
+        }
+        assert(efrp_handshake_output(&h, &output, &used) == EFRP_OK && used == length - length / 2);
+        assert(efrp_handshake_consume_output(&h, used) == EFRP_OK);
+        assert(h.state == EFRP_HANDSHAKE_HELLO); zero(h.output, sizeof h.output);
+        if (mode == 1) {
+            wire[8] = 'x';
+            assert(efrp_handshake_feed(&h, wire, wire_length, &used) == EFRP_PROTOCOL_ERROR);
+            zero(h.output, sizeof h.output);
+            wire[8] = '{';
+        } else {
+            assert(efrp_handshake_feed(&h, wire, wire_length + 8, &used) == EFRP_OK);
+            assert(used == wire_length && h.state == EFRP_HANDSHAKE_DONE);
+            efrp_aead_keys_t keys; char run_id[EFRP_RUN_ID_BYTES];
+            assert(efrp_handshake_take_result(&h, &keys, run_id) == EFRP_OK);
+            assert(!strcmp(run_id, "0123456789abcdef"));
+            zero(h.output, sizeof h.output);
+            efrp_aead_clear_keys(&keys);
+        }
+        efrp_handshake_destroy(&h); zero(&h, sizeof h);
+    }
+}
 static void rejection(const char *server_json, const char *login_json, efrp_result_t expected)
 {
     uint8_t wire[8192], rx[EFRP_HANDSHAKE_RX_BYTES]; efrp_handshake_t h = {0}; start(&h, rx);
@@ -194,7 +235,7 @@ static void allocation_failures(void)
 }
 int main(void)
 {
-    split_and_tail(); invalid_messages(); deadlines_and_limits(); allocation_failures();
+    split_and_tail(); in_place_receive(); invalid_messages(); deadlines_and_limits(); allocation_failures();
     puts("Handshake: framing, negotiation, JSON bounds, deadline, cleanup and allocation failures passed");
     return 0;
 }

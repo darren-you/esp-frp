@@ -1,5 +1,7 @@
 # 开发检查点
 
+2026-09-27 ESP32 Login 堆峰值检查点：会话将握手 `output[4096]` 在输出交给 Yamux 后按阶段复用为响应接收区，删除独立的 4 KiB 申请。完整 Mbed TLS/PSA host ASan/UBSan CTest 20/20、固定 SDK C3 sample 构建通过。仓外同输入 ESP32 QEMU 对照在两侧都关闭任务看门狗自动初始化时，旧、新源码均经真实 SNTP、严格 TLS 完成官方 FRPS 注册与 Pong；新源码握手阶段 8BIT 最大连续块多 4096 字节。原产品配置本轮在应用入口前的 QEMU 看门狗路径不稳定，满长会话记录和实体板仍未验收。数据与输入限制见 [Login 内存收据](p6-esp32-login-heap-reuse.md)。
+
 2026-09-26 双目标 Login 身份修正：ESP32 的 FRP Login `arch` 随固定 SDK target 写为 `xtensa`，C3 保持 `riscv32`；其他 IDF target 在编译期拒绝。两目标空输入样例分别在固定 IDF `578cf89c`／lwIP `2758df4` 完整编译链接，host OpenSSL ASan/UBSan CTest **11/11**，其中两目标各自对官方 FRP v0.71.0 完成 **9 组 Login/AEAD 往返、6 组拒绝**。这只证明字段和离线互操作，不代表 ESP32 真机 FRPS/TLS、双流或五组件资源已验收。
 
 2026-09-26 P6 连续内存候选：控制 AEAD 在合法长度头后按实际明文申请最多 16 个 4096 字节块，LoginResp 后清零释放独立的 4096 字节握手区；完整 64 KiB 记录与 tag 认证边界保持。官方 Mbed TLS/PSA 的 host ASan/UBSan 完整 CTest 17/17、固定 SDK C3 空输入构建通过。C3 会话/Yamux 编译尺寸为 17848/5552 字节；五组件 QEMU 的 guest 存活时最大连续块 45056 字节不再被单笔 65552 字节接收区阻挡，但总 free 和真实并发仍未通过，P6-03 保持未验收。完整数据见 [P6 连续内存检查点](p6-frp-chunked-aead.md)。

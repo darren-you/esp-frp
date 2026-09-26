@@ -24,6 +24,9 @@ typedef struct {
 } efrp_handshake_config_t;
 /* Caller-owned, zero initialize; single owner, fields are not for mutation.
  * Run only over already authenticated TLS + a newly opened Yamux control stream.
+ * The exact output buffer may also be borrowed as receive storage: response
+ * input is refused until all output has been consumed and wiped. Other partial
+ * overlap between input, output and receive storage is unsupported.
  * No socket, timer or task is created here. cJSON/crypto may allocate internally. */
 typedef struct {
     efrp_wire_reader_t frames;

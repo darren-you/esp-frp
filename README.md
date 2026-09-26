@@ -99,7 +99,7 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生；接收端可使用调用方提供的 65552 字节连续工作区，FRP 会话最多使用 16 个不超过 4096 字节的块。分块模式在合法长度头后、对应密文字节抵达时才逐块申请；完整 64 KiB 记录仍需同时持有 65536 字节。完整 GCM tag 验证前不暴露明文，失败或取消后清零释放。ESP32 有显式关闭默认值的 32BIT-only IRAM 接收实验，使用 32 位打包访问和认证后字节复制；它不改变正式会话默认。发送端支持小记录与部分输出，nonce 来自密码随机源，单方向限制 2^32 条记录。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)、[C3 连续内存检查点](docs/operations/p6-frp-chunked-aead.md)、[逐块分配审计](docs/operations/p6-frp-lazy-aead-memory-audit.md)与[ESP32 IRAM 实验](docs/operations/p6-frp-esp32-iram-aead.md)。
 
-`esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格 TLS 的 Yamux 控制流上；不自行建立网络连接。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。详见 [握手合同](docs/design/control-handshake.md)。
+`esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格 TLS 的 Yamux 控制流上；不自行建立网络连接。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。会话将握手输出区按阶段复用为接收区，消除独立 4 KiB 申请；[ESP32 Login 内存收据](docs/operations/p6-esp32-login-heap-reuse.md)记录固定 SDK 和 QEMU 对照边界。详见 [握手合同](docs/design/control-handshake.md)。
 
 可选上游 Yamux 互操作检查需要 POSIX 宿主和 Go >= 1.23，以 `-DEFRP_TEST_UPSTREAM_YAMUX=ON` 配置后运行 CTest。AEAD 官方交叉验证使用 Go >=1.25 与 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON`。两者各自固定公开 Go 依赖，不读取相邻仓或生产 FRPS；默认 host 检查不依赖 Go 或外网，POSIX 连接测试会使用回环 TCP。具体命令见[测试入口](tests/README.md)。
 

@@ -12,7 +12,7 @@ create 接收已经 OPEN、无待发数据的 TLS 句柄和配置。Token、代�
 
 ## 协议、背压与期限
 
-首条 Yamux 流承载 magic、ClientHello/Login。登录时独占借用 4096 字节握手接收区；LoginResp 完成后复制方向密钥与 run ID、销毁握手并清零释放借用区，再初始化按实际记录长度分块的 AEAD reader。未消费的控制尾数据保持原顺序，认证成功后才交给 wire parser。控制 JSON payload（含两字节消息编号）最多 4096 字节；共享预检限制 UTF-8、深度、字段规模与重复解码键，不接受未知消息、字段或错误顺序。
+首条 Yamux 流承载 magic、ClientHello/Login。会话将握手对象的 4096 字节输出区交给 Yamux 并逐段清零，输出全部消费后将同一区域借给握手接收；LoginResp 完成后复制方向密钥与 run ID、销毁握手，联合区再交给控制解析器并初始化按实际记录长度分块的 AEAD reader。未消费的控制尾数据保持原顺序，认证成功后才交给 wire parser。控制 JSON payload（含两字节消息编号）最多 4096 字节；共享预检限制 UTF-8、深度、字段规模与重复解码键，不接受未知消息、字段或错误顺序。
 
 NewProxyResp 必须匹配配置的名称，成功时 remote address 非空且最多 256 字节；错误返回 `EFRP_PROXY_REJECTED`。注册后立即发送 Ping，此后每 15 秒一次，始终使用官方 Token 公式签名。只有已有未完成 Ping 才接受 Pong，错误返回 `EFRP_AUTHENTICATION_FAILED`。注册响应和 Pong 各有 10 秒绝对期限，包含本地排队时间；TLS、Yamux 和握手更早到期时保留其错误。
 
