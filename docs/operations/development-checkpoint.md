@@ -1,5 +1,14 @@
 # 开发检查点
 
+2026-09-27 Flash reader 与 Login 内存修正组合检查点：独立候选将握手缓冲复用 `6609fbc9b324c5e10615731a1a994ec0bfacd258` 与 Flash reader 故障合同 `2f5b93862cbf5ad7d11e66aa08579066dad60bfe` 合入同一源码；第一项 cherry-pick 只在 README 与变更摘要产生说明冲突，代码无需冲突改写。组合代码提交为 `89b07a9921336379b3556df3421ea96984b2714e`，与 `6609fbc9` 对比，`src/session.c`、`src/client.c`、`src/work.c` 均无差异。Flash reader 已随 IDF 组件编译，现有会话仍使用 RAM reader。
+
+- AppleClang ASan/UBSan 主机测试：OpenSSL 与官方 TF-PSA-Crypto 各 **12/12**，完整 Mbed TLS／PSA **21/21**；后者包含真实官方 FRPS 的注册、心跳、工作流与客户端回归。新增 `aead_flash` 在两种密码后端通过。测试使用公开 fixture，不触及正式 FRPS。
+- 固定 ESP-IDF `578cf89c343e388db43ba1f4ddcd602fedcb763c`、lwIP `2758df4cd3666b3b2a5b53830148379326425c0d`，两个 target 的空输入独立样例分别完成编译链接和官方分区容量检查。C3 app `0x1eb00` 字节，SHA-256 `7bb237a8a2fc6e6168961581d8bd904df551d6d89102233d971f87c440c5532f`；ESP32 app `0x1c8a0` 字节，SHA-256 `2bdb6cdb9b813dffa942aa91c4e82c9b52c739bbdfc8bf55527d3dd4b4f67af0`。两个构建均产生 `aead_flash.c.obj`；远端源码 `src/aead_flash.c` 的 SHA-256 与本提交一致，为 `00b57c35e724de629e72369f7d14344a8806ab587448e4953bbf8d9ab61c9f21`。
+- 固定 C3 的原 `compile_commands.json` 使用 GCC 15.2.0、`-Os`、函数/数据分段；该 `aead_flash.c.obj` 的 `.text.*` 合计 **2,104 字节**，`.rodata*` 和 `.bss*` 均为 **0**。两个最终样例 ELF 均无 `efrp_aead_flash_*` 全局符号，说明未使用的新函数被链接裁剪。以原编译命令为基线，在仓外添加类型探针和 `-fstack-usage`（session 副本另补原源码 include 路径），测得 `efrp_aead_flash_reader_t` **248 字节**、现有 RAM reader **264 字节**、provider 函数表 **24 字节**，另须独占 **4096 字节**窗口；现有 session 对象 **11,280 字节**。若只替换 reader 字段并内嵌窗口，按类型大小净增约 **4,080 字节**，实际结果须重新编译。Flash reader 函数自身最大栈帧 **112 字节**（feed/verify），现有 session step/create 分别 **256/80 字节**；这些数字不含相互调用、密码后端及 provider 的传递栈峰值。未被链接的对象大小不能直接折算 Base 签名 app；C3 后续硬切须重做产品镜像 `app_check_size` 与真实栈检查。
+- 当前公开应用入口的真实调用者为独立样例、Base `frp_owner.c`、FRP C3 生命周期及客户端测试；它们只调用 `efrp_create/start/stop/destroy/get_status`。只有 FRP `src/client.c` 和 `session_peer.c`、`work_peer.c`、`session_memory_test.c` 直接创建 session。将 Flash reader 硬切为唯一会话读路径时，须一起改公开配置复制、client→session 参数传递、Base/样例/测试 provider 与启动恢复；在 session 的登录后初始化、控制输入、EOF、失败和销毁处统一替换。Flash reader 需要独占 4096 字节窗口，现有 `json_rx` 同时借给 wire parser，不能共用；其 `close` 失败会保留 lease，现有 `clear` 无返回值及无条件释放必须改为保留句柄并由 client drain 重试。该接线未在本候选实施。
+
+以上样例默认无网络凭据，构建不执行 flash；没有真实分区、Flash provider、设备启动恢复或实板网络峰值证据，P6-03/P7-01/P7-02 不因此验收。
+
 2026-09-27 ESP32 Login 堆峰值检查点：会话将握手 `output[4096]` 在输出交给 Yamux 后按阶段复用为响应接收区，删除独立的 4 KiB 申请。完整 Mbed TLS/PSA host ASan/UBSan CTest 20/20、固定 SDK C3 sample 构建通过。仓外同输入 ESP32 QEMU 对照在两侧都关闭任务看门狗自动初始化时，旧、新源码均经真实 SNTP、严格 TLS 完成官方 FRPS 注册与 Pong；新源码握手阶段 8BIT 最大连续块多 4096 字节。原产品配置本轮在应用入口前的 QEMU 看门狗路径不稳定，满长会话记录和实体板仍未验收。数据与输入限制见 [Login 内存收据](p6-esp32-login-heap-reuse.md)。
 
 2026-09-26 双目标 Login 身份修正：ESP32 的 FRP Login `arch` 随固定 SDK target 写为 `xtensa`，C3 保持 `riscv32`；其他 IDF target 在编译期拒绝。两目标空输入样例分别在固定 IDF `578cf89c`／lwIP `2758df4` 完整编译链接，host OpenSSL ASan/UBSan CTest **11/11**，其中两目标各自对官方 FRP v0.71.0 完成 **9 组 Login/AEAD 往返、6 组拒绝**。这只证明字段和离线互操作，不代表 ESP32 真机 FRPS/TLS、双流或五组件资源已验收。
