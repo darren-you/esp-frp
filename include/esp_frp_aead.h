@@ -53,9 +53,10 @@ typedef struct {
     efrp_result_t failure;
 } efrp_aead_writer_t;
 
-/* Fixed reader requires >=65552 bytes. Chunked reader allocates only after a
- * valid record length, in at most sixteen actual-sized blocks <=4096 bytes;
- * the tag stays in the reader. Both modes accept a full 64 KiB plaintext.
+/* Fixed reader requires >=65552 bytes. Chunked reader validates the record
+ * length first, then allocates each of at most sixteen blocks <=4096 bytes
+ * only when ciphertext for that block arrives; the tag stays in the reader.
+ * Both modes accept a full 64 KiB plaintext.
  * Storage is exclusive until destroy. Only plaintext() exposes authenticated contents.
  * Feed reports consumed prefix; retain suffix on WOULD_BLOCK and consume
  * plaintext before resuming. No callbacks or borrowed input pointers. */

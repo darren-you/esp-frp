@@ -30,7 +30,7 @@ struct efrp_session {
     efrp_session_status_t status;
     efrp_work_set_t work;
     /* Login borrows this 4 KiB block. Authenticated records instead allocate
-     * actual-sized AEAD chunks only after their length header is validated. */
+     * actual-sized AEAD chunks as ciphertext arrives after a valid header. */
     uint8_t *handshake_rx;
     /* All readers retain and resume partial input. Match the work transfer
      * chunk without reducing any TLS, Yamux, AEAD or JSON frame limit. */

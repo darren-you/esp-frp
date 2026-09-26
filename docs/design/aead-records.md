@@ -32,7 +32,7 @@
 | 资源 | 合同 |
 | --- | --- |
 | 连续接收缓存 | 调用方提供至少 65552 字节；保留直接使用 reader 的接口 |
-| FRP 会话动态接收 | 先验证长度头；按明文实际长度申请最多 16 个块，各块最多 4096 字节，末块按实际字节数申请；16 字节 tag 存在 reader 对象内。认证前所有块私有；已消费块立即清零释放，失败、取消与销毁清零释放剩余块。仍接受完整 65536 字节明文记录 |
+| FRP 会话动态接收 | 先验证长度头，之后每块密文首字节抵达时才申请该块；仅收到合法长度头不申请明文块。按明文实际长度最多 16 个块，各块最多 4096 字节，末块按实际字节数申请；16 字节 tag 存在 reader 对象内。认证前所有块私有；已消费块立即清零释放，失败、取消与销毁清零释放剩余块。完整 65536 字节明文记录仍需同时持有全部 16 块 |
 | 发送缓存 | 33–65568 字节；4128 字节缓存每次最多接收 4096 字节明文 |
 | C3 reader 对象 | 固定 SDK C3 构建为 264 字节，含块指针、长度与 tag，不含动态块或密码库分配 |
 | PSA 单次工作块 | 512 字节输入和 SDK 上界输出，输出编译约束不超过 1024 字节；另有操作状态和 tag |
@@ -46,6 +46,6 @@ IDF 的 `MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS` 不保证重叠缓冲有效。适
 
 ASan/UBSan 覆盖逐字节/边界拆分、部分读写、64 KiB 与多记录、空记录、篡改/错误密钥/重放、截断、计数边界及清零。可选测试直接调用官方 FRP 的 `NewClientCryptoContext` 和 `NewAEADCryptoReadWriter`，覆盖两后端各 12 组双向用例、10 组拒绝用例；小发送缓存 33 字节、4128 字节和最大缓存均有交叉验证。具体入口见 [tests](../../tests/README.md)。
 
-动态分块适配已在官方 Mbed TLS 4.1.0 内含的 TF-PSA-Crypto 1.1.0 host 后端完成 ASan/UBSan、官方 FRPS 和 64 KiB 记录验证，并在固定 ESP-IDF v6.1 / ESP32-C3 中编译链接通过；完整输入、大小和未验边界见 [P6 连续内存检查点](../operations/p6-frp-chunked-aead.md)。host 软件实现不是 Espressif 芯片驱动运行面，C3 guest/FRP 并发容量与实板资源峰值尚未证明。
+原分块适配已在官方 Mbed TLS 4.1.0 内含的 TF-PSA-Crypto 1.1.0 host 后端完成 ASan/UBSan、官方 FRPS 和 64 KiB 记录验证，并在固定 ESP-IDF v6.1 / ESP32-C3 中编译链接通过；完整输入、大小和未验边界见 [P6 连续内存检查点](../operations/p6-frp-chunked-aead.md)。后续逐块到达才申请的验证见[内存审计](../operations/p6-frp-lazy-aead-memory-audit.md)。host 软件实现不是 Espressif 芯片驱动运行面，C3 guest/FRP 并发容量与实板资源峰值尚未证明。
 
 协议依据：[FRP crypto](https://github.com/fatedier/frp/blob/v0.71.0/pkg/proto/wire/crypto.go)、[FRP 方向密钥装配](https://github.com/fatedier/frp/blob/v0.71.0/pkg/util/net/conn.go)、[golib AEAD](https://github.com/fatedier/golib/blob/v0.8.2/crypto/aead_stream.go)。

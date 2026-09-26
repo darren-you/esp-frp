@@ -248,27 +248,47 @@ static void chunked_reader(void)
     }
     size_t wire_length = encode(wire, plain, EFRP_AEAD_MAX_PLAINTEXT, EFRP_AEAD_TX_MAX_BYTES);
     efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0}; size_t used;
+    /* A valid header alone must not reserve the whole advertised record.
+     * Each arriving ciphertext block reserves only its own private storage. */
+    chunk_reset();
+    assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
+    assert(efrp_aead_feed(&r, wire, 16, &used) == EFRP_OK && used == 16);
+    assert(!chunk_calls && !chunk_live && efrp_aead_finish(&r) == EFRP_TRUNCATED);
+    const uint8_t *p; size_t n;
+    assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_WOULD_BLOCK && !p && !n);
+    assert(efrp_aead_feed(&r, wire + 16, 1, &used) == EFRP_OK && used == 1);
+    assert(chunk_calls == 1 && chunk_live_bytes == 4096);
+    assert(efrp_aead_feed(&r, wire + 17, 4095, &used) == EFRP_OK && used == 4095);
+    assert(chunk_calls == 1 && chunk_live_bytes == 4096);
+    assert(efrp_aead_feed(&r, wire + 4112, 1, &used) == EFRP_OK && used == 1);
+    assert(chunk_calls == 2 && chunk_live_bytes == 8192);
+    assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_WOULD_BLOCK && !p && !n);
+    efrp_aead_reader_destroy(&r); assert(!chunk_live);
     /* A valid maximum record has sixteen blocks, but the last-byte tag failure
      * may never expose plaintext and must wipe all sixteen blocks. */
     wire[wire_length - 1] ^= 1; chunk_reset();
     assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
     assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_AUTHENTICATION_FAILED);
     assert(chunk_calls == 16 && !chunk_live);
-    const uint8_t *p; size_t n;
     assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_AUTHENTICATION_FAILED && !p && !n);
     efrp_aead_reader_destroy(&r); wire[wire_length - 1] ^= 1;
-    /* A partial record cancelled by its owner and an eighth-allocation failure
+    /* A partial record cancelled by its owner and a failure at any block
      * both wipe all private bytes already received. */
     chunk_reset();
     assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
     assert(efrp_aead_feed(&r, wire, wire_length - 1, &used) == EFRP_OK);
     assert(efrp_aead_finish(&r) == EFRP_TRUNCATED && chunk_live == 16);
     efrp_aead_reader_destroy(&r); assert(!chunk_live);
-    chunk_reset(); chunk_fail_at = 8;
-    assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_NO_MEMORY && used == 16);
-    assert(chunk_calls == 8 && !chunk_live);
-    efrp_aead_reader_destroy(&r); efrp_aead_clear_keys(&k);
+    for (size_t failed = 1; failed <= EFRP_AEAD_RX_MAX_CHUNKS; ++failed) {
+        chunk_reset(); chunk_fail_at = failed;
+        assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
+        assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_NO_MEMORY);
+        assert(used == 16 + (failed - 1) * EFRP_AEAD_RX_CHUNK_BYTES);
+        assert(chunk_calls == failed && !chunk_live);
+        assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_NO_MEMORY && !p && !n);
+        efrp_aead_reader_destroy(&r);
+    }
+    efrp_aead_clear_keys(&k);
     free(plain); free(wire);
 }
 int main(void)
