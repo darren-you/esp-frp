@@ -2,6 +2,8 @@
 // Independently implemented pull-based client for the Yamux wire specification.
 // No upstream implementation is vendored or translated. See source provenance.
 #include "esp_frp_yamux.h"
+#include "crypto_backend.h"
+#include <stdlib.h>
 #include <string.h>
 
 enum { DATA = 0, WINDOW = 1, PING = 2, GOAWAY = 3 };
@@ -65,12 +67,22 @@ static void reset_state(efrp_yamux_t *m, efrp_yamux_stream_t *s)
         m->frame_discard = true;
         m->drain_started_ms = m->now_ms;
     }
-    memset(s->ring, 0, sizeof s->ring);
+    if (s->ring) efrp_crypto_zero(s->ring, EFRP_YAMUX_RING_BYTES);
 }
 
 void efrp_yamux_init(efrp_yamux_t *m, uint64_t now)
 {
     if (m) *m = (efrp_yamux_t){.next_id = 1, .now_ms = now};
+}
+
+void efrp_yamux_destroy(efrp_yamux_t *m)
+{
+    if (!m) return;
+    for (size_t i = 0; i < EFRP_YAMUX_STREAMS; ++i) {
+        efrp_yamux_stream_t *s = &m->streams[i];
+        if (s->ring) { efrp_crypto_zero(s->ring, EFRP_YAMUX_RING_BYTES); free(s->ring); }
+    }
+    efrp_crypto_zero(m, sizeof *m);
 }
 
 efrp_result_t efrp_yamux_open(efrp_yamux_t *m, uint32_t *id)
@@ -83,10 +95,13 @@ efrp_result_t efrp_yamux_open(efrp_yamux_t *m, uint32_t *id)
     efrp_yamux_stream_t *s = NULL;
     for (size_t i = 0; i < EFRP_YAMUX_STREAMS; ++i) if (!m->streams[i].id) { s = &m->streams[i]; break; }
     if (!s) return EFRP_CAPACITY_EXCEEDED;
+    if (m->control_count == EFRP_YAMUX_CONTROL_SLOTS) return EFRP_WOULD_BLOCK;
+    uint8_t *ring = calloc(1, EFRP_YAMUX_RING_BYTES);
+    if (!ring) return EFRP_NO_MEMORY;
     efrp_result_t result = queue(m, WINDOW, SYN, m->next_id, 0);
-    if (result != EFRP_OK) return result;
+    if (result != EFRP_OK) { free(ring); return result; }
     *s = (efrp_yamux_stream_t){.id = m->next_id, .send_credit = EFRP_YAMUX_INITIAL_WINDOW,
-        .receive_credit = EFRP_YAMUX_INITIAL_WINDOW, .opened_ms = m->now_ms};
+        .receive_credit = EFRP_YAMUX_INITIAL_WINDOW, .opened_ms = m->now_ms, .ring = ring};
     *id = s->id;
     m->next_id = s->id == UINT32_MAX ? 0 : s->id + 2;
     return EFRP_OK;
@@ -239,6 +254,7 @@ efrp_result_t efrp_yamux_release(efrp_yamux_t *m, uint32_t id)
     if (!s) return EFRP_INVALID_ARGUMENT;
     if (!s->reset && !(s->local_fin && s->remote_fin && !s->used)) return EFRP_INVALID_STATE;
     if (m->frame_active && m->frame_id == id) m->frame_discard = true;
+    if (s->ring) { efrp_crypto_zero(s->ring, EFRP_YAMUX_RING_BYTES); free(s->ring); }
     memset(s, 0, sizeof *s);
     return EFRP_OK;
 }

@@ -58,7 +58,7 @@ static void clear(efrp_session_t *s)
     efrp_crypto_zero(&s->storage, sizeof s->storage);
     efrp_crypto_zero(s->control_rx, sizeof s->control_rx); efrp_crypto_zero(s->control_tx, sizeof s->control_tx);
     efrp_crypto_zero(s->transport_rx, sizeof s->transport_rx);
-    if (s->mux) efrp_crypto_zero(s->mux, sizeof *s->mux);
+    if (s->mux) efrp_yamux_destroy(s->mux);
     s->transport_used = s->transport_offset = s->control_used = s->control_offset = 0;
     s->tx_used = s->tx_offset = s->tls_staged = s->token_length = 0;
     s->ping_pending = false;

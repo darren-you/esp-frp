@@ -93,7 +93,7 @@ ctest --test-dir build --output-on-failure
 
 `efrp_wire_init` 借用调用者缓冲区，输入指针不被保留。feed 支持拆帧与粘帧，只有完整帧才回调；EOF 用 finish 检查截断。最大 wire payload 为 65536 字节；header 与 payload 独立计数，非法输入后 reader 永久失败，必须重建连接再初始化。回调 payload 只在回调期间有效，不允许回调重入。该 parser 不是 TLS、Yamux 或 AEAD parser，不能将未经认证的 AEAD 明文直接交给它。
 
-`esp_frp_yamux.h` 提供单 owner、无分配、无 socket 的客户端核心。四流各用 1 KiB ring，协议初始窗口保持 256 KiB；可增量接收大于 ring 的 DATA。调用方定期 tick，显式消费串流和输出；仅当完整 WindowUpdate 已交给 transport 才归还接收信用。慢流超时 RST、释放后数据有界排空、半关闭与 PING/GOAWAY 均有 host 回归。完整合同和限制见 [Yamux 核心](docs/design/yamux-core.md)。
+`esp_frp_yamux.h` 提供单 owner、无 socket 的客户端核心。四流上限不变，但只在打开每条流时分别申请 1 KiB 接收 ring，`release` 或最终 `destroy` 清零释放；打开流的分配失败返回 `EFRP_NO_MEMORY`，不消耗流 ID 或控制队列。协议初始窗口保持 256 KiB，可增量接收大于 ring 的 DATA。调用方定期 tick，显式消费串流和输出；仅当完整 WindowUpdate 已交给 transport 才归还接收信用。慢流超时 RST、释放后数据有界排空、半关闭与 PING/GOAWAY 均有 host 回归。完整合同和限制见 [Yamux 核心](docs/design/yamux-core.md)。
 
 `esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生；接收端可使用调用方提供的 65552 字节连续工作区，FRP 会话最多使用 16 个不超过 4096 字节的块。分块模式在合法长度头后、对应密文字节抵达时才逐块申请；完整 64 KiB 记录仍需同时持有 65536 字节。完整 GCM tag 验证前不暴露明文，失败或取消后清零释放。发送端支持小记录与部分输出，nonce 来自密码随机源，单方向限制 2^32 条记录。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)、[C3 连续内存检查点](docs/operations/p6-frp-chunked-aead.md)与[逐块分配审计](docs/operations/p6-frp-lazy-aead-memory-audit.md)。
 

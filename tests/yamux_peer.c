@@ -101,6 +101,7 @@ static void run(unsigned port, unsigned round)
         assert(selected >= 0 || errno == EINTR);
     }
     assert(!input_used && !m.ping_pending && efrp_yamux_finish(&m) == EFRP_OK);
+    efrp_yamux_destroy(&m);
     assert(close(fd) == 0);
 }
 int main(int argc, char **argv)

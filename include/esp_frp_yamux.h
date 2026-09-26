@@ -29,14 +29,15 @@ typedef enum {
 #endif
 
 /* Private storage layout is exposed only for caller-owned/static allocation.
- * One owner; no callbacks, allocation, timers, sockets or retained input pointers.
- * Call tick regularly with a monotonic clock, including while I/O is blocked. */
+ * One owner; open allocates one receive ring per active stream. Destroy after
+ * the final use (and before re-init) to release rings still owned by the mux.
+ * No callbacks, timers, sockets or retained input pointers. */
 typedef struct {
     uint32_t id, send_credit, receive_credit, return_credit;
     size_t head, used;
     uint64_t opened_ms, blocked_ms;
     bool acknowledged, local_fin, remote_fin, reset, blocked;
-    uint8_t ring[EFRP_YAMUX_RING_BYTES];
+    uint8_t *ring;
 } efrp_yamux_stream_t;
 
 typedef struct {
@@ -70,6 +71,7 @@ typedef struct {
 } efrp_yamux_stream_info_t;
 
 void efrp_yamux_init(efrp_yamux_t *mux, uint64_t now_ms);
+void efrp_yamux_destroy(efrp_yamux_t *mux);
 efrp_result_t efrp_yamux_tick(efrp_yamux_t *mux, uint64_t now_ms);
 /* Only client-initiated odd stream IDs are opened. Incoming server SYN is
  * rejected by RST: FRP control/work streams are all client-initiated. */
