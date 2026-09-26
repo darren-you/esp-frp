@@ -38,6 +38,7 @@ static void run(efrp_work_phase_t phase, bool incoming, bool outgoing, bool part
 #else
     (void)expected_source;
 #endif
+    efrp_yamux_destroy(&mux);
 }
 
 int main(void)

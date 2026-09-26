@@ -37,6 +37,28 @@ static uint32_t open_stream(efrp_yamux_t *m)
     flush(m); header_in(m, 1, 2, id, 0);
     return id;
 }
+static void reinit(efrp_yamux_t *m, uint64_t now)
+{
+    efrp_yamux_destroy(m);
+    efrp_yamux_init(m, now);
+}
+static void lazy_ring_lifecycle(void)
+{
+    efrp_yamux_t m; efrp_yamux_init(&m, 0);
+    for (unsigned i = 0; i < EFRP_YAMUX_STREAMS; ++i) assert(!m.streams[i].ring);
+    for (unsigned i = 0; i < EFRP_YAMUX_CONTROL_SLOTS; ++i) header_in(&m, 2, 1, 0, i);
+    uint32_t id = 99;
+    assert(efrp_yamux_open(&m, &id) == EFRP_WOULD_BLOCK && !id && m.next_id == 1 && !m.streams[0].ring);
+    flush(&m);
+    id = open_stream(&m); assert(id == 1 && m.streams[0].ring);
+    assert(efrp_yamux_reset(&m, id) == EFRP_OK);
+    assert(efrp_yamux_release(&m, id) == EFRP_OK && !m.streams[0].ring);
+    efrp_yamux_destroy(&m);
+    efrp_yamux_destroy(&m);
+    efrp_yamux_init(&m, 0);
+    id = open_stream(&m); assert(id == 1 && m.streams[0].ring);
+    efrp_yamux_destroy(&m);
+}
 static void large_frames(void)
 {
     uint8_t *input = malloc(EFRP_YAMUX_INITIAL_WINDOW + 24), out[4096];
@@ -65,7 +87,7 @@ static void large_frames(void)
         assert(efrp_yamux_close_write(m, id) == EFRP_OK);
         assert(efrp_yamux_release(m, id) == EFRP_OK); flush(m);
     }
-    free(input); free(m);
+    efrp_yamux_destroy(m); free(input); free(m);
 }
 static void window_and_output(void)
 {
@@ -105,6 +127,7 @@ static void window_and_output(void)
     assert(efrp_yamux_close_write(&m, id) == EFRP_OK);
     assert(efrp_yamux_write(&m, id, payload, 1, &n) == EFRP_INVALID_STATE);
     flush(&m); assert(efrp_yamux_release(&m, id) == EFRP_OK);
+    efrp_yamux_destroy(&m);
 }
 static void stalled_and_late_data(void)
 {
@@ -133,6 +156,7 @@ static void stalled_and_late_data(void)
     assert(efrp_yamux_feed(&m, input, 15, &used) == EFRP_OK && used == 15);
     assert(efrp_yamux_info(&m, third, &info) == EFRP_OK && !info.readable_bytes);
     assert(m.discarded_bytes == 8192 - EFRP_YAMUX_RING_BYTES + 3);
+    efrp_yamux_destroy(&m);
 }
 static void control_and_capacity(void)
 {
@@ -156,6 +180,7 @@ static void control_and_capacity(void)
     header_in(&m, 3, 0, 0, 0);
     assert(efrp_yamux_open(&m, &extra) == EFRP_SESSION_CLOSED);
     assert(efrp_yamux_goaway(&m) == EFRP_OK); flush(&m);
+    efrp_yamux_destroy(&m);
 }
 static void invalid_frames(void)
 {
@@ -182,21 +207,23 @@ static void invalid_frames(void)
         assert(efrp_yamux_feed(&m, h, 12, &used) == EFRP_PROTOCOL_ERROR);
         assert(efrp_yamux_feed(&m, h, 12, &used) == EFRP_PROTOCOL_ERROR && !used);
         assert(efrp_yamux_tick(&m, 1) == EFRP_PROTOCOL_ERROR);
+        efrp_yamux_destroy(&m);
     }
     efrp_yamux_t m; uint8_t h[12]; size_t used;
     efrp_yamux_init(&m, 0); uint32_t id = open_stream(&m);
     header_in(&m, 1, 4, id, 0); frame(h, 0, 0, id, 1);
     assert(efrp_yamux_feed(&m, h, 12, &used) == EFRP_PROTOCOL_ERROR);
-    efrp_yamux_init(&m, 0); header_in(&m, 1, 1, 2, 0); frame(h, 1, 1, 2, 0);
+    reinit(&m, 0); header_in(&m, 1, 1, 2, 0); frame(h, 1, 1, 2, 0);
     assert(efrp_yamux_feed(&m, h, 12, &used) == EFRP_PROTOCOL_ERROR);
-    efrp_yamux_init(&m, 0); id = open_stream(&m); header_in(&m, 1, 4, id, 0);
+    reinit(&m, 0); id = open_stream(&m); header_in(&m, 1, 4, id, 0);
     header_in(&m, 0, 8, id, 0); // RST may abort an already half-closed stream.
     assert(efrp_yamux_release(&m, id) == EFRP_OK);
     for (size_t cut = 1; cut < 13; ++cut) {
-        efrp_yamux_init(&m, 0); id = open_stream(&m); frame(h, 0, 0, id, 1);
+        reinit(&m, 0); id = open_stream(&m); frame(h, 0, 0, id, 1);
         assert(efrp_yamux_feed(&m, h, cut, &used) == EFRP_OK && used == cut);
         assert(efrp_yamux_finish(&m) == EFRP_TRUNCATED);
     }
+    efrp_yamux_destroy(&m);
 }
 static void combined_flags(void)
 {
@@ -217,11 +244,12 @@ static void combined_flags(void)
     assert(efrp_yamux_feed(&m, input, 27, &used) == EFRP_OK && used == 27);
     assert(efrp_yamux_read(&m, id, out, sizeof out, &n) == EFRP_STREAM_RESET);
     assert(m.discarded_bytes == 3); flush(&m);
-    efrp_yamux_init(&m, 0); frame(input, 0, 1, 2, 3); memcpy(input + 12, "syn", 3);
+    reinit(&m, 0); frame(input, 0, 1, 2, 3); memcpy(input + 12, "syn", 3);
     assert(efrp_yamux_feed(&m, input, 15, &used) == EFRP_OK && used == 15 && m.discarded_bytes == 3);
     for (size_t i = 0; i < EFRP_YAMUX_STREAMS; ++i) assert(!m.streams[i].id);
     flush(&m); frame(input, 3, 0, 0, 1);
     assert(efrp_yamux_feed(&m, input, 12, &used) == EFRP_SESSION_CLOSED);
+    efrp_yamux_destroy(&m);
 }
 static void deadlines_and_reuse(void)
 {
@@ -232,7 +260,7 @@ static void deadlines_and_reuse(void)
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_INPUT && m.timeout_age_ms == 5000);
 #endif
-    efrp_yamux_init(&m, 0); id = open_stream(&m); frame(h, 0, 0, id, 1);
+    reinit(&m, 0); id = open_stream(&m); frame(h, 0, 0, id, 1);
     assert(efrp_yamux_feed(&m, h, 1, &used) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 4000) == EFRP_OK);
     assert(efrp_yamux_feed(&m, h + 1, 1, &used) == EFRP_OK);
@@ -240,25 +268,25 @@ static void deadlines_and_reuse(void)
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_HEADER && m.timeout_age_ms == 5000);
 #endif
-    efrp_yamux_init(&m, 0); assert(efrp_yamux_open(&m, &id) == EFRP_OK);
+    reinit(&m, 0); assert(efrp_yamux_open(&m, &id) == EFRP_OK);
     assert(efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT);
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_OUTPUT && m.timeout_pending_bytes == EFRP_YAMUX_HEADER_BYTES);
 #endif
-    efrp_yamux_init(&m, 0); assert(efrp_yamux_open(&m, &id) == EFRP_OK); flush(&m);
+    reinit(&m, 0); assert(efrp_yamux_open(&m, &id) == EFRP_OK); flush(&m);
     assert(efrp_yamux_tick(&m, 9999) == EFRP_OK && efrp_yamux_tick(&m, 10000) == EFRP_OK);
     efrp_yamux_stream_info_t info;
     assert(efrp_yamux_info(&m, id, &info) == EFRP_OK && info.reset);
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_OPEN && m.timeout_stream_id == id && m.timeout_age_ms == 10000);
 #endif
-    efrp_yamux_init(&m, 1); assert(efrp_yamux_tick(&m, 0) == EFRP_INVALID_ARGUMENT);
-    efrp_yamux_init(&m, 0); assert(efrp_yamux_ping(&m, 1) == EFRP_OK); flush(&m);
+    reinit(&m, 1); assert(efrp_yamux_tick(&m, 0) == EFRP_INVALID_ARGUMENT);
+    reinit(&m, 0); assert(efrp_yamux_ping(&m, 1) == EFRP_OK); flush(&m);
     assert(efrp_yamux_tick(&m, 5000) == EFRP_TIMEOUT);
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_PING && m.timeout_age_ms == 5000);
 #endif
-    efrp_yamux_init(&m, 0);
+    reinit(&m, 0);
     for (unsigned cycle = 0; cycle < 1000; ++cycle) {
         id = open_stream(&m); assert(id == cycle * 2 + 1);
         assert(efrp_yamux_reset(&m, id) == EFRP_OK);
@@ -268,6 +296,7 @@ static void deadlines_and_reuse(void)
     }
     m.next_id = UINT32_MAX; assert(efrp_yamux_open(&m, &id) == EFRP_OK && id == UINT32_MAX);
     assert(efrp_yamux_open(&m, &id) == EFRP_CAPACITY_EXCEEDED);
+    efrp_yamux_destroy(&m);
 }
 static void bounded_discard(void)
 {
@@ -279,7 +308,7 @@ static void bounded_discard(void)
         assert(efrp_yamux_feed(&m, p, 12 + EFRP_YAMUX_INITIAL_WINDOW, &used) == EFRP_OK && used == 12 + EFRP_YAMUX_INITIAL_WINDOW);
     frame(p, 0, 0, id, 1);
     assert(efrp_yamux_feed(&m, p, 13, &used) == EFRP_PROTOCOL_ERROR && used == 12);
-    efrp_yamux_init(&m, 0); id = open_stream(&m);
+    reinit(&m, 0); id = open_stream(&m);
     assert(efrp_yamux_reset(&m, id) == EFRP_OK && efrp_yamux_release(&m, id) == EFRP_OK); flush(&m);
     frame(p, 0, 0, id, 4096);
     assert(efrp_yamux_feed(&m, p, 13, &used) == EFRP_OK);
@@ -289,7 +318,7 @@ static void bounded_discard(void)
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     assert(m.timeout_source == EFRP_YAMUX_TIMEOUT_DISCARD && m.timeout_stream_id == id && m.timeout_age_ms == 5000);
 #endif
-    free(p);
+    efrp_yamux_destroy(&m); free(p);
 }
 static void continuous_receive_and_send(void)
 {
@@ -335,10 +364,11 @@ static void continuous_receive_and_send(void)
     assert(efrp_yamux_write(&m, ids[1], (const uint8_t *)"x", 1, &written) == EFRP_WOULD_BLOCK && !written);
     assert(efrp_yamux_output(&m, &bytes, &length) == EFRP_OK && bytes[1] == 2 && word(bytes + 8) == 0x1234);
     assert(efrp_yamux_consume_output(&m, length) == EFRP_OK);
+    efrp_yamux_destroy(&m);
 }
 int main(void)
 {
-    large_frames(); window_and_output(); stalled_and_late_data(); control_and_capacity();
+    lazy_ring_lifecycle(); large_frames(); window_and_output(); stalled_and_late_data(); control_and_capacity();
     invalid_frames(); combined_flags(); deadlines_and_reuse(); bounded_discard(); continuous_receive_and_send();
     printf("Yamux host checks passed; caller-owned session bytes: %zu\n", sizeof(efrp_yamux_t));
     return 0;
