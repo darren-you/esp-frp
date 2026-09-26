@@ -13,4 +13,9 @@ efrp_result_t efrp_crypto_random(uint8_t *output, size_t length);
  * inspect output before success; record layer wipes storage on any failure. */
 efrp_result_t efrp_crypto_gcm(bool encrypt, const uint8_t key[32], const uint8_t nonce[12],
                              const uint8_t aad[16], uint8_t *buffer, size_t plain_length);
+/* Chunks remain private to the reader until the complete tag verifies. On any
+ * failure the reader wipes and releases every chunk. */
+efrp_result_t efrp_crypto_gcm_decrypt_chunks(const uint8_t key[32], const uint8_t nonce[12],
+                                            const uint8_t aad[16], uint8_t *const chunks[],
+                                            const size_t sizes[], size_t count, const uint8_t tag[16]);
 void efrp_crypto_zero(void *buffer, size_t length);

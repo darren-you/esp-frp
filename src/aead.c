@@ -61,9 +61,20 @@ static efrp_result_t reader_ready(const efrp_aead_reader_t *r)
     if (!r || !r->active) return EFRP_INVALID_STATE;
     return r->failure;
 }
+static void reader_clear_chunks(efrp_aead_reader_t *r)
+{
+    for (size_t i = 0; i < r->chunk_count; ++i) {
+        if (!r->chunks[i]) continue;
+        efrp_crypto_zero(r->chunks[i], r->chunk_sizes[i]);
+        r->release(r->chunks[i]); r->chunks[i] = NULL;
+    }
+    r->chunk_count = 0;
+    efrp_crypto_zero(r->tag, sizeof r->tag);
+}
 static efrp_result_t reader_fail(efrp_aead_reader_t *r, efrp_result_t error)
 {
-    efrp_crypto_zero(r->storage, EFRP_AEAD_RX_BYTES);
+    if (r->chunked) reader_clear_chunks(r);
+    else efrp_crypto_zero(r->storage, EFRP_AEAD_RX_BYTES);
     efrp_crypto_zero(r->key, sizeof r->key);
     r->plain_used = r->plain_offset = 0; r->failure = error;
     return error;
@@ -75,6 +86,49 @@ efrp_result_t efrp_aead_reader_init(efrp_aead_reader_t *r, const uint8_t key[32]
     *r = (efrp_aead_reader_t){.storage = storage, .active = true};
     memcpy(r->key, key, 32); efrp_crypto_zero(storage, EFRP_AEAD_RX_BYTES);
     return EFRP_OK;
+}
+efrp_result_t efrp_aead_reader_init_chunked(efrp_aead_reader_t *r, const uint8_t key[32],
+                                           void *(*allocate)(size_t, size_t), void (*release)(void *))
+{
+    if (!r || !key || !allocate || !release) return EFRP_INVALID_ARGUMENT;
+    if (r->active) return EFRP_INVALID_STATE;
+    *r = (efrp_aead_reader_t){.active = true, .chunked = true, .allocate = allocate, .release = release};
+    memcpy(r->key, key, sizeof r->key);
+    return EFRP_OK;
+}
+static efrp_result_t reader_allocate_chunks(efrp_aead_reader_t *r, size_t plain_length)
+{
+    size_t remaining = plain_length;
+    while (remaining) {
+        size_t n = remaining > EFRP_AEAD_RX_CHUNK_BYTES ? EFRP_AEAD_RX_CHUNK_BYTES : remaining;
+        size_t i = r->chunk_count;
+        if (i >= EFRP_AEAD_RX_MAX_CHUNKS) return reader_fail(r, EFRP_PROTOCOL_ERROR);
+        r->chunks[i] = r->allocate(1, n);
+        if (!r->chunks[i]) return reader_fail(r, EFRP_NO_MEMORY);
+        r->chunk_sizes[i] = n; ++r->chunk_count; remaining -= n;
+    }
+    return EFRP_OK;
+}
+static void reader_store_chunked(efrp_aead_reader_t *r, const uint8_t *bytes, size_t length)
+{
+    size_t plain_length = r->body_expected - EFRP_AEAD_TAG_BYTES;
+    while (length) {
+        size_t offset = r->body_used;
+        size_t n;
+        if (offset < plain_length) {
+            size_t index = offset / EFRP_AEAD_RX_CHUNK_BYTES;
+            size_t inside = offset % EFRP_AEAD_RX_CHUNK_BYTES;
+            n = r->chunk_sizes[index] - inside;
+            if (n > length) n = length;
+            memcpy(r->chunks[index] + inside, bytes, n);
+        } else {
+            size_t inside = offset - plain_length;
+            n = sizeof r->tag - inside;
+            if (n > length) n = length;
+            memcpy(r->tag + inside, bytes, n);
+        }
+        r->body_used += n; bytes += n; length -= n;
+    }
 }
 efrp_result_t efrp_aead_feed(efrp_aead_reader_t *r, const uint8_t *bytes, size_t length, size_t *consumed)
 {
@@ -102,19 +156,28 @@ efrp_result_t efrp_aead_feed(efrp_aead_reader_t *r, const uint8_t *bytes, size_t
             if (size < 16 || size > EFRP_AEAD_RX_BYTES) return reader_fail(r, EFRP_PROTOCOL_ERROR);
             if (!available(r->nonce, r->records)) return reader_fail(r, EFRP_COUNTER_EXHAUSTED);
             r->body_expected = size;
+            if (r->chunked) {
+                efrp_result_t result = reader_allocate_chunks(r, size - EFRP_AEAD_TAG_BYTES);
+                if (result != EFRP_OK) return result;
+            }
         }
         size_t n = r->body_expected - r->body_used;
         if (n > length - *consumed) n = length - *consumed;
-        memcpy(r->storage + r->body_used, bytes + *consumed, n);
-        r->body_used += n; *consumed += n;
+        if (r->chunked) reader_store_chunked(r, bytes + *consumed, n);
+        else { memcpy(r->storage + r->body_used, bytes + *consumed, n); r->body_used += n; }
+        *consumed += n;
         if (r->body_used != r->body_expected) continue;
         uint8_t aad[16]; memcpy(aad, r->stream_nonce, 12); memcpy(aad + 12, r->header, 4);
         size_t plain_length = r->body_expected - 16;
-        efrp_result_t result = efrp_crypto_gcm(false, r->key, r->nonce, aad, r->storage, plain_length);
+        efrp_result_t result = r->chunked ?
+            efrp_crypto_gcm_decrypt_chunks(r->key, r->nonce, aad, r->chunks, r->chunk_sizes, r->chunk_count, r->tag) :
+            efrp_crypto_gcm(false, r->key, r->nonce, aad, r->storage, plain_length);
         if (result != EFRP_OK) return reader_fail(r, result);
         if (!increment(r->nonce)) return reader_fail(r, EFRP_COUNTER_EXHAUSTED);
         ++r->records; r->plain_used = plain_length; r->plain_offset = 0;
-        efrp_crypto_zero(r->storage + plain_length, 16);
+        if (r->chunked) efrp_crypto_zero(r->tag, sizeof r->tag);
+        else efrp_crypto_zero(r->storage + plain_length, 16);
+        if (r->chunked && !plain_length) reader_clear_chunks(r);
         r->header_used = r->body_used = r->body_expected = 0;
     }
     return EFRP_OK;
@@ -126,15 +189,35 @@ efrp_result_t efrp_aead_plaintext(const efrp_aead_reader_t *r, const uint8_t **b
     if (!bytes || !length) return EFRP_INVALID_ARGUMENT;
     if (reader_ready(r) != EFRP_OK) return reader_ready(r);
     if (!r->plain_used) return EFRP_WOULD_BLOCK;
-    *bytes = r->storage + r->plain_offset; *length = r->plain_used - r->plain_offset;
+    if (r->chunked) {
+        size_t index = r->plain_offset / EFRP_AEAD_RX_CHUNK_BYTES;
+        size_t inside = r->plain_offset % EFRP_AEAD_RX_CHUNK_BYTES;
+        *bytes = r->chunks[index] + inside;
+        *length = r->chunk_sizes[index] - inside;
+    } else {
+        *bytes = r->storage + r->plain_offset; *length = r->plain_used - r->plain_offset;
+    }
     return EFRP_OK;
 }
 efrp_result_t efrp_aead_consume_plaintext(efrp_aead_reader_t *r, size_t length)
 {
     if (reader_ready(r) != EFRP_OK) return reader_ready(r);
     if (length > r->plain_used - r->plain_offset) return EFRP_INVALID_ARGUMENT;
-    efrp_crypto_zero(r->storage + r->plain_offset, length); r->plain_offset += length;
-    if (r->plain_offset == r->plain_used) r->plain_offset = r->plain_used = 0;
+    if (r->chunked) {
+        size_t index = r->plain_offset / EFRP_AEAD_RX_CHUNK_BYTES;
+        size_t inside = r->plain_offset % EFRP_AEAD_RX_CHUNK_BYTES;
+        if (length > r->chunk_sizes[index] - inside) return EFRP_INVALID_ARGUMENT;
+        efrp_crypto_zero(r->chunks[index] + inside, length);
+        r->plain_offset += length;
+        if (r->plain_offset == r->plain_used) {
+            reader_clear_chunks(r); r->plain_offset = r->plain_used = 0;
+        } else if (inside + length == r->chunk_sizes[index]) {
+            r->release(r->chunks[index]); r->chunks[index] = NULL;
+        }
+    } else {
+        efrp_crypto_zero(r->storage + r->plain_offset, length); r->plain_offset += length;
+        if (r->plain_offset == r->plain_used) r->plain_offset = r->plain_used = 0;
+    }
     return EFRP_OK;
 }
 efrp_result_t efrp_aead_finish(const efrp_aead_reader_t *r)
@@ -145,7 +228,10 @@ efrp_result_t efrp_aead_finish(const efrp_aead_reader_t *r)
 void efrp_aead_reader_destroy(efrp_aead_reader_t *r)
 {
     if (!r) return;
-    if (r->active) efrp_crypto_zero(r->storage, EFRP_AEAD_RX_BYTES);
+    if (r->active) {
+        if (r->chunked) reader_clear_chunks(r);
+        else efrp_crypto_zero(r->storage, EFRP_AEAD_RX_BYTES);
+    }
     efrp_crypto_zero(r, sizeof *r);
 }
 static efrp_result_t writer_ready(const efrp_aead_writer_t *w)

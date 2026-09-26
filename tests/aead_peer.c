@@ -24,13 +24,13 @@ int main(void)
     assert(capacity >= 33 && capacity <= EFRP_AEAD_TX_MAX_BYTES);
     uint8_t *token = blob(&tn, 1024), *client = blob(&cn, 65536), *server = blob(&sn, 65536);
     uint8_t *wire = blob(&wn, 500000), *plain = malloc(400001);
-    uint8_t *rx = malloc(EFRP_AEAD_RX_BYTES), *tx = malloc(capacity);
-    assert(plain && rx && tx && getchar() == EOF);
+    uint8_t *tx = malloc(capacity);
+    assert(plain && tx && getchar() == EOF);
     efrp_aead_keys_t keys;
     efrp_aead_reader_t r = {0}; efrp_aead_writer_t w = {0};
     int exit_code = 10;
     assert(efrp_aead_derive(token, tn, client, cn, server, sn, &keys) == EFRP_OK);
-    assert(efrp_aead_reader_init(&r, keys.server_to_client, rx, EFRP_AEAD_RX_BYTES) == EFRP_OK);
+    assert(efrp_aead_reader_init_chunked(&r, keys.server_to_client, calloc, free) == EFRP_OK);
     size_t offset = 0, total = 0;
     while (offset < wn) {
         size_t take = wn - offset, consumed;
@@ -39,7 +39,7 @@ int main(void)
         if (result != EFRP_OK && result != EFRP_WOULD_BLOCK) goto done;
         offset += consumed;
         const uint8_t *p; size_t n;
-        if (efrp_aead_plaintext(&r, &p, &n) == EFRP_OK) {
+        while (efrp_aead_plaintext(&r, &p, &n) == EFRP_OK) {
             assert(n <= 400001 - total); memcpy(plain + total, p, n); total += n;
             assert(efrp_aead_consume_plaintext(&r, n) == EFRP_OK);
         }
@@ -62,6 +62,6 @@ int main(void)
     assert(fflush(stdout) == 0); exit_code = 0;
 done:
     efrp_aead_reader_destroy(&r); efrp_aead_writer_destroy(&w); efrp_aead_clear_keys(&keys);
-    free(token); free(client); free(server); free(wire); free(plain); free(rx); free(tx);
+    free(token); free(client); free(server); free(wire); free(plain); free(tx);
     return exit_code;
 }

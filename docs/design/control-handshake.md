@@ -16,7 +16,7 @@ ServerHello 必须先于 LoginResp，算法只能为已广告的 AES，message c
 
 ## 边界、错误与所有权
 
-- 握手接收缓存固定使用调用方前 4096 字节；单条 Hello/LoginResp 超出该范围返回 CAPACITY_EXCEEDED。这是握手 JSON 上限，后续 AEAD 仍保留完整 65552 字节接收工作区。
+- 握手接收缓存固定使用调用方前 4096 字节；单条 Hello/LoginResp 超出该范围返回 CAPACITY_EXCEEDED。这是握手 JSON 上限；后续 AEAD 仍接受完整 65552 字节密文加 tag 记录。会话在登录结束时释放握手区，再按记录长度分块接收。
 - cJSON 调用前限制深度 8、结构标记数量 128 和有效 UTF-8；拒绝 BOM、编码 NUL、非法控制字符、重复键（含转义别名）、未知字段与额外尾部 JSON。字段按固定上游对象结构和类型校验。cJSON 分配失败与解析失败不能由该库 API 精确区分，接收端统一 fail closed 为 PROTOCOL_ERROR；构建输出失败为 CAPACITY_EXCEEDED。
 - 所有对象先零初始化，单 owner 使用；输入、输出对象与借用缓存不得重叠。输出可分批消费，已消费部分立即清零；配置提交或网络执行不能从 write/consume 推断。
 - 输出全部交给 transport 后才接收响应。`efrp_wire_feed_one` 在单帧边界停止，使握手在 LoginResp 后立即退出；feed 返回消费的精确前缀。调用方必须保留剩余字节，同次读取可能已经包含控制 AEAD 的 nonce 和首记录。

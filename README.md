@@ -95,7 +95,7 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_yamux.h` 提供单 owner、无分配、无 socket 的客户端核心。四流各用 1 KiB ring，协议初始窗口保持 256 KiB；可增量接收大于 ring 的 DATA。调用方定期 tick，显式消费串流和输出；仅当完整 WindowUpdate 已交给 transport 才归还接收信用。慢流超时 RST、释放后数据有界排空、半关闭与 PING/GOAWAY 均有 host 回归。完整合同和限制见 [Yamux 核心](docs/design/yamux-core.md)。
 
-`esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生；接收端必须提供 65552 字节工作区，在完整 GCM tag 验证前不暴露明文，失败后清零并永久拒绝复用。发送端支持小记录与部分输出，nonce 来自密码随机源，单方向限制 2^32 条记录。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)。
+`esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生；接收端可使用调用方提供的 65552 字节连续工作区，FRP 会话改为按记录实际长度最多分配 16 个 4096 字节块。在完整 GCM tag 验证前不暴露明文，失败或取消后清零释放。发送端支持小记录与部分输出，nonce 来自密码随机源，单方向限制 2^32 条记录。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)与 [C3 连续内存检查点](docs/operations/p6-frp-chunked-aead.md)。
 
 `esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格 TLS 的 Yamux 控制流上；不自行建立网络连接。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。详见 [握手合同](docs/design/control-handshake.md)。
 

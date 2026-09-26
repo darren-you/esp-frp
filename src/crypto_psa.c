@@ -97,3 +97,64 @@ efrp_result_t efrp_crypto_gcm(bool encrypt, const uint8_t key[32], const uint8_t
     efrp_crypto_zero(input, sizeof input); efrp_crypto_zero(output, sizeof output); efrp_crypto_zero(tag, sizeof tag);
     return outcome(status);
 }
+static void chunk_copy(uint8_t *const chunks[], const size_t sizes[], size_t count,
+                       size_t offset, uint8_t *buffer, size_t length, bool write_chunks)
+{
+    for (size_t i = 0; i < count && length; ++i) {
+        if (offset >= sizes[i]) { offset -= sizes[i]; continue; }
+        size_t n = sizes[i] - offset;
+        if (n > length) n = length;
+        if (write_chunks) memcpy(chunks[i] + offset, buffer, n);
+        else memcpy(buffer, chunks[i] + offset, n);
+        buffer += n; length -= n; offset = 0;
+    }
+}
+efrp_result_t efrp_crypto_gcm_decrypt_chunks(const uint8_t key[32], const uint8_t nonce[12],
+                                            const uint8_t aad[16], uint8_t *const chunks[],
+                                            const size_t sizes[], size_t count, const uint8_t tag[16])
+{
+    size_t total = 0;
+    if (count > EFRP_AEAD_RX_MAX_CHUNKS) return EFRP_INVALID_ARGUMENT;
+    for (size_t i = 0; i < count; ++i) {
+        if (!chunks[i] || !sizes[i] || sizes[i] > EFRP_AEAD_RX_CHUNK_BYTES ||
+            total > EFRP_AEAD_MAX_PLAINTEXT - sizes[i]) return EFRP_INVALID_ARGUMENT;
+        total += sizes[i];
+    }
+    psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+    mbedtls_svc_key_id_t id = MBEDTLS_SVC_KEY_ID_INIT;
+    psa_aead_operation_t op = PSA_AEAD_OPERATION_INIT;
+    uint8_t input[512], output[PSA_AEAD_UPDATE_OUTPUT_MAX_SIZE(512)];
+    _Static_assert(sizeof output <= 1024, "Review AEAD chunk workspace after SDK changes");
+    size_t consumed = 0, produced = 0, n = 0;
+    psa_status_t status = psa_crypto_init();
+    psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
+    psa_set_key_bits(&attributes, 256);
+    psa_set_key_algorithm(&attributes, PSA_ALG_GCM);
+    psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_DECRYPT);
+    if (status == PSA_SUCCESS) status = psa_import_key(&attributes, key, 32, &id);
+    psa_reset_key_attributes(&attributes);
+    if (status == PSA_SUCCESS) status = psa_aead_decrypt_setup(&op, id, PSA_ALG_GCM);
+    if (status == PSA_SUCCESS) status = psa_aead_set_nonce(&op, nonce, 12);
+    if (status == PSA_SUCCESS) status = psa_aead_set_lengths(&op, 16, total);
+    if (status == PSA_SUCCESS) status = psa_aead_update_ad(&op, aad, 16);
+    while (consumed < total && status == PSA_SUCCESS) {
+        size_t take = total - consumed;
+        if (take > sizeof input) take = sizeof input;
+        chunk_copy(chunks, sizes, count, consumed, input, take, false);
+        status = psa_aead_update(&op, input, take, output, sizeof output, &n);
+        consumed += take;
+        if (status == PSA_SUCCESS && n > consumed - produced) status = PSA_ERROR_BAD_STATE;
+        if (status == PSA_SUCCESS) {
+            chunk_copy(chunks, sizes, count, produced, output, n, true); produced += n;
+        }
+    }
+    if (status == PSA_SUCCESS) {
+        status = psa_aead_verify(&op, output, sizeof output, &n, tag, 16);
+        if (status == PSA_SUCCESS && n != total - produced) status = PSA_ERROR_BAD_STATE;
+        if (status == PSA_SUCCESS) chunk_copy(chunks, sizes, count, produced, output, n, true);
+    }
+    if (psa_aead_abort(&op) != PSA_SUCCESS) status = PSA_ERROR_BAD_STATE;
+    if (!mbedtls_svc_key_id_is_null(id) && psa_destroy_key(id) != PSA_SUCCESS) status = PSA_ERROR_BAD_STATE;
+    efrp_crypto_zero(input, sizeof input); efrp_crypto_zero(output, sizeof output);
+    return outcome(status);
+}

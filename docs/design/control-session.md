@@ -12,7 +12,7 @@ create 接收已经 OPEN、无待发数据的 TLS 句柄和配置。Token、代�
 
 ## 协议、背压与期限
 
-首条 Yamux 流承载 magic、ClientHello/Login。LoginResp 完成后释放握手借用区，在同一块内存初始化 AEAD；未消费的控制尾数据保持原顺序，认证成功后才交给 wire parser。控制 JSON payload（含两字节消息编号）最多 4096 字节；共享预检限制 UTF-8、深度、字段规模与重复解码键，不接受未知消息、字段或错误顺序。
+首条 Yamux 流承载 magic、ClientHello/Login。登录时独占借用 4096 字节握手接收区；LoginResp 完成后复制方向密钥与 run ID、销毁握手并清零释放借用区，再初始化按实际记录长度分块的 AEAD reader。未消费的控制尾数据保持原顺序，认证成功后才交给 wire parser。控制 JSON payload（含两字节消息编号）最多 4096 字节；共享预检限制 UTF-8、深度、字段规模与重复解码键，不接受未知消息、字段或错误顺序。
 
 NewProxyResp 必须匹配配置的名称，成功时 remote address 非空且最多 256 字节；错误返回 `EFRP_PROXY_REJECTED`。注册后立即发送 Ping，此后每 15 秒一次，始终使用官方 Token 公式签名。只有已有未完成 Ping 才接受 Pong，错误返回 `EFRP_AUTHENTICATION_FAILED`。注册响应和 Pong 各有 10 秒绝对期限，包含本地排队时间；TLS、Yamux 和握手更早到期时保留其错误。
 
@@ -28,6 +28,6 @@ TLS 已复制一段 Yamux 输出并不意味着该段已发完。会话记录暂
 
 另外 28 个场景复用相同官方 TLS/Yamux/wire/Token/AEAD API，并在 TLS 后注入固定非法 Yamux header。覆盖握手后同包 AEAD、4096 字节控制 payload 跨暂存边界、单条 64 KiB AEAD 明文、超长控制帧/AEAD 记录、名称/类型/重复键/未知消息拒绝、重复或失败 Pong、超量工作请求、FIN、TLS close_notify、帧/密文截断、tag 篡改、两类响应超时，以及 Yamux 版本/类型/旗标/信用/窗口/流 ID、RST 与截断。这些协议 fixture 不冒充完整 FRPS；两类对端共同验证组合行为。单设备入口和证据边界见 [crypto-interop](../../tests/crypto-interop/README.md#单设备协议-fixture)。
 
-ESP-IDF v6.1 / C3 的会话分为 24848 字节对象、20912 字节 Yamux 和 65552 字节 AEAD 接收区，合计 111312 字节（不含 allocator 元数据），保持原有完整记录容量。会话保留 1056 字节 AEAD 发送区、四条 Yamux ring、阶段复用的握手/控制区和三个工作槽。实板首次测得 Wi-Fi 在线时最大连续块只有 114688 字节，因此禁止再要求一个 127728 字节的连续分配。首次两块分配在真实 TLS 后仍因堆区分布失败，因此采用三块分配，再移除互斥阶段的重复空间。任一分配失败都回滚；正常销毁和握手配置拒绝均清零三块内存。另需 TLS 对象、SDK 内部内存、cJSON 临时分配和每条连接 56 字节的对象。编译尺寸不是运行峰值或 MCU 泄漏结论；真实 SDK 网络、worker 和双业务流已部分通过，资源与故障缺口见 [C3 问题记录](../issues/c3-loopback-memory-pressure.md)，Base/MQTT 组合仍待验证。
+固定 ESP-IDF v6.1 / C3 的编译尺寸为会话对象 17848 字节（含 264 字节 AEAD reader）、Yamux 5552 字节。登录暂借 4096 字节握手接收区，因此这三笔初始分配共 27496 字节，不含 allocator 元数据、TLS 或其他组件。登录后释放握手区；只有收到合法 AEAD 长度头才按明文实际长度申请最多十六个不超过 4096 字节的块。64 KiB 明文仍需合计 65536 字节动态块，tag 留在 reader 内；这改变最大单笔分配，不保证 guest 存活时总内存充足。会话保留 1056 字节 AEAD 发送区、四条 Yamux ring、阶段复用的握手/控制区和三个工作槽。任何分配失败、认证失败、取消或销毁均清零释放已持有块；正常消费完成也逐块清零释放。另需 TLS 对象、SDK 内部内存、cJSON 临时分配和工作连接对象。编译尺寸不是运行峰值或 MCU 泄漏结论；证据与 P6-03 未验边界见 [连续内存检查点](../operations/p6-frp-chunked-aead.md)。
 
-登录握手和认证后的控制区在会话内复用同一存储：只有 `take_result` 复制密钥/run_id、销毁握手并释放借用后，才建立控制 writer 与 JSON parser。清理按实际初始化阶段执行，不能将控制字节解释为握手对象。控制明文输出最多 1024 字节，AEAD 发送区为 1056 字节；对端接收仍保留完整 65552 字节认证工作区及 4 KiB JSON 边界，不把本地发送大小当成对端 record 上限。
+登录握手和认证后的控制区在会话内复用同一存储：只有 `take_result` 复制密钥/run_id、销毁握手并释放借用后，才建立控制 writer 与 JSON parser。清理按实际初始化阶段执行，不能将控制字节解释为握手对象。控制明文输出最多 1024 字节，AEAD 发送区为 1056 字节；对端仍可发送完整 65552 字节密文加 tag 记录及 4 KiB JSON 边界，不把本地发送大小当成对端 record 上限。

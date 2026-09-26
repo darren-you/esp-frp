@@ -15,6 +15,8 @@ extern "C" {
 #define EFRP_AEAD_TX_MAX_BYTES (EFRP_AEAD_RX_BYTES + 16u)
 #define EFRP_AEAD_MAX_RECORDS (UINT64_C(1) << 32)
 #define EFRP_AEAD_MAX_TOKEN_BYTES 1024u
+#define EFRP_AEAD_RX_CHUNK_BYTES 4096u
+#define EFRP_AEAD_RX_MAX_CHUNKS (EFRP_AEAD_MAX_PLAINTEXT / EFRP_AEAD_RX_CHUNK_BYTES)
 
 typedef struct {
     uint8_t client_to_server[32], server_to_client[32], transcript_hash[32];
@@ -32,9 +34,14 @@ void efrp_aead_clear_keys(efrp_aead_keys_t *keys);
 typedef struct {
     uint8_t key[32], stream_nonce[12], nonce[12], header[4];
     uint8_t *storage;
+    uint8_t *chunks[EFRP_AEAD_RX_MAX_CHUNKS];
+    size_t chunk_sizes[EFRP_AEAD_RX_MAX_CHUNKS], chunk_count;
+    uint8_t tag[EFRP_AEAD_TAG_BYTES];
+    void *(*allocate)(size_t count, size_t size);
+    void (*release)(void *pointer);
     size_t nonce_used, header_used, body_used, body_expected, plain_used, plain_offset;
     uint64_t records;
-    bool active;
+    bool active, chunked;
     efrp_result_t failure;
 } efrp_aead_reader_t;
 typedef struct {
@@ -46,12 +53,16 @@ typedef struct {
     efrp_result_t failure;
 } efrp_aead_writer_t;
 
-/* Reader requires >=65552 bytes: peer records may contain 64 KiB. Storage is
- * exclusive until destroy. Only plaintext() exposes authenticated contents.
+/* Fixed reader requires >=65552 bytes. Chunked reader allocates only after a
+ * valid record length, in at most sixteen actual-sized blocks <=4096 bytes;
+ * the tag stays in the reader. Both modes accept a full 64 KiB plaintext.
+ * Storage is exclusive until destroy. Only plaintext() exposes authenticated contents.
  * Feed reports consumed prefix; retain suffix on WOULD_BLOCK and consume
  * plaintext before resuming. No callbacks or borrowed input pointers. */
 efrp_result_t efrp_aead_reader_init(efrp_aead_reader_t *reader, const uint8_t key[32],
                                     uint8_t *storage, size_t capacity);
+efrp_result_t efrp_aead_reader_init_chunked(efrp_aead_reader_t *reader, const uint8_t key[32],
+                                           void *(*allocate)(size_t, size_t), void (*release)(void *));
 efrp_result_t efrp_aead_feed(efrp_aead_reader_t *reader, const uint8_t *bytes,
                              size_t length, size_t *consumed);
 efrp_result_t efrp_aead_plaintext(const efrp_aead_reader_t *reader,

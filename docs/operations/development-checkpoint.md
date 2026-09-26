@@ -1,5 +1,7 @@
 # 开发检查点
 
+2026-09-26 P6 连续内存候选：控制 AEAD 在合法长度头后按实际明文申请最多 16 个 4096 字节块，LoginResp 后清零释放独立的 4096 字节握手区；完整 64 KiB 记录与 tag 认证边界保持。官方 Mbed TLS/PSA 的 host ASan/UBSan 完整 CTest 17/17、固定 SDK C3 空输入构建通过。C3 会话/Yamux 编译尺寸为 17848/5552 字节；五组件 QEMU 的 guest 存活时最大连续块 45056 字节不再被单笔 65552 字节接收区阻挡，但总 free 和真实并发仍未通过，P6-03 保持未验收。完整数据见 [P6 连续内存检查点](p6-frp-chunked-aead.md)。
+
 2026-09-23 P4 热点复测：`p4-hotspot-linger-20260923` 使用当前 FRP 源码构建 867888 字节 C3 实验应用，SHA-256 为 `50c001c2634e6487b34a7cfbd03f5364ff3dfb26134afc971a9f370898412d80`。设备经近距手机热点接入，本轮验收状态采样 RSSI 为 -45 至 -44 dBm。官方 FRPS 初检先完成单流 1024 字节双向回显，再完成双流各 1024 字节双向回显；未放宽 FRPS 固定 10 秒 work 等待。`work-local-fin` 的交付与回显两个方向各 300001 字节、零 mismatch，完整交付证明均为 `valid=1`；`work-shared` 在活动流与预备流并存时确认暂停 socket 有未读字节，RST 后活动流 `work_error=-17`、预备流继续完成，最终 `completed=1`、`failed=1`。两场景各自销毁后均重新连接官方 FRPS 并通过双流回显；`acceptance-result.json` 为 `complete=true`，不代表十轮压力、Base/MQTT 组合或 P4 总验收完成。
 
 首次准备尝试在两份一致的完整 Flash 回读后因私有收据缺少 `partition-table.bin` 停于写入前，原基座已复启，现场归档于 `preflight-attempt-1/`。第二次热点运行的验收虽通过，原自动 pipeline 的 `restored=false`：恢复脚本完成首次 `after-lab` 全量回读后仍要求未生成的 `verified-lab-app.bin`。执行者保留 `after-lab-first.bin`，核对实验应用摘要并补齐副本后独立执行恢复；`recovery-followup.json` 明确区分这两次动作，不修改原 `pipeline-result.json`。独立恢复的启动前后各双份 4 MiB Flash 均逐字节等于本轮新鲜基线，同 UUID、revision 5、Wi-Fi、原 Mac Bridge 恢复；PF 清理收据验证临时 anchor 为空且全局 NAT 未变。私有恢复脚本现直接校验 `input-app.bin` 与准备/目标双重固定摘要，修正后未再次刷板。

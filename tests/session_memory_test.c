@@ -3,15 +3,16 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-/* Only session.c uses this allocator. TLS and crypto remain real. */
-static struct { void *pointer; size_t bytes; } blocks[3];
+/* session.c passes this allocator to the chunked reader. TLS and crypto remain real. */
+static struct { void *pointer; size_t bytes; } blocks[3 + EFRP_AEAD_RX_MAX_CHUNKS];
 static unsigned calls, fail_at, live;
 void *fixture_session_calloc(size_t count, size_t bytes)
 {
     assert(!count || bytes <= SIZE_MAX / count);
+    assert(count * bytes != EFRP_AEAD_RX_BYTES);
     if (++calls == fail_at) return NULL;
     void *pointer = calloc(count, bytes); assert(pointer);
-    for (unsigned i=0;i<3;++i) if (!blocks[i].pointer) {
+    for (unsigned i=0;i<3 + EFRP_AEAD_RX_MAX_CHUNKS;++i) if (!blocks[i].pointer) {
         blocks[i].pointer=pointer; blocks[i].bytes=count*bytes; ++live; return pointer;
     }
     abort();
@@ -19,7 +20,7 @@ void *fixture_session_calloc(size_t count, size_t bytes)
 void fixture_session_free(void *pointer)
 {
     if (!pointer) return;
-    for (unsigned i=0;i<3;++i) if (blocks[i].pointer == pointer) {
+    for (unsigned i=0;i<3 + EFRP_AEAD_RX_MAX_CHUNKS;++i) if (blocks[i].pointer == pointer) {
         for (size_t j=0;j<blocks[i].bytes;++j) assert(((const uint8_t *)pointer)[j] == 0);
         blocks[i].pointer=NULL; --live; free(pointer); return;
     }

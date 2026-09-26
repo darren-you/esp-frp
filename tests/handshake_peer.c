@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     assert(fflush(stdout) == 0 && fread(header, 1, 4, stdin) == 4);
     size_t length = ((uint32_t)header[0] << 24) | ((uint32_t)header[1] << 16) | ((uint32_t)header[2] << 8) | header[3];
     assert(length <= 100000);
-    uint8_t *wire = malloc(length), *rx = malloc(EFRP_AEAD_RX_BYTES), tx[4128], plain[4096]; assert(wire && rx);
+    uint8_t *wire = malloc(length), tx[4128], plain[4096]; assert(wire);
     assert(fread(wire, 1, length, stdin) == length && getchar() == EOF);
     efrp_aead_reader_t r = {0}; efrp_aead_writer_t w = {0}; efrp_aead_keys_t keys = {0};
     size_t at = 0, plain_used = 0; int status = 10;
@@ -43,13 +43,13 @@ int main(int argc, char **argv)
                 char run_id[EFRP_RUN_ID_BYTES];
                 assert(efrp_handshake_take_result(&h, &keys, run_id) == EFRP_OK);
                 assert(!strcmp(run_id, "0123456789abcdef"));
-                assert(efrp_aead_reader_init(&r, keys.server_to_client, rx, EFRP_AEAD_RX_BYTES) == EFRP_OK);
+                assert(efrp_aead_reader_init_chunked(&r, keys.server_to_client, calloc, free) == EFRP_OK);
             }
         } else {
             result = efrp_aead_feed(&r, wire + at, take, &used);
             if (result != EFRP_OK && result != EFRP_WOULD_BLOCK) goto done;
             at += used;
-            if (efrp_aead_plaintext(&r, &p, &n) == EFRP_OK) {
+            while (efrp_aead_plaintext(&r, &p, &n) == EFRP_OK) {
                 assert(n <= sizeof plain - plain_used); memcpy(plain + plain_used, p, n); plain_used += n;
                 assert(efrp_aead_consume_plaintext(&r, n) == EFRP_OK);
             }
@@ -62,5 +62,5 @@ int main(int argc, char **argv)
     assert(fflush(stdout) == 0); status = 0;
 done:
     efrp_aead_clear_keys(&keys); efrp_aead_reader_destroy(&r); efrp_aead_writer_destroy(&w); efrp_handshake_destroy(&h);
-    free(wire); free(rx); return status;
+    free(wire); return status;
 }

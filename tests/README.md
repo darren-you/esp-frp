@@ -123,4 +123,4 @@ Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回�
 
 可以把完整 Mbed TLS 命令中的 `-fsanitize=address,undefined` 替换为 `-fsanitize=thread`，在独立构建目录运行 `ctest --test-dir <目录> -R '^client_' --output-on-failure`，检查 worker、外部 API、状态副本与迟到测试 DNS 的竞争。不可同时开启 TSan 和 ASan。停止和线程退出检查见[客户端生命周期](../docs/design/client-lifecycle.md)。
 
-`session_peer` 将实际 `session.c` 的 allocator 单独替换为测试计数器，TLS、密码与对端保持真实。首轮分别注入对象、完整 AEAD 接收区和 Yamux 分配失败，再验证握手配置拒绝回滚；每次正常/失败会话销毁均检查三块内存已清零且无残留。
+`session_peer` 将实际 `session.c` 的 allocator 单独替换为测试计数器，并传给分块 AEAD reader；TLS、密码与对端保持真实。首轮分别注入会话对象、4096 字节握手区和 Yamux 分配失败，再验证握手配置拒绝回滚；正常/失败/取消会话销毁均检查所有持有块已清零且无残留。`aead` 另以同一后端覆盖 64 KiB 记录的 16 块分配、tag 篡改、末字节截断和中途分配失败；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)记录 C3 编译尺寸与组合边界。
