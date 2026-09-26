@@ -1,0 +1,62 @@
+# raw_sha256=39f58ec8aa93e1632388b281ce373061696073cecaf8bff6c64b0d38f64d3610
+# boot_id/device_id 已脱敏；重复 OpenETH RX 失败只保留首条。
+I (2450) five-capacity-auth: heap phase=before_guest free=193900 largest=110592 min=193900
+I (2450) five-capacity-auth: heap phase=guest_opened free=116220 largest=57344 min=116220
+I (2450) five-capacity-auth: heap phase=guest_event_done free=116220 largest=57344 min=116220
+I (2450) five-capacity-auth: frp_record run=1 label=early_max plain=65536 init=0 feed=0 consumed=65568 records=1 compare=65536 auth=1 expected=1 alloc=16 released=16 alloc_fail=0 peak=65536 live=0 before=116220/57344 during=49796/43008 after=115396/57344
+I (2450) five-capacity-auth: heap phase=guest_closed free=192972 largest=110592 min=49340
+I (2450) five-capacity-auth: result run=1 open=0 init=0 event=0 stop=0 close=0 guest=3 failures=0
+I (2450) five-capacity-auth: probe_summary runs=1 failures=0
+I (3510) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=1099 free_heap=147312 min_free_heap=49340 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (3510) esp_base: ESP_BASE_READY hardware_outputs=untouched provisioning=required
+I (3510) five-capacity-auth: heap phase=after_base_ready free=147096 largest=110592 min=49340
+I (3510) five-capacity-auth: heap phase=before_guest free=138728 largest=110592 min=49340
+I (3530) five-capacity-auth: heap phase=guest_opened free=61160 largest=43008 min=49340
+I (3530) five-capacity-auth: heap phase=guest_event_done free=61160 largest=43008 min=49340
+I (3540) five-capacity-auth: frp_record run=2 label=ready_4k_first plain=4096 init=0 feed=0 consumed=4128 records=1 compare=4096 auth=1 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=61160/43008 during=57060/43008 after=61160/43008
+I (3540) five-capacity-auth: frp_record run=2 label=ready_4k_repeat plain=4096 init=0 feed=0 consumed=4128 records=1 compare=4096 auth=1 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=61160/43008 during=57060/43008 after=61160/43008
+I (3540) five-capacity-auth: frp_record run=2 label=ready_4k_bad_tag plain=4096 init=0 feed=-11 consumed=4128 records=0 compare=0 auth=0 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=61160/43008 during=61160/43008 after=61160/43008
+I (3540) five-capacity-auth: frp_record run=2 label=ready_max plain=65536 init=0 feed=-20 consumed=53264 records=0 compare=0 auth=0 expected=1 alloc=13 released=13 alloc_fail=1 peak=53248 live=0 before=61160/43008 during=61160/43008 after=61160/43008
+I (3600) five-capacity-openeth: openeth phase=before error=0 got_ip=0 free=61160 largest=43008 min=4696 alloc_fail=0 last_size=0 last_caps=0
+I (3600) five-capacity-openeth: openeth phase=created_mac_phy error=0 got_ip=0 free=48332 largest=43008 min=4556 alloc_fail=0 last_size=0 last_caps=0
+I (3630) five-capacity-openeth: openeth phase=driver_install error=0 got_ip=0 free=48204 largest=43008 min=4556 alloc_fail=0 last_size=0 last_caps=0
+I (3630) five-capacity-openeth: openeth phase=netif_attach error=0 got_ip=0 free=47440 largest=43008 min=4556 alloc_fail=0 last_size=0 last_caps=0
+I (3630) five-capacity-openeth: openeth phase=register_ip error=0 got_ip=0 free=47408 largest=43008 min=4556 alloc_fail=0 last_size=0 last_caps=0
+I (3730) five-capacity-openeth: openeth phase=eth_start error=0 got_ip=0 free=47388 largest=43008 min=4556 alloc_fail=0 last_size=0 last_caps=0
+I (4790) five-capacity-openeth: openeth phase=dhcp_result error=0 got_ip=1 free=47064 largest=43008 min=2996 alloc_fail=0 last_size=0 last_caps=0
+I (6560) five-capacity-frps: base_sntp_ready=1 unix_time=1790454830
+I (6560) five-capacity-frps: frps phase=before_create api=0 client_phase=-1 failure_phase=-1 error=-1 attempts=0 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=46960 largest=43008 min=2996
+I (6560) five-capacity-openeth: openeth phase=before_create error=0 got_ip=1 free=46960 largest=43008 min=2996 alloc_fail=0 last_size=0 last_caps=0
+I (6560) five-capacity-frps: frps phase=created api=0 client_phase=0 failure_phase=0 error=0 attempts=0 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=36512 largest=32768 min=2996
+I (6560) five-capacity-openeth: openeth phase=created error=0 got_ip=1 free=36512 largest=32768 min=2996 alloc_fail=0 last_size=0 last_caps=0
+I (6560) five-capacity-frps: frps phase=start_queued api=0 client_phase=0 failure_phase=0 error=0 attempts=0 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=36512 largest=32768 min=2996
+I (6560) five-capacity-openeth: openeth phase=start_queued error=0 got_ip=1 free=36512 largest=32768 min=2996 alloc_fail=0 last_size=0 last_caps=0
+I (6600) five-capacity-frps: frps phase=phase_changed api=0 client_phase=1 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=34192 largest=32768 min=2424
+I (6600) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=34092 largest=32768 min=2424 alloc_fail=0 last_size=0 last_caps=0
+I (6710) five-capacity-frps: frps phase=phase_changed api=0 client_phase=2 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=7916 largest=6912 min=2380
+I (6710) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=7916 largest=6912 min=2380 alloc_fail=0 last_size=0 last_caps=0
+I (8180) five-capacity-frps: frps phase=phase_changed api=0 client_phase=6 failure_phase=2 error=-20 attempts=1 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=33348 largest=32768 min=1468
+I (8180) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=35972 largest=32768 min=1468 alloc_fail=1 last_size=18872 last_caps=6144
+I (8210) five-capacity-frps: frps phase=phase_changed api=0 client_phase=8 failure_phase=2 error=-20 attempts=1 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=35972 largest=32768 min=1468
+I (8210) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=35972 largest=32768 min=1468 alloc_fail=1 last_size=18872 last_caps=6144
+I (8210) five-capacity-frps: frps phase=result api=0 client_phase=8 failure_phase=2 error=-20 attempts=1 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=35972 largest=32768 min=1468
+I (8210) five-capacity-openeth: openeth phase=result error=0 got_ip=1 free=35972 largest=32768 min=1468 alloc_fail=1 last_size=18872 last_caps=6144
+I (8250) five-capacity-frps: frps phase=destroy api=0 client_phase=-1 failure_phase=-1 error=-1 attempts=0 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=46552 largest=43008 min=1468
+I (8250) five-capacity-openeth: openeth phase=destroy error=0 got_ip=1 free=46552 largest=43008 min=1468 alloc_fail=1 last_size=18872 last_caps=6144
+I (8260) five-capacity-openeth: openeth phase=after_cleanup error=0 got_ip=1 free=60520 largest=43008 min=1468 alloc_fail=1 last_size=18872 last_caps=6144
+I (8260) five-capacity-auth: heap phase=guest_closed free=138088 largest=110592 min=1468
+I (8260) five-capacity-auth: result run=2 open=0 init=0 event=0 stop=0 close=0 guest=3 failures=1
+I (8260) five-capacity-auth: probe_summary runs=2 failures=1
+I (8270) five-capacity-auth: heap phase=after_base_guest_closed free=146456 largest=110592 min=1468
+I (8570) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=6148 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (13620) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=11195 free_heap=150808 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (18630) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=16205 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (23640) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=21215 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (28660) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=26233 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (33670) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=31250 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (38680) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=36253 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (43700) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=41279 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (48720) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=46294 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (53730) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=51307 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (58750) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=56330 free_heap=150816 min_free_heap=1468 device_id=<redacted> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+# openeth_rx_no_memory_lines=0

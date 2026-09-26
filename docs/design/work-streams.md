@@ -14,11 +14,11 @@ NewWorkConn 输出有 10 秒期限；收到 StartWorkConn 的首字节后，完�
 
 ## 字节与关闭所有权
 
-全组最多一条 SENDING/WAITING 流；收到该流首段输入时才分配共享的 4096 字节握手 payload 区，长期空闲的预备流不持有该区。每槽保留各 1024 字节的两方向暂存。活动流的关闭不能清除另一条等待流的部分握手；StartWorkConn parser 只消费一帧，后缀立即归业务方向，不能丢弃或再次解析。握手完成、握手失败或全组取消时清空并释放 JSON 工作区；分配失败只回收该工作流。每次仅搬运接受的前缀，未消费字节保留到下一步，输出成功只意味着相应层接管了数据。
+全组最多一条 SENDING/WAITING 流。三个工作槽在会话创建时为空指针；收到 ReqWorkConn 并可打开 Yamux 流时，才为该槽申请一个工作对象，其中两个方向各有 1024 字节暂存。申请失败返回 `EFRP_NO_MEMORY` 并结束该会话，待办请求不会在申请失败前被消费。若 Yamux 暂不可打开，清零释放临时对象，保留待办请求。收到 StartWorkConn 首段输入时才分配共享的 4096 字节握手 payload 区，长期空闲的预备流不持有该区。活动流的关闭不能清除另一条等待流的部分握手；StartWorkConn parser 只消费一帧，后缀立即归业务方向，不能丢弃或再次解析。握手完成、握手失败或全组取消时清空并释放 JSON 工作区；该区分配失败只回收对应工作流。每次仅搬运接受的前缀，未消费字节保留到下一步，输出成功只意味着相应层接管了数据。
 
 远端 Yamux FIN 必须等全部先前数据写入本地后，才调用本地 close_write；本地 EOF 必须等此前响应交给 Yamux 后，才排队 Yamux FIN。两个方向独立，因此收到一个方向 FIN 后，另一方向仍能传输。双向结束后使用连接层的普通 finish 保留 TCP 尾数据；网络错误、RST、期限、协议拒绝和取消走终止清理。
 
-单条 work 失败只计入 status.work.last_error/failed 并收回该槽，正常双向结束且本地清理完成计入 completed。local_sent/local_received 是本地 socket 接受或读到的字节，不是远端交付回执。session destroy 在本地 fd 尚未释放时返回 WOULD_BLOCK 并保留整个对象；不能先 free 后让 lwIP 清理访问悬空对象。
+单条已打开的 work 失败只计入 status.work.last_error/failed 并收回该槽，正常双向结束且本地清理完成计入 completed。收回时清零释放该工作对象；取消后本地 fd 仍在异步清理的槽继续持有对象，直到 `destroy` 重试确认释放。local_sent/local_received 是本地 socket 接受或读到的字节，不是远端交付回执。session destroy 在本地 fd 尚未释放时返回 WOULD_BLOCK 并保留整个对象；不能先 free 后让 lwIP 清理访问悬空对象。
 
 ## 已验证范围
 
@@ -26,4 +26,4 @@ NewWorkConn 输出有 10 秒期限；收到 StartWorkConn 的首字节后，完�
 - 13 个官方协议 API 场景：StartWorkConn 与业务粘连、两个方向分别先 FIN 再反向传输、预备流长期等待后再使用、错误 proxy/服务端 error/超长/截断/越界端口/重复键、握手和活跃空闲期限，以及真正慢读阻塞与另一条流继续完成、旧活动流 RST 清理期间保留新流部分握手及 300001 字节尾数据。预备等待和两类长期限使用测试 owner 的单调时钟推进；慢读 2.5 秒背压使用真实 I/O。
 - 真实 FRPS 使用的 golib Join 在任一方向 EOF 时关闭双方；因此真实服务端字节测试在 EOF 前交换应用回执，严格的反向半关闭能力由官方 Yamux/wire 对端单独证明。不能把组件支持扩大为官方 FRPS 提供端到端半关闭。
 
-上一固定 SDK C3 候选编译尺寸为会话对象 17848 字节、Yamux 5552 字节；当前候选的 Yamux 为 1488 字节，按实际打开的流分别申请 1024 字节 ring，控制流从登录阶段持有，最多三条工作流以后按需持有。登录暂借 4096 字节握手区，控制 AEAD 按实际长度最多申请 16 个不超过 4096 字节的块。完整 64 KiB 记录仍需 65536 字节块总量，工作握手开始接收时另分配 4096 字节，每条连接对象及 TLS、lwIP、cJSON、allocator 元数据和任务栈还需额外内存。[同输入 C3 QEMU 复测](../operations/c3-yamux-stream-ring-capacity.md)到达认证阶段，随即遇到 OpenETH RX buffer 分配失败；仍没有本候选实板工作流容量数据。先前 8 KiB worker 的同板十轮双流压力最低 heap 为 48296 字节；调整为 6 KiB worker 后，同类十轮压力最低 heap 为 60504 字节、worker 最低栈余量为 3104 字节。这些旧候选结果不能当作本轮分块实现的实板验收。早期通过单份工作 JSON 与登录/控制存储复用节省内存，随后将搬运块收敛到 1 KiB，均不削减 4 KiB JSON、64 KiB AEAD 或 256 KiB 协议信用。独立 C3 样例的工作流单项实板通过与失败属于不同轮次，尚未形成同一候选的完整矩阵；具体边界见 [问题记录](../issues/c3-loopback-memory-pressure.md)。同一候选的 [host/local 软件矩阵](../operations/p4-host-workflow-matrix.md)不代替 MCU 资源、故障与 Base/MQTT 组合验收。
+固定 SDK C3 的会话对象从 17848 降至 11280 字节，其中工作槽组从 6672 降至 104 字节；单个实际工作流对象仍为 2192 字节。Yamux 对象保持上一候选的 1488 字节，控制流在登录时另持有 1024 字节 ring，最多三条工作流的 ring 和对象都只随实际打开的流持有。登录暂借 4096 字节握手区，控制 AEAD 按实际长度最多申请 16 个不超过 4096 字节的块。完整 64 KiB 记录仍需 65536 字节块总量，工作握手开始接收时另分配 4096 字节，每条连接对象及 TLS、lwIP、cJSON、allocator 元数据和任务栈还需额外内存。[同输入 C3 QEMU 复测](../operations/p6-frp-lazy-work-stream-capacity.md)已完成 Base 和标准 guest 同存下的官方 FRPS 登录、注册、Pong 与销毁；仍没有该候选的实板工作流容量数据。先前 8 KiB worker 的同板十轮双流压力最低 heap 为 48296 字节；调整为 6 KiB worker 后，同类十轮压力最低 heap 为 60504 字节、worker 最低栈余量为 3104 字节。这些旧候选结果不能当作本轮分块实现的实板验收。早期通过单份工作 JSON 与登录/控制存储复用节省内存，随后将搬运块收敛到 1 KiB，均不削减 4 KiB JSON、64 KiB AEAD 或 256 KiB 协议信用。独立 C3 样例的工作流单项实板通过与失败属于不同轮次，尚未形成同一候选的完整矩阵；具体边界见 [问题记录](../issues/c3-loopback-memory-pressure.md)。同一候选的 [host/local 软件矩阵](../operations/p4-host-workflow-matrix.md)不代替 MCU 资源、故障与 Base/MQTT 组合验收。

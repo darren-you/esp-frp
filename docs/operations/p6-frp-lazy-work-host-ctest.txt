@@ -1,0 +1,46 @@
+Internal ctest changing into directory: /tmp/esp-frp-lazy-work-streams-host-build
+Test project /tmp/esp-frp-lazy-work-streams-host-build
+      Start 11: work_upstream
+      Start 10: session_upstream
+ 1/20 Test #10: session_upstream .................   Passed   48.57 sec
+      Start 15: client_upstream
+ 2/20 Test #15: client_upstream ..................   Passed   29.05 sec
+      Start  9: tls_upstream
+ 3/20 Test  #9: tls_upstream .....................   Passed   18.06 sec
+      Start 12: work_faults_upstream
+ 4/20 Test #12: work_faults_upstream .............   Passed   12.75 sec
+      Start 20: yamux_upstream
+ 5/20 Test #20: yamux_upstream ...................   Passed    3.05 sec
+      Start  5: yamux
+ 6/20 Test  #5: yamux ............................   Passed    1.30 sec
+      Start  6: aead
+ 7/20 Test  #6: aead .............................   Passed    1.23 sec
+      Start 17: aead_upstream
+ 8/20 Test #17: aead_upstream ....................   Passed    1.42 sec
+      Start  1: connect
+ 9/20 Test  #1: connect ..........................   Passed    0.70 sec
+      Start  8: handshake_esp32
+10/20 Test  #8: handshake_esp32 ..................   Passed    0.99 sec
+      Start  7: handshake
+11/20 Test  #7: handshake ........................   Passed    0.99 sec
+      Start  4: frame_reader
+12/20 Test  #4: frame_reader .....................   Passed    0.56 sec
+      Start 13: work_allocation
+13/20 Test #13: work_allocation ..................   Passed    0.80 sec
+      Start 14: work_timeout_trace
+14/20 Test #14: work_timeout_trace ...............   Passed    0.79 sec
+      Start 18: handshake_upstream
+15/20 Test #18: handshake_upstream ...............   Passed    1.25 sec
+      Start 19: handshake_esp32_upstream
+16/20 Test #19: handshake_esp32_upstream .........   Passed    1.11 sec
+      Start  2: connect_linger
+17/20 Test  #2: connect_linger ...................   Passed    0.02 sec
+      Start 16: client_contract
+18/20 Test #16: client_contract ..................   Passed    0.85 sec
+      Start  3: dns_adapter
+19/20 Test  #3: dns_adapter ......................   Passed    0.05 sec
+20/20 Test #11: work_upstream ....................   Passed  169.49 sec
+
+100% tests passed, 0 tests failed out of 20
+
+Total Test time (real) = 169.50 sec

@@ -1,0 +1,46 @@
+Internal ctest changing into directory: /tmp/esp-frp-lazy-work-streams-word-host-build
+Test project /tmp/esp-frp-lazy-work-streams-word-host-build
+      Start  1: connect
+      Start  2: connect_linger
+      Start  3: dns_adapter
+      Start  4: frame_reader
+      Start  5: yamux
+      Start  6: aead
+      Start  7: handshake
+      Start  8: handshake_esp32
+ 1/20 Test  #2: connect_linger ...................   Passed    1.48 sec
+      Start  9: tls_upstream
+ 2/20 Test  #1: connect ..........................   Passed    1.76 sec
+      Start 10: session_upstream
+ 3/20 Test  #3: dns_adapter ......................   Passed    2.35 sec
+      Start 11: work_upstream
+ 4/20 Test  #4: frame_reader .....................   Passed    2.94 sec
+      Start 12: work_faults_upstream
+ 5/20 Test  #5: yamux ............................   Passed    4.18 sec
+      Start 13: work_allocation
+ 6/20 Test  #6: aead .............................   Passed    4.99 sec
+      Start 14: work_timeout_trace
+ 7/20 Test  #7: handshake ........................   Passed    5.43 sec
+      Start 15: client_upstream
+ 8/20 Test  #8: handshake_esp32 ..................   Passed    6.23 sec
+      Start 16: client_contract
+ 9/20 Test #13: work_allocation ..................   Passed    5.75 sec
+      Start 17: aead_upstream
+10/20 Test #14: work_timeout_trace ...............   Passed    5.81 sec
+      Start 18: handshake_upstream
+11/20 Test #16: client_contract ..................   Passed    6.11 sec
+      Start 19: handshake_esp32_upstream
+12/20 Test #17: aead_upstream ....................   Passed    4.45 sec
+      Start 20: yamux_upstream
+13/20 Test #18: handshake_upstream ...............   Passed    4.05 sec
+14/20 Test #19: handshake_esp32_upstream .........   Passed    3.40 sec
+15/20 Test #20: yamux_upstream ...................   Passed    3.79 sec
+16/20 Test #12: work_faults_upstream .............   Passed   18.14 sec
+17/20 Test  #9: tls_upstream .....................   Passed   24.73 sec
+18/20 Test #15: client_upstream ..................   Passed   32.46 sec
+19/20 Test #10: session_upstream .................   Passed   54.27 sec
+20/20 Test #11: work_upstream ....................   Passed  177.35 sec
+
+100% tests passed, 0 tests failed out of 20
+
+Total Test time (real) = 179.71 sec

@@ -1,0 +1,59 @@
+# raw_sha256=6025946689b20989680e2946508fcff908ca21aae2a1b46324dcb4180a44d020
+# boot_id/device_id 已脱敏；重复 OpenETH RX 失败只保留首条。
+I (176) five-capacity-auth: heap phase=before_guest free=220876 largest=114688 min=220876
+I (176) five-capacity-auth: heap phase=guest_opened free=143204 largest=114688 min=143204
+I (176) five-capacity-auth: heap phase=guest_event_done free=143204 largest=114688 min=143204
+I (176) five-capacity-auth: frp_record run=1 label=early_max plain=65536 init=0 feed=0 consumed=65568 records=1 compare=65536 auth=1 expected=1 alloc=16 released=16 alloc_fail=0 peak=65536 live=0 before=143204/114688 during=76392/65536 after=141992/114688
+I (176) five-capacity-auth: heap phase=guest_closed free=219560 largest=114688 min=75800
+I (176) five-capacity-auth: result run=1 open=0 init=0 event=0 stop=0 close=0 guest=3 failures=0
+I (176) five-capacity-auth: probe_summary runs=1 failures=0
+I (296) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=243 free_heap=171080 min_free_heap=75800 device_id=<redacted> firmware=0.2.0 chip=ESP32-C3 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (296) esp_base: ESP_BASE_READY hardware_outputs=untouched provisioning=required
+I (296) five-capacity-auth: heap phase=after_base_ready free=170776 largest=114688 min=75800
+I (296) five-capacity-auth: heap phase=before_guest free=162412 largest=114688 min=75800
+I (296) five-capacity-auth: heap phase=guest_opened free=84844 largest=45056 min=55364
+I (296) five-capacity-auth: heap phase=guest_event_done free=84844 largest=45056 min=55364
+I (296) five-capacity-auth: frp_record run=2 label=ready_4k_first plain=4096 init=0 feed=0 consumed=4128 records=1 compare=4096 auth=1 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=84844/45056 during=80744/45056 after=84844/45056
+I (296) five-capacity-auth: frp_record run=2 label=ready_4k_repeat plain=4096 init=0 feed=0 consumed=4128 records=1 compare=4096 auth=1 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=84844/45056 during=80744/45056 after=84844/45056
+I (296) five-capacity-auth: frp_record run=2 label=ready_4k_bad_tag plain=4096 init=0 feed=-11 consumed=4128 records=0 compare=0 auth=0 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=84844/45056 during=84844/45056 after=84844/45056
+I (296) five-capacity-auth: frp_record run=2 label=ready_max plain=65536 init=0 feed=0 consumed=65568 records=1 compare=65536 auth=1 expected=1 alloc=16 released=16 alloc_fail=0 peak=65536 live=0 before=84844/45056 during=19244/8704 after=84844/45056
+I (356) five-capacity-client: frp_client stage=create created=0 status=0 phase=0 handle=1 worker=1 worker_stack_min_free=5716 before=84844/45056/18464 with=74920/45056/18464 delta_free=9924
+I (356) five-capacity-auth: frp_record run=2 label=ready_max_with_client plain=65536 init=0 feed=0 consumed=65568 records=1 compare=65536 auth=1 expected=1 alloc=16 released=16 alloc_fail=0 peak=65536 live=0 before=74920/45056 during=9320/3584 after=74920/45056
+I (386) five-capacity-client: frp_client stage=destroy destroyed=0 handle=0 worker_stack_min_free=5716 before=74920/45056/6164 after=84844/45056/6164 delta_free=9924
+I (386) five-capacity-openeth: openeth phase=before error=0 got_ip=0 free=84844 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (386) five-capacity-openeth: openeth phase=created_mac_phy error=0 got_ip=0 free=72340 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (496) five-capacity-openeth: openeth phase=driver_install error=0 got_ip=0 free=72212 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (496) five-capacity-openeth: openeth phase=netif_attach error=0 got_ip=0 free=71448 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (496) five-capacity-openeth: openeth phase=register_ip error=0 got_ip=0 free=71416 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (676) five-capacity-openeth: openeth phase=eth_start error=0 got_ip=0 free=71116 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (1716) five-capacity-openeth: openeth phase=dhcp_result error=0 got_ip=1 free=71072 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (3376) five-capacity-frps: frps phase=base_sntp_ready ready=1
+I (3376) five-capacity-frps: frps phase=before_create api=0 client_phase=-1 failure_phase=-1 error=-1 attempts=0 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=70980 largest=45056 min=6164
+I (3376) five-capacity-openeth: openeth phase=before_create error=0 got_ip=1 free=70980 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (3376) five-capacity-frps: frps phase=created api=0 client_phase=0 failure_phase=0 error=0 attempts=0 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=60532 largest=45056 min=6164
+I (3376) five-capacity-openeth: openeth phase=created error=0 got_ip=1 free=60532 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (3376) five-capacity-frps: frps phase=start_queued api=0 client_phase=0 failure_phase=0 error=0 attempts=0 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=60532 largest=45056 min=6164
+I (3376) five-capacity-openeth: openeth phase=start_queued error=0 got_ip=1 free=60532 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (3446) five-capacity-frps: frps phase=phase_changed api=0 client_phase=1 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=59944 largest=45056 min=6164
+I (3446) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=59944 largest=45056 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (3496) five-capacity-frps: frps phase=phase_changed api=0 client_phase=2 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=31960 largest=18432 min=6164
+I (3496) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=31960 largest=18432 min=6164 alloc_fail=0 last_size=0 last_caps=0
+I (4316) five-capacity-frps: frps phase=phase_changed api=0 client_phase=3 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=16004 largest=7680 min=4620
+I (4316) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=16004 largest=7680 min=4620 alloc_fail=0 last_size=0 last_caps=0
+I (4476) five-capacity-frps: frps phase=phase_changed api=0 client_phase=4 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=20104 largest=9216 min=4620
+I (4476) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=20104 largest=9216 min=4620 alloc_fail=0 last_size=0 last_caps=0
+I (4686) five-capacity-frps: frps phase=phase_changed api=0 client_phase=5 failure_phase=0 error=0 attempts=1 ready=1 pongs=1 tls_error=0 verify=4294967295 system_error=0 free=20104 largest=9216 min=4620
+I (4686) five-capacity-openeth: openeth phase=phase_changed error=0 got_ip=1 free=20104 largest=9216 min=4620 alloc_fail=0 last_size=0 last_caps=0
+I (4686) five-capacity-frps: frps phase=result api=0 client_phase=5 failure_phase=0 error=0 attempts=1 ready=1 pongs=1 tls_error=0 verify=4294967295 system_error=0 free=20104 largest=9216 min=4620
+I (4686) five-capacity-openeth: openeth phase=result error=0 got_ip=1 free=20104 largest=9216 min=4620 alloc_fail=0 last_size=0 last_caps=0
+I (4706) five-capacity-frps: frps phase=destroy api=0 client_phase=-1 failure_phase=-1 error=-1 attempts=0 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=70756 largest=45056 min=4620
+I (4706) five-capacity-openeth: openeth phase=destroy error=0 got_ip=1 free=70756 largest=45056 min=4620 alloc_fail=0 last_size=0 last_caps=0
+I (4706) five-capacity-openeth: openeth phase=after_cleanup error=0 got_ip=1 free=84400 largest=45056 min=4620 alloc_fail=0 last_size=0 last_caps=0
+I (4706) five-capacity-auth: heap phase=guest_closed free=161968 largest=114688 min=4620
+I (4706) five-capacity-auth: result run=2 open=0 init=0 event=0 stop=0 close=0 guest=3 failures=0
+I (4706) five-capacity-auth: probe_summary runs=2 failures=0
+I (4706) five-capacity-auth: heap phase=after_base_guest_closed free=170332 largest=114688 min=4620
+I (5306) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=5243 free_heap=174692 min_free_heap=4620 device_id=<redacted> firmware=0.2.0 chip=ESP32-C3 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (10306) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=10243 free_heap=174692 min_free_heap=4620 device_id=<redacted> firmware=0.2.0 chip=ESP32-C3 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (15336) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<redacted> uptime_ms=15272 free_heap=174692 min_free_heap=4620 device_id=<redacted> firmware=0.2.0 chip=ESP32-C3 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=true mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+# openeth_rx_no_memory_lines=0

@@ -109,6 +109,8 @@ ctest --test-dir build-tls --output-on-failure
 
 同一模式的 `work_upstream` 用实际 FRPS 验证 100 轮双业务流，共 200 条本地连接，每流双向各 300001 字节；总期限 240 秒。`work_faults_upstream` 总期限 180 秒，包含四个真实 FRPS 拒绝/取消场景和 13 个官方 API 半关闭、尾数据、解析、期限与慢流场景。连接目标是独立回环业务 listener；正常结束与取消均检查 fd 基线，详情见 [工作流](../docs/design/work-streams.md)。
 
+`work_allocation` 对三个工作槽的首次分配失败、待办请求保留、取消清零释放及重复取消做定向检查；完整 Mbed TLS 模式的 `work_upstream` 和 `work_faults_upstream` 覆盖实际 FRPS 工作流与背压。固定 C3/ESP32 QEMU 同输入容量边界见[工作槽惰性分配收据](../docs/operations/p6-frp-lazy-work-stream-capacity.md)。
+
 同一候选源码下的完整 host/local 压力与工作流矩阵结果、精确复现命令和实板边界见 [P4-04 主机工作流矩阵](../docs/operations/p4-host-workflow-matrix.md)。
 
 可选互操作需 macOS/Linux 与 Go >= 1.23；`tests/interop/go.mod` 和 `go.sum` 固定 FRP v0.71.0 的实际 Yamux replacement。首次运行可能下载该公开依赖，不读取生产配置或相邻源码：
