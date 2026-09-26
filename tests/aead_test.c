@@ -291,9 +291,71 @@ static void chunked_reader(void)
     efrp_aead_clear_keys(&k);
     free(plain); free(wire);
 }
+static void word_reader(void)
+{
+    uint8_t *plain = malloc(EFRP_AEAD_MAX_PLAINTEXT);
+    uint8_t *wire = malloc(EFRP_AEAD_TX_MAX_BYTES);
+    assert(plain && wire);
+    for (size_t i = 0; i < EFRP_AEAD_MAX_PLAINTEXT; ++i) plain[i] = (uint8_t)(i * 37u + 11u);
+    const size_t lengths[] = {1, 3, 4, 4095, 4096, 4097, 65535, 65536};
+    for (size_t item = 0; item < sizeof lengths / sizeof lengths[0]; ++item) {
+        size_t wire_length = encode(wire, plain, lengths[item], EFRP_AEAD_TX_MAX_BYTES);
+        for (size_t step = 1; step <= 4096; step *= 4096) {
+            efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0}; chunk_reset();
+            assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
+            size_t fed = 0, verified = 0;
+            while (fed < wire_length) {
+                size_t take = wire_length - fed, used = 0;
+                if (take > step) take = step;
+                assert(efrp_aead_feed(&r, wire + fed, take, &used) == EFRP_OK && used == take);
+                fed += used;
+                uint8_t output[193]; size_t n;
+                if (fed < wire_length)
+                    assert(efrp_aead_copy_plaintext(&r, output, sizeof output, &n) == EFRP_WOULD_BLOCK && !n);
+                while (efrp_aead_copy_plaintext(&r, output, sizeof output, &n) == EFRP_OK) {
+                    const uint8_t *raw; size_t raw_length;
+                    assert(efrp_aead_plaintext(&r, &raw, &raw_length) == EFRP_INVALID_STATE && !raw && !raw_length);
+                    assert(n && verified + n <= lengths[item]);
+                    assert(!memcmp(output, plain + verified, n));
+                    assert(efrp_aead_consume_plaintext(&r, n) == EFRP_OK);
+                    verified += n;
+                }
+            }
+            assert(verified == lengths[item] && !chunk_live && efrp_aead_finish(&r) == EFRP_OK);
+            assert(chunk_calls == (lengths[item] + 4095) / 4096);
+            efrp_aead_reader_destroy(&r); efrp_aead_clear_keys(&k);
+        }
+    }
+    size_t wire_length = encode(wire, plain, EFRP_AEAD_MAX_PLAINTEXT, EFRP_AEAD_TX_MAX_BYTES);
+    efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0}; size_t used, copied;
+    uint8_t output[193];
+    chunk_reset();
+    assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
+    assert(efrp_aead_feed(&r, wire, 16, &used) == EFRP_OK && used == 16 && !chunk_calls);
+    assert(efrp_aead_feed(&r, wire + 16, wire_length - 17, &used) == EFRP_OK && used == wire_length - 17);
+    assert(efrp_aead_copy_plaintext(&r, output, sizeof output, &copied) == EFRP_WOULD_BLOCK && !copied);
+    assert(efrp_aead_finish(&r) == EFRP_TRUNCATED && chunk_live == 16);
+    efrp_aead_reader_destroy(&r); assert(!chunk_live);
+    wire[wire_length - 1] ^= 1;
+    chunk_reset();
+    assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
+    assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_AUTHENTICATION_FAILED);
+    assert(chunk_calls == 16 && !chunk_live);
+    assert(efrp_aead_copy_plaintext(&r, output, sizeof output, &copied) == EFRP_AUTHENTICATION_FAILED && !copied);
+    efrp_aead_reader_destroy(&r); wire[wire_length - 1] ^= 1;
+    for (size_t failed = 1; failed <= EFRP_AEAD_RX_MAX_CHUNKS; ++failed) {
+        chunk_reset(); chunk_fail_at = failed;
+        assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
+        assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_NO_MEMORY);
+        assert(used == 16 + (failed - 1) * EFRP_AEAD_RX_CHUNK_BYTES);
+        assert(!chunk_live);
+        efrp_aead_reader_destroy(&r);
+    }
+    efrp_aead_clear_keys(&k); free(plain); free(wire);
+}
 int main(void)
 {
-    round_trips(); failure_cases(); empty_and_limits(); chunked_reader();
+    round_trips(); failure_cases(); empty_and_limits(); chunked_reader(); word_reader();
     puts("AEAD: boundaries, authentication-before-delivery, replay, truncation, counters and zeroization passed");
     return 0;
 }

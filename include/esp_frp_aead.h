@@ -41,7 +41,7 @@ typedef struct {
     void (*release)(void *pointer);
     size_t nonce_used, header_used, body_used, body_expected, plain_used, plain_offset;
     uint64_t records;
-    bool active, chunked;
+    bool active, chunked, words_only;
     efrp_result_t failure;
 } efrp_aead_reader_t;
 typedef struct {
@@ -64,10 +64,19 @@ efrp_result_t efrp_aead_reader_init(efrp_aead_reader_t *reader, const uint8_t ke
                                     uint8_t *storage, size_t capacity);
 efrp_result_t efrp_aead_reader_init_chunked(efrp_aead_reader_t *reader, const uint8_t key[32],
                                            void *(*allocate)(size_t, size_t), void (*release)(void *));
+/* Explicit 32-bit-only storage mode. allocate must return aligned storage of
+ * the requested rounded size; release accepts that same pointer. The caller
+ * owns its memory-region policy. Never dereference chunks as byte pointers. */
+efrp_result_t efrp_aead_reader_init_words(efrp_aead_reader_t *reader, const uint8_t key[32],
+                                         void *(*allocate)(size_t, size_t), void (*release)(void *));
 efrp_result_t efrp_aead_feed(efrp_aead_reader_t *reader, const uint8_t *bytes,
                              size_t length, size_t *consumed);
 efrp_result_t efrp_aead_plaintext(const efrp_aead_reader_t *reader,
                                   const uint8_t **bytes, size_t *length);
+/* Copies at most one authenticated chunk into byte-accessible caller storage.
+ * Required for 32-bit-only chunks; plaintext() rejects that storage mode. */
+efrp_result_t efrp_aead_copy_plaintext(const efrp_aead_reader_t *reader,
+                                      uint8_t *bytes, size_t capacity, size_t *copied);
 efrp_result_t efrp_aead_consume_plaintext(efrp_aead_reader_t *reader, size_t length);
 /* Record-boundary EOF is NOT authenticated and does not prove session success. */
 efrp_result_t efrp_aead_finish(const efrp_aead_reader_t *reader);

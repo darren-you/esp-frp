@@ -17,5 +17,6 @@ efrp_result_t efrp_crypto_gcm(bool encrypt, const uint8_t key[32], const uint8_t
  * failure the reader wipes and releases every chunk. */
 efrp_result_t efrp_crypto_gcm_decrypt_chunks(const uint8_t key[32], const uint8_t nonce[12],
                                             const uint8_t aad[16], uint8_t *const chunks[],
-                                            const size_t sizes[], size_t count, const uint8_t tag[16]);
+                                            const size_t sizes[], size_t count, const uint8_t tag[16],
+                                            bool words_only);
 void efrp_crypto_zero(void *buffer, size_t length);

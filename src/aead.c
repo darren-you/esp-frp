@@ -2,6 +2,7 @@
 // Original incremental record layer; primitives belong to SDK/OpenSSL.
 #include "esp_frp_aead.h"
 #include "crypto_backend.h"
+#include "word_storage.h"
 #include <string.h>
 
 void efrp_crypto_zero(void *buffer, size_t length)
@@ -65,7 +66,8 @@ static void reader_clear_chunks(efrp_aead_reader_t *r)
 {
     for (size_t i = 0; i < r->chunk_count; ++i) {
         if (!r->chunks[i]) continue;
-        efrp_crypto_zero(r->chunks[i], r->chunk_sizes[i]);
+        if (r->words_only) efrp_words_zero(r->chunks[i], r->chunk_sizes[i]);
+        else efrp_crypto_zero(r->chunks[i], r->chunk_sizes[i]);
         r->release(r->chunks[i]); r->chunks[i] = NULL;
     }
     r->chunk_count = 0;
@@ -96,6 +98,13 @@ efrp_result_t efrp_aead_reader_init_chunked(efrp_aead_reader_t *r, const uint8_t
     memcpy(r->key, key, sizeof r->key);
     return EFRP_OK;
 }
+efrp_result_t efrp_aead_reader_init_words(efrp_aead_reader_t *r, const uint8_t key[32],
+                                         void *(*allocate)(size_t, size_t), void (*release)(void *))
+{
+    efrp_result_t result = efrp_aead_reader_init_chunked(r, key, allocate, release);
+    if (result == EFRP_OK) r->words_only = true;
+    return result;
+}
 static efrp_result_t reader_store_chunked(efrp_aead_reader_t *r, const uint8_t *bytes,
                                           size_t length, size_t *stored)
 {
@@ -111,14 +120,23 @@ static efrp_result_t reader_store_chunked(efrp_aead_reader_t *r, const uint8_t *
                 if (index != r->chunk_count) return reader_fail(r, EFRP_PROTOCOL_ERROR);
                 size_t capacity = plain_length - index * EFRP_AEAD_RX_CHUNK_BYTES;
                 if (capacity > EFRP_AEAD_RX_CHUNK_BYTES) capacity = EFRP_AEAD_RX_CHUNK_BYTES;
-                r->chunks[index] = r->allocate(1, capacity);
+                size_t allocated = r->words_only ? (capacity + 3u) & ~(size_t)3u : capacity;
+                r->chunks[index] = r->allocate(1, allocated);
                 if (!r->chunks[index]) return reader_fail(r, EFRP_NO_MEMORY);
+                if (r->words_only) {
+                    if ((uintptr_t)r->chunks[index] % 4u) {
+                        r->release(r->chunks[index]); r->chunks[index] = NULL;
+                        return reader_fail(r, EFRP_INVALID_ARGUMENT);
+                    }
+                    efrp_words_zero(r->chunks[index], allocated);
+                }
                 r->chunk_sizes[index] = capacity;
                 ++r->chunk_count;
             }
             n = r->chunk_sizes[index] - inside;
             if (n > length) n = length;
-            memcpy(r->chunks[index] + inside, bytes, n);
+            if (r->words_only) efrp_words_store(r->chunks[index], inside, bytes, n);
+            else memcpy(r->chunks[index] + inside, bytes, n);
         } else {
             size_t inside = offset - plain_length;
             n = sizeof r->tag - inside;
@@ -171,7 +189,8 @@ efrp_result_t efrp_aead_feed(efrp_aead_reader_t *r, const uint8_t *bytes, size_t
         uint8_t aad[16]; memcpy(aad, r->stream_nonce, 12); memcpy(aad + 12, r->header, 4);
         size_t plain_length = r->body_expected - 16;
         efrp_result_t result = r->chunked ?
-            efrp_crypto_gcm_decrypt_chunks(r->key, r->nonce, aad, r->chunks, r->chunk_sizes, r->chunk_count, r->tag) :
+            efrp_crypto_gcm_decrypt_chunks(r->key, r->nonce, aad, r->chunks, r->chunk_sizes,
+                                           r->chunk_count, r->tag, r->words_only) :
             efrp_crypto_gcm(false, r->key, r->nonce, aad, r->storage, plain_length);
         if (result != EFRP_OK) return reader_fail(r, result);
         if (!increment(r->nonce)) return reader_fail(r, EFRP_COUNTER_EXHAUSTED);
@@ -190,6 +209,7 @@ efrp_result_t efrp_aead_plaintext(const efrp_aead_reader_t *r, const uint8_t **b
     if (!bytes || !length) return EFRP_INVALID_ARGUMENT;
     if (reader_ready(r) != EFRP_OK) return reader_ready(r);
     if (!r->plain_used) return EFRP_WOULD_BLOCK;
+    if (r->words_only) return EFRP_INVALID_STATE;
     if (r->chunked) {
         size_t index = r->plain_offset / EFRP_AEAD_RX_CHUNK_BYTES;
         size_t inside = r->plain_offset % EFRP_AEAD_RX_CHUNK_BYTES;
@@ -200,6 +220,28 @@ efrp_result_t efrp_aead_plaintext(const efrp_aead_reader_t *r, const uint8_t **b
     }
     return EFRP_OK;
 }
+efrp_result_t efrp_aead_copy_plaintext(const efrp_aead_reader_t *r,
+                                      uint8_t *bytes, size_t capacity, size_t *copied)
+{
+    if (copied) *copied = 0;
+    if (!copied || !bytes || !capacity) return EFRP_INVALID_ARGUMENT;
+    if (reader_ready(r) != EFRP_OK) return reader_ready(r);
+    if (!r->plain_used) return EFRP_WOULD_BLOCK;
+    size_t n = r->plain_used - r->plain_offset;
+    if (r->chunked) {
+        size_t index = r->plain_offset / EFRP_AEAD_RX_CHUNK_BYTES;
+        size_t inside = r->plain_offset % EFRP_AEAD_RX_CHUNK_BYTES;
+        n = r->chunk_sizes[index] - inside;
+        if (n > capacity) n = capacity;
+        if (r->words_only) efrp_words_load(r->chunks[index], inside, bytes, n);
+        else memcpy(bytes, r->chunks[index] + inside, n);
+    } else {
+        if (n > capacity) n = capacity;
+        memcpy(bytes, r->storage + r->plain_offset, n);
+    }
+    *copied = n;
+    return EFRP_OK;
+}
 efrp_result_t efrp_aead_consume_plaintext(efrp_aead_reader_t *r, size_t length)
 {
     if (reader_ready(r) != EFRP_OK) return reader_ready(r);
@@ -208,7 +250,8 @@ efrp_result_t efrp_aead_consume_plaintext(efrp_aead_reader_t *r, size_t length)
         size_t index = r->plain_offset / EFRP_AEAD_RX_CHUNK_BYTES;
         size_t inside = r->plain_offset % EFRP_AEAD_RX_CHUNK_BYTES;
         if (length > r->chunk_sizes[index] - inside) return EFRP_INVALID_ARGUMENT;
-        efrp_crypto_zero(r->chunks[index] + inside, length);
+        if (r->words_only) efrp_words_clear(r->chunks[index], inside, length);
+        else efrp_crypto_zero(r->chunks[index] + inside, length);
         r->plain_offset += length;
         if (r->plain_offset == r->plain_used) {
             reader_clear_chunks(r); r->plain_offset = r->plain_used = 0;
