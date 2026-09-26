@@ -8,6 +8,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX) && defined(ESP_PLATFORM)
+#include "esp_heap_caps.h"
+#include "esp_memory_utils.h"
+#if !CONFIG_IDF_TARGET_ESP32
+#error "The IRAM AEAD receive experiment is limited to ESP32"
+#endif
+#endif
+
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+static void *word_chunk_allocate(size_t count, size_t size)
+{
+    if (!count || !size || size > SIZE_MAX / count) return NULL;
+#if defined(ESP_PLATFORM)
+    size_t length = count * size;
+    void *pointer = heap_caps_malloc(length, MALLOC_CAP_EXEC | MALLOC_CAP_32BIT);
+    if (!pointer) return NULL;
+    const uint8_t *last = (const uint8_t *)pointer + length - 1u;
+    if (!esp_ptr_in_iram(pointer) || !esp_ptr_in_iram(last) ||
+        esp_ptr_in_diram_iram(pointer) || esp_ptr_in_diram_iram(last)) {
+        heap_caps_free(pointer);
+        return NULL;
+    }
+    return pointer;
+#else
+    return calloc(count, size);
+#endif
+}
+static void word_chunk_release(void *pointer)
+{
+#if defined(ESP_PLATFORM)
+    heap_caps_free(pointer);
+#else
+    free(pointer);
+#endif
+}
+#endif
 
 _Static_assert(EFRP_TLS_TX_BYTES >= EFRP_YAMUX_HEADER_BYTES + EFRP_YAMUX_RING_BYTES,
     "session TLS staging must hold one complete Yamux output frame");
@@ -35,6 +71,9 @@ struct efrp_session {
     /* All readers retain and resume partial input. Match the work transfer
      * chunk without reducing any TLS, Yamux, AEAD or JSON frame limit. */
     uint8_t transport_rx[1024], control_rx[1024], control_tx[1024];
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+    uint8_t aead_plain[1024];
+#endif
     uint8_t token[EFRP_AEAD_MAX_TOKEN_BYTES];
     char proxy_name[129];
     size_t token_length, transport_used, transport_offset, control_used, control_offset;
@@ -57,6 +96,9 @@ static void clear(efrp_session_t *s)
     }
     efrp_crypto_zero(&s->storage, sizeof s->storage);
     efrp_crypto_zero(s->control_rx, sizeof s->control_rx); efrp_crypto_zero(s->control_tx, sizeof s->control_tx);
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+    efrp_crypto_zero(s->aead_plain, sizeof s->aead_plain);
+#endif
     efrp_crypto_zero(s->transport_rx, sizeof s->transport_rx);
     if (s->mux) efrp_crypto_zero(s->mux, sizeof *s->mux);
     s->transport_used = s->transport_offset = s->control_used = s->control_offset = 0;
@@ -137,7 +179,12 @@ static efrp_result_t finish_login(efrp_session_t *s)
     efrp_crypto_zero(s->handshake_rx, EFRP_HANDSHAKE_RX_BYTES);
     free(s->handshake_rx); s->handshake_rx = NULL;
     s->control_ready = true;
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+    result = efrp_aead_reader_init_words(&s->reader, keys.server_to_client,
+                                         word_chunk_allocate, word_chunk_release);
+#else
     result = efrp_aead_reader_init_chunked(&s->reader, keys.server_to_client, calloc, free);
+#endif
     if (result == EFRP_OK) result = efrp_aead_writer_init(&s->writer, keys.client_to_server, s->storage.control.aead_tx, sizeof s->storage.control.aead_tx);
     efrp_aead_clear_keys(&keys);
     if (result == EFRP_OK)
@@ -221,6 +268,16 @@ static efrp_result_t control_input(efrp_session_t *s)
 {
     efrp_result_t result; size_t used;
     if (s->status.phase != EFRP_SESSION_AUTHENTICATING) {
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+        size_t length;
+        result = efrp_aead_copy_plaintext(&s->reader, s->aead_plain, sizeof s->aead_plain, &length);
+        if (result == EFRP_OK) {
+            result = efrp_wire_feed(&s->frames, s->aead_plain, length, &used);
+            efrp_crypto_zero(s->aead_plain, sizeof s->aead_plain);
+            if (result != EFRP_OK) return s->frame_error != EFRP_OK ? s->frame_error : result;
+            return efrp_aead_consume_plaintext(&s->reader, used);
+        }
+#else
         const uint8_t *plain; size_t length;
         result = efrp_aead_plaintext(&s->reader, &plain, &length);
         if (result == EFRP_OK) {
@@ -229,6 +286,7 @@ static efrp_result_t control_input(efrp_session_t *s)
             if (result != EFRP_OK) return s->frame_error != EFRP_OK ? s->frame_error : result;
             return efrp_aead_consume_plaintext(&s->reader, used);
         }
+#endif
         if (result != EFRP_WOULD_BLOCK) return result;
     }
     if (!s->control_used) {
@@ -290,8 +348,12 @@ static efrp_result_t check_eof(efrp_session_t *s)
     if (result != EFRP_OK) return result;
     if (info.readable_bytes) return EFRP_OK;
     if (s->status.phase != EFRP_SESSION_AUTHENTICATING) {
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+        if (s->reader.plain_used) return EFRP_OK;
+#else
         const uint8_t *plain; size_t length;
         if (efrp_aead_plaintext(&s->reader, &plain, &length) == EFRP_OK) return EFRP_OK;
+#endif
     }
     result = efrp_yamux_finish(s->mux);
     return result == EFRP_OK ? control_finish(s) : result;

@@ -30,7 +30,11 @@ int main(void)
     efrp_aead_reader_t r = {0}; efrp_aead_writer_t w = {0};
     int exit_code = 10;
     assert(efrp_aead_derive(token, tn, client, cn, server, sn, &keys) == EFRP_OK);
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+    assert(efrp_aead_reader_init_words(&r, keys.server_to_client, calloc, free) == EFRP_OK);
+#else
     assert(efrp_aead_reader_init_chunked(&r, keys.server_to_client, calloc, free) == EFRP_OK);
+#endif
     size_t offset = 0, total = 0;
     while (offset < wn) {
         size_t take = wn - offset, consumed;
@@ -38,9 +42,15 @@ int main(void)
         efrp_result_t result = efrp_aead_feed(&r, wire + offset, take, &consumed);
         if (result != EFRP_OK && result != EFRP_WOULD_BLOCK) goto done;
         offset += consumed;
-        const uint8_t *p; size_t n;
+        size_t n;
+#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
+        while (efrp_aead_copy_plaintext(&r, plain + total, 400001 - total, &n) == EFRP_OK) {
+            total += n;
+#else
+        const uint8_t *p;
         while (efrp_aead_plaintext(&r, &p, &n) == EFRP_OK) {
             assert(n <= 400001 - total); memcpy(plain + total, p, n); total += n;
+#endif
             assert(efrp_aead_consume_plaintext(&r, n) == EFRP_OK);
         }
     }

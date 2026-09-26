@@ -38,6 +38,8 @@
 | PSA 单次工作块 | 512 字节输入和 SDK 上界输出，输出编译约束不超过 1024 字节；另有操作状态和 tag |
 | 密码库资源 | SDK 可内部动态分配；每记录导入 volatile AES key，最终 abort operation 并 destroy key |
 
+ESP32 另有**默认关闭**的 `EFRP_LAB_ESP32_IRAM_AEAD_RX` 实验接收模式。它保留 65536 字节记录上限和按密文字节到达逐块申请的时机；16 个块请求 `MALLOC_CAP_EXEC | MALLOC_CAP_32BIT`，每块仅使用对齐的 32 位读写，将字节逻辑打包到 word。分配器拒绝共享 D/IRAM，避免占用同时属于 8BIT 的能力池。PSA 的 `update`／`verify` 只接收、输出栈上 byte-accessible 缓冲；完整 tag 验证后，`efrp_aead_copy_plaintext` 才把明文复制到会话独立 1024 字节解析缓冲。字宽模式的 `efrp_aead_plaintext` 拒绝返回 I 总线裸指针。已消费字节与失败/取消块均以 32 位访问清零，再释放。默认会话仍调用普通分块 reader；实验模式只在显式 CMake 开关开启时接线。
+
 `feed` / `write` 返回消费的前缀长度；剩余输入由调用方保留。存在未消费明文时 feed 返回 WOULD_BLOCK；存在未消费输出时非空 write 返回 WOULD_BLOCK。消费可以分批，已消费数据立即清零；返回 OK 或消费数量不代表 transport 已发出或对端已执行。
 
 IDF 的 `MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS` 不保证重叠缓冲有效。适配器通过 multipart AEAD 的独立输入/输出小块运行，检查输出边界后复制回连续缓存或各动态块；最后 verify 成功前缓存仅供内部使用。此设计避免再申请一份完整 64 KiB 明文缓存。动态块只改变本地存储与分配形状，不改变官方记录长度、AAD、nonce 或认证条件。

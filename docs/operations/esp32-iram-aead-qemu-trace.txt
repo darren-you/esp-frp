@@ -1,0 +1,69 @@
+I (2299) five-capacity-auth: heap phase=before_guest free=193972 largest=110592 min=193972
+I (2299) five-capacity-auth: heap phase=guest_opened free=116292 largest=57344 min=116292
+I (2299) five-capacity-auth: heap phase=guest_event_done free=116292 largest=57344 min=116292
+I (2299) five-capacity-auth: frp_record run=1 label=early_max plain=65536 init=0 feed=0 consumed=65568 records=1 compare=65536 auth=1 expected=1 alloc=16 released=16 alloc_fail=0 peak=65536 live=0 before=116292/57344 during=49880/43008 after=115480/57344
+I (2299) five-capacity-auth: heap phase=guest_closed free=193056 largest=110592 min=49424
+I (2299) five-capacity-auth: result run=1 open=0 init=0 event=0 stop=0 close=0 guest=3 failures=0
+I (2299) five-capacity-auth: probe_summary runs=1 failures=0
+I (3439) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=1177 free_heap=147388 min_free_heap=49424 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (3439) esp_base: ESP_BASE_READY hardware_outputs=untouched provisioning=required
+I (3439) five-capacity-auth: heap phase=after_base_ready free=147172 largest=110592 min=49424
+I (3439) five-capacity-auth: heap phase=before_guest free=138804 largest=110592 min=49424
+I (3439) five-capacity-auth: heap phase=guest_opened free=61236 largest=43008 min=49424
+I (3439) five-capacity-auth: heap phase=guest_event_done free=61236 largest=43008 min=49424
+I (3439) five-capacity-auth: frp_record run=2 label=ready_4k_first plain=4096 init=0 feed=0 consumed=4128 records=1 compare=4096 auth=1 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=61236/43008 during=57136/43008 after=61236/43008
+I (3439) five-capacity-auth: frp_record run=2 label=ready_4k_repeat plain=4096 init=0 feed=0 consumed=4128 records=1 compare=4096 auth=1 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=61236/43008 during=57136/43008 after=61236/43008
+I (3439) five-capacity-auth: frp_record run=2 label=ready_4k_bad_tag plain=4096 init=0 feed=-11 consumed=4128 records=0 compare=0 auth=0 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=61236/43008 during=61236/43008 after=61236/43008
+I (3439) five-capacity-auth: frp_record run=2 label=ready_max plain=65536 init=0 feed=-20 consumed=53264 records=0 compare=0 auth=0 expected=1 alloc=13 released=13 alloc_fail=1 peak=53248 live=0 before=61236/43008 during=61236/43008 after=61236/43008
+I (3439) frp-iram-aead: start 8bit=61236/43008 exec32=132316/73728
+I (3439) frp-iram-aead: alloc index=1 size=4096 pointer=0x4008ddac pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=128216/69632
+I (3439) frp-iram-aead: record label=4k plain=4096 feed=0 fed=4128 records=1 compared=4096 alloc=1 release=1 reject=0 wipe_errors=0 region_errors=0 heap8_before=61236/43008 heap8_min_alloc=61236 heap8_after_feed=61236 heap8_after=61236 exec_before=132316 exec_after_feed=128216 exec_after=132316 pass=1
+I (3439) frp-iram-aead: alloc index=1 size=4096 pointer=0x4008ddac pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=128216/69632
+I (3439) frp-iram-aead: record label=4k_bad_tag plain=4096 feed=-11 fed=4128 records=0 compared=0 alloc=1 release=1 reject=0 wipe_errors=0 region_errors=0 heap8_before=61236/43008 heap8_min_alloc=61236 heap8_after_feed=61236 heap8_after=61236 exec_before=132316 exec_after_feed=132316 exec_after=132316 pass=1
+I (3439) frp-iram-aead: alloc index=1 size=4096 pointer=0x4008ddac pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=128216/69632
+I (3439) frp-iram-aead: alloc index=2 size=4096 pointer=0x4008edb0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=124116/65536
+I (3439) frp-iram-aead: alloc index=3 size=4096 pointer=0x4008fdb4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=120016/61440
+I (3439) frp-iram-aead: alloc index=4 size=4096 pointer=0x40090db8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=115916/57344
+I (3439) frp-iram-aead: alloc index=5 size=4096 pointer=0x40091dbc pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=111816/53248
+I (3439) frp-iram-aead: alloc index=6 size=4096 pointer=0x40092dc0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=107716/49152
+I (3439) frp-iram-aead: alloc index=7 size=4096 pointer=0x40093dc4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=103616/45056
+I (3439) frp-iram-aead: alloc index=8 size=4096 pointer=0x40094dc8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=99516/43008
+I (3439) frp-iram-aead: alloc index=9 size=4096 pointer=0x40095dcc pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=95416/43008
+I (3439) frp-iram-aead: alloc index=10 size=4096 pointer=0x40096dd0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=91316/43008
+I (3439) frp-iram-aead: alloc index=11 size=4096 pointer=0x40097dd4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=87216/43008
+I (3439) frp-iram-aead: alloc index=12 size=4096 pointer=0x40098dd8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=83116/43008
+I (3439) frp-iram-aead: alloc index=13 size=4096 pointer=0x40099ddc pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=79016/43008
+I (3489) frp-iram-aead: alloc index=14 size=4096 pointer=0x4009ade0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=74916/43008
+I (3489) frp-iram-aead: alloc index=15 size=4096 pointer=0x4009bde4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=70816/43008
+I (3489) frp-iram-aead: alloc index=16 size=4096 pointer=0x4009cde8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=66716/43008
+I (3509) frp-iram-aead: record label=64k plain=65536 feed=0 fed=65568 records=1 compared=65536 alloc=16 release=16 reject=0 wipe_errors=0 region_errors=0 heap8_before=61236/43008 heap8_min_alloc=61236 heap8_after_feed=61236 heap8_after=61236 exec_before=132316 exec_after_feed=66716 exec_after=132316 pass=1
+I (3509) frp-iram-aead: alloc index=1 size=4096 pointer=0x4008ddac pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=128216/69632
+I (3509) frp-iram-aead: alloc index=2 size=4096 pointer=0x4008edb0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=124116/65536
+I (3509) frp-iram-aead: alloc index=3 size=4096 pointer=0x4008fdb4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=120016/61440
+I (3509) frp-iram-aead: alloc index=4 size=4096 pointer=0x40090db8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=115916/57344
+I (3509) frp-iram-aead: alloc index=5 size=4096 pointer=0x40091dbc pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=111816/53248
+I (3509) frp-iram-aead: alloc index=6 size=4096 pointer=0x40092dc0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=107716/49152
+I (3509) frp-iram-aead: alloc index=7 size=4096 pointer=0x40093dc4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=103616/45056
+I (3509) frp-iram-aead: alloc index=8 size=4096 pointer=0x40094dc8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=99516/43008
+I (3509) frp-iram-aead: alloc index=9 size=4096 pointer=0x40095dcc pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=95416/43008
+I (3509) frp-iram-aead: alloc index=10 size=4096 pointer=0x40096dd0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=91316/43008
+I (3509) frp-iram-aead: alloc index=11 size=4096 pointer=0x40097dd4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=87216/43008
+I (3509) frp-iram-aead: alloc index=12 size=4096 pointer=0x40098dd8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=83116/43008
+I (3509) frp-iram-aead: alloc index=13 size=4096 pointer=0x40099ddc pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=79016/43008
+I (3509) frp-iram-aead: alloc index=14 size=4096 pointer=0x4009ade0 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=74916/43008
+I (3519) frp-iram-aead: alloc index=15 size=4096 pointer=0x4009bde4 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=70816/43008
+I (3519) frp-iram-aead: alloc index=16 size=4096 pointer=0x4009cde8 pure_iram=1 byte_accessible=0 free8=61236/43008 exec32=66716/43008
+I (3519) frp-iram-aead: record label=64k_bad_tag plain=65536 feed=-11 fed=65568 records=0 compared=0 alloc=16 release=16 reject=0 wipe_errors=0 region_errors=0 heap8_before=61236/43008 heap8_min_alloc=61236 heap8_after_feed=61236 heap8_after=61236 exec_before=132316 exec_after_feed=132316 exec_after=132316 pass=1
+I (3519) frp-iram-aead: summary failures=0
+I (3519) five-capacity-auth: heap phase=guest_closed free=138804 largest=110592 min=4744
+I (3519) five-capacity-auth: result run=2 open=0 init=0 event=0 stop=0 close=0 guest=3 failures=0
+I (3519) five-capacity-auth: probe_summary runs=2 failures=0
+I (3519) five-capacity-auth: heap phase=after_base_guest_closed free=147172 largest=110592 min=4744
+I (8489) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=6214 free_heap=151504 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (13519) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=11245 free_heap=151512 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (18549) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=16281 free_heap=151512 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (23569) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=21294 free_heap=151512 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (28599) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=26324 free_heap=151512 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (33609) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=31336 free_heap=151512 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (38629) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=36362 free_heap=151512 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0
+I (43649) base_reported: ESP_BASE_REPORTED schema=1 boot_id=<qemu-generated> uptime_ms=41378 free_heap=151512 min_free_heap=4744 device_id=<qemu-generated> firmware=0.2.0 chip=ESP32 flash=4194304 config_generation=0 reset=power_on provisioned=false wifi_state=unconfigured time_ready=false mqtt_state=unconfigured frp_state=unconfigured frp_attempts=0 frp_sessions=0 frp_pongs=0 frp_active=0 frp_error=0 ota_received=0 ota_total=0

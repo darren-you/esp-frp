@@ -1,0 +1,26 @@
+# 2026-09-27 ESP32 纯 IRAM AEAD 接收实验；SHA-256；原始 QEMU 日志留在仓外。
+# 固定输入；原五仓身份见 p6-frp-esp32-iram-aead.md。
+b1f4e090370e5ac7b20a05cf84faf941f39c847df7b18eccc1e777e90586d6ff  frozen-and-candidate/firmware/sdkconfig
+d57ca7be871f59b6366b8614e1349dffb3cba9506c5438571956e1bfae6c4e32  frozen/firmware/build/esp_base.bin
+2855df4bd4199f7ce21526c33bcc0b21776adf4d6e5b9f631e43491ea9d30e20  frozen-and-candidate/firmware/apps/esp_base/main/aead_4096.bin
+35979812621d6b6778c4086f937991353cfa7f73a4c1aa60dfcfc5507b2542aa  frozen-and-candidate/firmware/apps/esp_base/main/aead_65536.bin
+db0af7ab0ff9cfb827929c3505f2edf365c4fd2c1c9e8b352c3363fa5bcd0c13  sdk/components/heap/port/esp32/memory_layout.c
+# 本分支核心输入。
+7eb8a32710a9b9ada5dd55565370f7231f49920c5404bcf7f9d78ba547278047  tests/esp32-iram-aead/prepare_qemu.py
+6c4659b287a080a1e1cce6ba125d86b6337684424e7c8cd034f0d5c8bb78244e  tests/esp32-iram-aead/word_capacity_probe.c
+b20cde4a481b6cd7264fa1f84234e11fe55b7754cb006ed266825679cb4723d5  src/aead.c
+6b51d18873126d9550b8bee4952798499ae9ed0c8d0f3ffcd78ced31b26ff1bd  src/word_storage.h
+6cd9943cc804c07fe65a7ab03fb50f819c71b274ffdcaffb4412f9f771f49842  src/crypto_psa.c
+51dc11977f0e6a6d8fae5a3b089f2ab35c70c29bdd1fe9e10de4adbaed5500ac  src/session.c
+# 最终仓外候选、签名与日志；候选路径 /private/tmp/esp32-frp-iram-aead-qemu-20260927/probe。
+82bba31d16c277f5defe4c4950da9a533a62330d9bb2ac05110f4640d1879541  candidate/firmware/dependencies.lock.esp32
+786922075b523cf370d93e4a90f616768848bef5d1f832053d1319bf38cf032f  candidate/firmware/build/esp_base.elf
+e54493c022c2e5b7e8ee3ef7906708d3dfe39e6dfe0d9f7975dabddfdb89700e  candidate/firmware/build/esp_base.bin
+74fe2cedec93ae18a94c131a427aaee22cc53e10b8b6a41cffbe13db5a0b66a9  candidate/qemu-final.log (raw, outside Git)
+15f4f3bdc5ac112c3ad4a1850aaa461718e83aacbbf5721b80a34d9d62487ce3  docs/operations/esp32-iram-aead-qemu-trace.txt (redacted)
+# 官方 Mbed TLS/PSA 实验 host 矩阵及重建后的两项官方 AEAD 互操作。
+a1076a79c81cb33d38a627812d9580840e25dfd56ac4aa890c03a7c2a20561f9  docs/operations/p6-frp-esp32-iram-aead-host-ctest.txt
+16b4545b4f448cbdd9fd1817739356218405cde24cdd14075379a2e929406265  docs/operations/p6-frp-esp32-iram-aead-psa-peer-ctest.txt
+2d1a6aaa04974a6e607642058fcca1bf419b0d4b964a09f71908c91782da4585  docs/operations/p6-frp-esp32-iram-aead-openssl-peer-ctest.txt
+# espsecure v5.4.0 verify-signature --version 1：Verifying 1114032 bytes of data... Signature is valid.
+# 签名文件 1114100 字节；官方 Xtensa QEMU 限时 45 秒，宿主结束码 -15；probe_summary runs=2 failures=0。

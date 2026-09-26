@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Host verification backend only; ESP-IDF always builds crypto_psa.c.
 #include "crypto_backend.h"
+#include "word_storage.h"
 #include <openssl/core_names.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
@@ -77,24 +78,35 @@ done:
 }
 efrp_result_t efrp_crypto_gcm_decrypt_chunks(const uint8_t key[32], const uint8_t nonce[12],
                                             const uint8_t aad[16], uint8_t *const chunks[],
-                                            const size_t sizes[], size_t count, const uint8_t tag[16])
+                                            const size_t sizes[], size_t count, const uint8_t tag[16],
+                                            bool words_only)
 {
     if (count > EFRP_AEAD_RX_MAX_CHUNKS) return EFRP_INVALID_ARGUMENT;
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) return EFRP_CRYPTO_ERROR;
-    int n = 0, tail = 0; uint8_t final[16] = {0};
+    int n = 0, tail = 0; uint8_t final[16] = {0}, input[512], output[512];
     efrp_result_t result = EFRP_CRYPTO_ERROR;
     if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, nonce) != 1 ||
         EVP_DecryptUpdate(ctx, NULL, &n, aad, 16) != 1 ||
         EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, 16, (void *)tag) != 1) goto done;
     for (size_t i = 0; i < count; ++i) {
-        if (!chunks[i] || sizes[i] > EFRP_AEAD_RX_CHUNK_BYTES ||
-            EVP_DecryptUpdate(ctx, chunks[i], &n, chunks[i], (int)sizes[i]) != 1 || n != (int)sizes[i]) goto done;
+        if (!chunks[i] || sizes[i] > EFRP_AEAD_RX_CHUNK_BYTES) goto done;
+        if (!words_only) {
+            if (EVP_DecryptUpdate(ctx, chunks[i], &n, chunks[i], (int)sizes[i]) != 1 || n != (int)sizes[i]) goto done;
+        } else for (size_t offset = 0; offset < sizes[i];) {
+            size_t take = sizes[i] - offset;
+            if (take > sizeof input) take = sizeof input;
+            efrp_words_load(chunks[i], offset, input, take);
+            if (EVP_DecryptUpdate(ctx, output, &n, input, (int)take) != 1 || n != (int)take) goto done;
+            efrp_words_store(chunks[i], offset, output, take);
+            offset += take;
+        }
     }
     if (EVP_DecryptFinal_ex(ctx, final, &tail) != 1) result = EFRP_AUTHENTICATION_FAILED;
     else if (!tail) result = EFRP_OK;
 done:
     efrp_crypto_zero(final, sizeof final);
+    efrp_crypto_zero(input, sizeof input); efrp_crypto_zero(output, sizeof output);
     EVP_CIPHER_CTX_free(ctx);
     return result;
 }

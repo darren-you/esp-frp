@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "crypto_backend.h"
+#include "word_storage.h"
 #include "psa/crypto.h"
 #include <string.h>
 
@@ -98,20 +99,25 @@ efrp_result_t efrp_crypto_gcm(bool encrypt, const uint8_t key[32], const uint8_t
     return outcome(status);
 }
 static void chunk_copy(uint8_t *const chunks[], const size_t sizes[], size_t count,
-                       size_t offset, uint8_t *buffer, size_t length, bool write_chunks)
+                       size_t offset, uint8_t *buffer, size_t length, bool write_chunks,
+                       bool words_only)
 {
     for (size_t i = 0; i < count && length; ++i) {
         if (offset >= sizes[i]) { offset -= sizes[i]; continue; }
         size_t n = sizes[i] - offset;
         if (n > length) n = length;
-        if (write_chunks) memcpy(chunks[i] + offset, buffer, n);
+        if (words_only) {
+            if (write_chunks) efrp_words_store(chunks[i], offset, buffer, n);
+            else efrp_words_load(chunks[i], offset, buffer, n);
+        } else if (write_chunks) memcpy(chunks[i] + offset, buffer, n);
         else memcpy(buffer, chunks[i] + offset, n);
         buffer += n; length -= n; offset = 0;
     }
 }
 efrp_result_t efrp_crypto_gcm_decrypt_chunks(const uint8_t key[32], const uint8_t nonce[12],
                                             const uint8_t aad[16], uint8_t *const chunks[],
-                                            const size_t sizes[], size_t count, const uint8_t tag[16])
+                                            const size_t sizes[], size_t count, const uint8_t tag[16],
+                                            bool words_only)
 {
     size_t total = 0;
     if (count > EFRP_AEAD_RX_MAX_CHUNKS) return EFRP_INVALID_ARGUMENT;
@@ -140,18 +146,18 @@ efrp_result_t efrp_crypto_gcm_decrypt_chunks(const uint8_t key[32], const uint8_
     while (consumed < total && status == PSA_SUCCESS) {
         size_t take = total - consumed;
         if (take > sizeof input) take = sizeof input;
-        chunk_copy(chunks, sizes, count, consumed, input, take, false);
+        chunk_copy(chunks, sizes, count, consumed, input, take, false, words_only);
         status = psa_aead_update(&op, input, take, output, sizeof output, &n);
         consumed += take;
         if (status == PSA_SUCCESS && n > consumed - produced) status = PSA_ERROR_BAD_STATE;
         if (status == PSA_SUCCESS) {
-            chunk_copy(chunks, sizes, count, produced, output, n, true); produced += n;
+            chunk_copy(chunks, sizes, count, produced, output, n, true, words_only); produced += n;
         }
     }
     if (status == PSA_SUCCESS) {
         status = psa_aead_verify(&op, output, sizeof output, &n, tag, 16);
         if (status == PSA_SUCCESS && n != total - produced) status = PSA_ERROR_BAD_STATE;
-        if (status == PSA_SUCCESS) chunk_copy(chunks, sizes, count, produced, output, n, true);
+        if (status == PSA_SUCCESS) chunk_copy(chunks, sizes, count, produced, output, n, true, words_only);
     }
     if (psa_aead_abort(&op) != PSA_SUCCESS) status = PSA_ERROR_BAD_STATE;
     if (!mbedtls_svc_key_id_is_null(id) && psa_destroy_key(id) != PSA_SUCCESS) status = PSA_ERROR_BAD_STATE;

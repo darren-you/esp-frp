@@ -45,6 +45,8 @@ flowchart LR
     session <-->|"真实重启与双流"| client
     qemu["官方 ESP32-C3 QEMU"] --> lifecycle["c3-lifecycle：真实 FreeRTOS worker 失败与回收"]
     lifecycle --> lib
+    qemu32["官方 ESP32 QEMU"] --> iram["esp32-iram-aead：字宽 reader／五仓容量 A/B"]
+    iram --> lib
     dependency["esp-lwip/tests/zero-window：依赖独立回归"] --> sdk["显式实际 lwIP 源码"]
     sdk --> zero["双向零窗口、序号边界与回绕"]
 ```
@@ -124,3 +126,5 @@ Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回�
 可以把完整 Mbed TLS 命令中的 `-fsanitize=address,undefined` 替换为 `-fsanitize=thread`，在独立构建目录运行 `ctest --test-dir <目录> -R '^client_' --output-on-failure`，检查 worker、外部 API、状态副本与迟到测试 DNS 的竞争。不可同时开启 TSan 和 ASan。停止和线程退出检查见[客户端生命周期](../docs/design/client-lifecycle.md)。
 
 `session_peer` 将实际 `session.c` 的 allocator 单独替换为测试计数器，并传给分块 AEAD reader；TLS、密码与对端保持真实。首轮分别注入会话对象、4096 字节握手区和 Yamux 分配失败，再验证握手配置拒绝回滚；正常/失败/取消会话销毁均检查所有持有块已清零且无残留。`aead` 另以同一后端覆盖仅合法头不分配、密文逐块到达才分配、64 KiB 记录的 16 块、tag 篡改、末字节截断和任意一块分配失败；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)记录原分块实现的 C3 编译尺寸与组合边界，[逐块分配审计](../docs/operations/p6-frp-lazy-aead-memory-audit.md)记录本次行为变化。
+
+ESP32 32BIT-only IRAM 接收实验用 `-DEFRP_LAB_ESP32_IRAM_AEAD_RX=ON` 另建 host 构建目录；完整 Mbed TLS／PSA 命令其余参数同上。这个开关让实际 `session.c` 的官方 FRPS 会话测试及 `aead_upstream` 使用字宽块模式；host 分配器仍为 byte-accessible，只证明协议、认证、背压、双流和清理合同。`aead` 单元测试另外覆盖 1、3、4、4095、4096、4097、65535 和 65536 字节、单字节拆包、满长坏 tag、取消及十六个分配失败点。固定 ESP32 QEMU 的真实 I 总线访问与容量入口见 [esp32-iram-aead](esp32-iram-aead/README.md)，其结果不能冒充真实 FRPS／TLS 与 guest 同时运行的设备峰值。

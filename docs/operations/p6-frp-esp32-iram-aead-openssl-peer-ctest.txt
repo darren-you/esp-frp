@@ -1,0 +1,10 @@
+Internal ctest changing into directory: /tmp/esp-frp-iram-aead-openssl-build
+Test project /tmp/esp-frp-iram-aead-openssl-build
+    Start 6: aead
+1/2 Test #6: aead .............................   Passed    0.27 sec
+    Start 9: aead_upstream
+2/2 Test #9: aead_upstream ....................   Passed    1.00 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   1.26 sec
