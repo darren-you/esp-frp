@@ -1,0 +1,3 @@
+espsecure v5.4.0
+Verifying 1179568 bytes of data...
+Signature is valid.
