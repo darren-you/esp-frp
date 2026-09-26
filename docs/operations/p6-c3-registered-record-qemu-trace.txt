@@ -1,0 +1,20 @@
+# raw_sha256=9d5ab483252efe1a560ca134a5c54468b71e1596192b1b9a539f254cc87738e1
+I (175) five-capacity-auth: heap phase=guest_event_done free=143204 largest=114688 min=143204
+I (175) five-capacity-auth: probe_summary runs=1 failures=0
+I (305) esp_base: ESP_BASE_READY hardware_outputs=untouched provisioning=required
+I (305) five-capacity-auth: heap phase=guest_event_done free=84844 largest=45056 min=55364
+I (2435) five-capacity-frps: frps phase=base_sntp_ready ready=1
+I (2435) five-capacity-frps: frps phase=before_create api=0 client_phase=-1 failure_phase=-1 error=-1 attempts=0 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=70960 largest=45056 min=6164
+I (2435) five-capacity-frps: frps phase=created api=0 client_phase=0 failure_phase=0 error=0 attempts=0 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=60512 largest=45056 min=6164
+I (2435) five-capacity-frps: frps phase=start_queued api=0 client_phase=0 failure_phase=0 error=0 attempts=0 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=60512 largest=45056 min=6164
+I (2505) five-capacity-frps: frps phase=phase_changed api=0 client_phase=1 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=59928 largest=45056 min=6164
+I (2545) five-capacity-frps: frps phase=phase_changed api=0 client_phase=2 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=31928 largest=18432 min=6164
+I (3365) five-capacity-frps: frps phase=phase_changed api=0 client_phase=3 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=15996 largest=7680 min=4612
+I (3615) five-capacity-frps: frps phase=phase_changed api=0 client_phase=4 failure_phase=0 error=0 attempts=1 ready=0 pongs=0 tls_error=0 verify=4294967295 system_error=0 free=20096 largest=9216 min=4612
+I (3955) five-capacity-frps: frps phase=phase_changed api=0 client_phase=5 failure_phase=0 error=0 attempts=1 ready=1 pongs=1 tls_error=0 verify=4294967295 system_error=0 free=20096 largest=9216 min=4612
+I (3955) five-capacity-frps: frps phase=result api=0 client_phase=5 failure_phase=0 error=0 attempts=1 ready=1 pongs=1 tls_error=0 verify=4294967295 system_error=0 free=20096 largest=9216 min=4612
+I (3955) five-capacity-auth: frp_record run=2 label=registered_4k plain=4096 init=0 feed=0 consumed=4128 records=1 compare=4096 auth=1 expected=1 alloc=1 released=1 alloc_fail=0 peak=4096 live=0 before=20096/9216 during=15996/7680 after=20096/9216
+I (3955) five-capacity-auth: frp_record run=2 label=registered_max plain=65536 init=0 feed=-20 consumed=12304 records=0 compare=0 auth=0 expected=1 alloc=3 released=3 alloc_fail=1 peak=12288 live=0 before=20096/9216 during=20096/9216 after=20096/9216
+I (3995) five-capacity-frps: frps phase=destroy api=0 client_phase=-1 failure_phase=-1 error=-1 attempts=0 ready=0 pongs=0 tls_error=0 verify=0 system_error=0 free=70788 largest=45056 min=4612
+I (3995) five-capacity-openeth: openeth phase=after_cleanup error=0 got_ip=1 free=84432 largest=45056 min=4612 alloc_fail=1 last_size=4096 last_caps=6144
+I (3995) five-capacity-auth: probe_summary runs=2 failures=0
