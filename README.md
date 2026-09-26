@@ -33,7 +33,7 @@ flowchart LR
     api --> aead["src/aead.c：握手摘要、方向密钥、认证记录"]
     host --> aead
     idf --> aead
-    api --> flash_aead["src/aead_flash.c：独立 Flash 密文暂存候选"]
+    api --> flash_aead["src/aead_flash.c：未接 session 的 Flash 密文暂存候选"]
     host --> flash_aead
     idf --> flash_aead
     flash_aead --> crypto

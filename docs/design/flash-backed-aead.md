@@ -26,4 +26,4 @@ scratch 的独占范围必须由 Base 的 Flash 操作 owner 与 OTA、包槽、
 
 当前 `efrp_session_create` 在没有 scratch provider 的情况下仍走现有分块 RAM reader；满长记录在内存不足时明确返回 `EFRP_NO_MEMORY`，本分支没有改变该行为或将软件候选宣传为会话能力。若现在加入可选 provider，需要同时维护两套 reader 的初始化、明文读取、消费、EOF、失败和释放分支，还要为新 reader 单独提供 4096 字节窗口：现有 `json_rx` 在控制解析时同时借给 wire parser，不能重叠。该接线会在尚无真实分区及全局 Flash owner 时形成长期双路径。因此本次只交付独立核心；待产品分区和单一 owner 冻结后，先实现真实 provider 与启动 `recover`，再在 `session.c` 的创建、登录完成、控制输入、EOF 和销毁五处一次性切换目标装配，验证 64 KiB 官方记录、期限、失败清理及双板组合峰值。
 
-host fake Flash 回归覆盖 4096/4097 边界、64 KiB 正例与错 tag、tag 前零交付、短读、写失败、clear 失败与重试、双 reader 争用、认证后篡改和有效记录替换、掉电后的旧 lease 失效；OpenSSL 与官方 PSA host 后端分别运行同一测试。可选 `aead_upstream` 还把官方 FRP 发来的有效记录同时交给原 RAM reader 与本 reader，逐字节比对明文。它们证明本软件接口行为，不代替设备 Flash、PSA 芯片适配或完整 FRPS 会话验证。
+host fake Flash 回归覆盖 4096/4097 边界、64 KiB 正例与错 tag、tag 前零交付、部分写入后报错、首次认证后的窗口复读中途报错、末窗消费时 clear 失败与重试、双 reader 争用、认证后篡改和有效记录替换、掉电后的旧 lease 失效；故障后须清零窗口与 key，旧 lease 撤销后失效，若清理失败则隔离该 lease 并拒绝新 owner 抢占。调用方必须零初始化 reader，且在 `close` 成功前保留 reader 和独占窗口，失败后重试清理。OpenSSL 与官方 PSA host 后端分别运行同一测试。可选 `aead_upstream` 还把官方 FRP 发来的有效记录同时交给原 RAM reader 与本 reader，逐字节比对明文。它们证明本软件接口行为，不代替设备 Flash、PSA 芯片适配或完整 FRPS 会话验证。
