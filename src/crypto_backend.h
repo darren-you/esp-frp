@@ -20,3 +20,14 @@ efrp_result_t efrp_crypto_gcm_decrypt_chunks(const uint8_t key[32], const uint8_
                                             const size_t sizes[], size_t count, const uint8_t tag[16],
                                             bool words_only);
 void efrp_crypto_zero(void *buffer, size_t length);
+/* A complete GCM verification over exact store reads. The private window is
+ * wiped on every failure. A verified digest binds AAD, record nonce/number,
+ * tag and all ciphertext bytes; later calls must match it before exposure. */
+typedef efrp_result_t (*efrp_crypto_store_read_t)(void *context, size_t offset,
+                                                   uint8_t *bytes, size_t length);
+efrp_result_t efrp_crypto_gcm_decrypt_store(const uint8_t key[32], const uint8_t nonce[12],
+                                           const uint8_t aad[16], uint64_t sequence,
+                                           efrp_crypto_store_read_t read_store, void *context,
+                                           size_t plain_length, const uint8_t tag[16],
+                                           size_t window_offset, uint8_t *window, size_t window_length,
+                                           const uint8_t expected_digest[32], uint8_t digest[32]);

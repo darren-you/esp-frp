@@ -7,10 +7,12 @@ flowchart LR
     cmake["根 CMake / CTest"] --> wire["frame_reader_test.c"]
     cmake --> mux["yamux_test.c"]
     cmake --> aead["aead_test.c：记录边界与认证"]
+    cmake --> flash["aead_flash_test.c：64 KiB 密文暂存、复验与失效"]
     cmake --> handshake["handshake_test.c：协商、顺序、资源清理"]
     wire --> lib["esp_frp C 静态库"]
     mux --> lib
     aead --> lib
+    flash --> lib
     handshake --> lib
     cmake -->|"可选"| upstream["interop：固定 Go Yamux"]
     upstream <-->|"回环 TCP"| peer["yamux_peer.c"]
@@ -61,6 +63,8 @@ cmake -S . -B build -DBUILD_TESTING=ON \
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+`aead_flash` 在 OpenSSL 与官方 PSA host 模式使用伪 Flash 覆盖大小边界、最大记录认证、读写/清理故障和模拟掉电恢复；真实分区与 FRP 会话仍按 [Flash 暂存候选](../docs/design/flash-backed-aead.md)单独验证。
 
 [lwIP 零窗口回环回归](https://github.com/esp-space/esp-lwip/blob/master/tests/zero-window/README.md) 是单独的 SDK 缺陷复现入口，直接编译显式提供的依赖源码，不混入 FRP host 通过结论。原始官方 SDK 会失败；[sdk-lock.json](../sdk-lock.json) 已锁定通过该回归的修正源依赖，不用预期失败规则将原始 SDK 标绿。SDK 身份与脏内容守卫使用 `python3 -m unittest discover -s tools/tests -p 'test_*.py'` 验证。
 
