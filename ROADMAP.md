@@ -1,10 +1,10 @@
 # ESP FRP Roadmap
 
-只有独立 ESP32-C3 示例、`esp-base` 组合和 `esp-tool` 能力状态均通过才标 verified；尚未实现或未测保持明确状态。
+只有 ESP32-C3 与 ESP32-D0WD-V3 各自的独立示例、`esp-base` 组合和 `esp-tool` 能力状态均通过才标 verified；尚未实现或未测保持明确状态。
 
 | 阶段 | 能力 | 当前状态 | 验收 |
 | --- | --- | --- | --- |
-| R0 | TCP + TLS + Yamux + wire v2 + Token | 开发中：独立 C3 样例已通过双流、认证负例和百次回收；完整工作流组合、资源预算及 Base/MQTT 组合待验收 | 官方 FRPS、C3 双流、慢读背压、认证负例、100 次回收及 Base 组合 |
+| R0 | TCP + TLS + Yamux + wire v2 + Token | 开发中：独立 C3 样例已通过双流、认证负例和百次回收；ESP32 样例已通过固定 SDK 空输入构建，实板矩阵和两目标 Base/MQTT 组合待验收 | 官方 FRPS、两目标各自的双流、慢读背压、认证负例、100 次回收及 Base 组合 |
 | R1 | UDP proxy | 未实现 | 边界、丢包、重排、突发与会话回收 |
 | R2a | STCP provider / visitor | 未实现 | ESP 与官方 frpc 双角色互测、错误密钥 |
 | R3 | HTTP/HTTPS proxy 与域名/子域 | 未实现 | Host/SNI、重复注册、并发大响应；HTTPS 终止在本地服务 |

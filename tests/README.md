@@ -33,7 +33,7 @@ flowchart LR
     sp --> lib
     session --> faults["session_fixture.go：官方 API 异常对端"]
     device["crypto-interop/device_fixture.go：私有单设备场景"] --> faults
-    device <-->|"真实 TCP / TLS"| board["独立 C3 sample"]
+    device <-->|"真实 TCP / TLS"| board["独立 C3 / ESP32 sample"]
     cmake --> work["crypto-interop/work.go / work_fixture.go"]
     work <-->|"双业务流及故障"| wp["work_peer.c"]
     wp --> lib

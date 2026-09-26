@@ -8,7 +8,14 @@
 #include "esp_netif_sntp.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
+#if CONFIG_IDF_TARGET_ESP32C3
 #include "driver/usb_serial_jtag_vfs.h"
+#elif CONFIG_IDF_TARGET_ESP32
+#include "driver/uart.h"
+#include "driver/uart_vfs.h"
+#else
+#error "FRP sample supports only esp32c3 and esp32"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lwip/inet.h"
@@ -198,12 +205,18 @@ static void serial_input(void)
 void app_main(void)
 {
     setvbuf(stdout,NULL,_IONBF,0);
-    puts("ESP_FRP_LAB_ONLY TCP_PROXY sdk=6.1 target=esp32c3");
+    printf("ESP_FRP_LAB_ONLY TCP_PROXY sdk=6.1 target=%s\n", CONFIG_IDF_TARGET);
     if (!inputs_valid()) { puts("EFRP_SAMPLE valid_private_inputs_required; no_network_started"); return; }
     sample_resources_init();
+#if CONFIG_IDF_TARGET_ESP32C3
     usb_serial_jtag_vfs_use_nonblocking();
+#else
+    uart_vfs_dev_use_nonblocking(UART_NUM_0);
+#endif
+#if CONFIG_IDF_TARGET_ESP32C3
     int flags=fcntl(STDIN_FILENO,F_GETFL);
     if (flags<0 || fcntl(STDIN_FILENO,F_SETFL,flags & ~O_NONBLOCK)<0) { puts("EFRP_SAMPLE serial_init_failed"); return; }
+#endif
     esp_err_t error=start_wifi();
     if (error != ESP_OK) { printf("EFRP_SAMPLE wifi_init_error=%d\n",error); return; }
     esp_sntp_config_t ntp=ESP_NETIF_SNTP_DEFAULT_CONFIG(sample_ntp_server); ntp.sync_cb=synced;

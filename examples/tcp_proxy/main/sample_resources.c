@@ -11,8 +11,11 @@
 #include <stdio.h>
 #include <stdatomic.h>
 #include <string.h>
-#if !CONFIG_IDF_TARGET_ESP32C3 || !CONFIG_FREERTOS_USE_TRACE_FACILITY || !CONFIG_ESP_TIMER_PROFILING
-#error "This C3 lab sample requires task trace and esp_timer profiling"
+#if !(CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32) || !CONFIG_FREERTOS_USE_TRACE_FACILITY || !CONFIG_ESP_TIMER_PROFILING
+#error "FRP lab sample requires esp32c3/esp32, task trace and esp_timer profiling"
+#endif
+#if CONFIG_IDF_TARGET_ESP32 && !CONFIG_FREERTOS_UNICORE
+#error "ESP32 sample task-name snapshots require the single-core lab configuration"
 #endif
 static TaskStatus_t tasks[32];
 static atomic_uint allocation_failures, last_failed_bytes, last_failed_caps;
@@ -36,7 +39,8 @@ void sample_resources(const char *phase, unsigned cycle)
         if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &kind, &n) == 0) ++sockets;
         else if (errno != EBADF) ++socket_errors;
     }
-    /* C3 is single-core. Copy borrowed TCB names while scheduling is paused. */
+    /* Both sample targets run one scheduler core. Copy borrowed TCB names
+     * before task deletion can invalidate them. */
     vTaskSuspendAll();
     UBaseType_t count=uxTaskGetSystemState(tasks, 32, NULL);
     for (UBaseType_t i=0;i<count;++i) {

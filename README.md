@@ -1,12 +1,12 @@
 # ESP FRP
 
-独立的 ESP-IDF FRP 客户端组件，采用 Apache-2.0。当前实现包含 wire v2 帧、有界 Yamux、Hello/Login、AES-256-GCM 控制记录、严格 TLS、单次 DNS/TCP 建连，以及代理注册、Token 心跳和固定本地目标 TCP 双向转发；单 worker 已组合生命周期与带抖动的重连。独立 C3 sample 已通过官方 FRPS 双流、DNS/TLS、部分异常协议及 `work-tail-fin` 实板互操作；完整工作流、Base/MQTT 组合资源与长稳尚未验收，不能作为已验收 FRPC 发布。
+独立的 ESP-IDF FRP 客户端组件，采用 Apache-2.0。当前实现包含 wire v2 帧、有界 Yamux、Hello/Login、AES-256-GCM 控制记录、严格 TLS、单次 DNS/TCP 建连，以及代理注册、Token 心跳和固定本地目标 TCP 双向转发；单 worker 已组合生命周期与带抖动的重连。独立 C3 sample 已通过官方 FRPS 双流、DNS/TLS、部分异常协议及 `work-tail-fin` 实板互操作；ESP32-D0WD-V3 的样例已完成固定 SDK 空输入构建，尚无实板结果。完整工作流、Base/MQTT 组合资源与长稳尚未验收，不能作为已验收 FRPC 发布。
 
 ## 架构拓扑
 
 ```mermaid
 flowchart LR
-    sample["examples/tcp_proxy：独立 C3 实验应用"] --> owner
+    sample["examples/tcp_proxy：独立 C3 / ESP32 实验应用"] --> owner
     inputs["仓外输入：RAM Wi-Fi、SNTP、CA 与实验 FRPS"] --> sample
     sample --> echo["sample_echo.c：固定回环 TCP 目标"]
     sample --> resources["sample_resources.c：任务、heap、socket 和 esp_timer 观测"]
@@ -79,7 +79,7 @@ ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公
 
 ## 独立开发
 
-[独立 C3 TCP 样例](examples/tcp_proxy/README.md) 使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。默认空输入只供编译，真实设备必须先核对其分区与恢复基线。
+[独立 TCP 样例](examples/tcp_proxy/README.md) 面向 C3 与 ESP32-D0WD-V3，使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。默认空输入只供编译，真实设备必须先核对其分区与恢复基线。ESP32 样例采用单核实验配置，目标构建与实板矩阵仍须分别验证。
 
 [C3 生命周期故障探针](tests/c3-lifecycle/README.md)使用公开占位输入，在官方 QEMU 检查真实 FreeRTOS worker 的不可信时间拒绝和百次销毁回收；验证范围与实板边界见[运行记录](docs/operations/p4-c3-qemu-lifecycle.md)。
 
@@ -89,7 +89,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-依赖 C11 编译器、CMake >=3.16、OpenSSL >=3.0 开发库和 cJSON 1.7.19 开发包；非系统路径用 `-DOPENSSL_ROOT_DIR=...` 和 `-DCMAKE_PREFIX_PATH=...` 指定。无需 ESP、真实 Token、私有仓或相邻 checkout 即可运行 host 测试。IDF 组件入口为根 `CMakeLists.txt` 与 `idf_component.yml`，使用 SDK PSA 密码 API，并固定 `espressif/cjson ==1.7.19~2`；Token 协议需要启用 `CONFIG_MBEDTLS_MD5_C`，严格 TLS 必须开启 `CONFIG_MBEDTLS_HAVE_TIME_DATE=y`。target 验证限定 ESP-IDF v6.1 / ESP32-C3。PSA 与完整 Mbed TLS 后端也可用显式官方源码运行 host 测试，详见[测试入口](tests/README.md)。
+依赖 C11 编译器、CMake >=3.16、OpenSSL >=3.0 开发库和 cJSON 1.7.19 开发包；非系统路径用 `-DOPENSSL_ROOT_DIR=...` 和 `-DCMAKE_PREFIX_PATH=...` 指定。无需 ESP、真实 Token、私有仓或相邻 checkout 即可运行 host 测试。IDF 组件入口为根 `CMakeLists.txt` 与 `idf_component.yml`，使用 SDK PSA 密码 API，并固定 `espressif/cjson ==1.7.19~2`；Token 协议需要启用 `CONFIG_MBEDTLS_MD5_C`，严格 TLS 必须开启 `CONFIG_MBEDTLS_HAVE_TIME_DATE=y`。固定 ESP-IDF v6.1 的空输入样例已分别通过 ESP32-C3 与 ESP32 target 编译；[双目标构建检查点](docs/operations/dual-target-sample-build.md)区分该软件证据和待完成的实板验证。PSA 与完整 Mbed TLS 后端也可用显式官方源码运行 host 测试，详见[测试入口](tests/README.md)。
 
 `efrp_wire_init` 借用调用者缓冲区，输入指针不被保留。feed 支持拆帧与粘帧，只有完整帧才回调；EOF 用 finish 检查截断。最大 wire payload 为 65536 字节；header 与 payload 独立计数，非法输入后 reader 永久失败，必须重建连接再初始化。回调 payload 只在回调期间有效，不允许回调重入。该 parser 不是 TLS、Yamux 或 AEAD parser，不能将未经认证的 AEAD 明文直接交给它。
 
