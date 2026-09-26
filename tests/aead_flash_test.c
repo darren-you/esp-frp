@@ -8,8 +8,9 @@
 typedef struct {
     uint8_t bytes[EFRP_AEAD_MAX_PLAINTEXT];
     uint64_t generation, lease;
-    size_t begins, clears, reads, read_bytes, writes;
-    bool recovered, busy, quarantined, fail_recover, fail_read, short_read, fail_write, fail_clear;
+    size_t begins, clears, reads, read_bytes, writes, partial_writes, fail_read_after;
+    bool recovered, busy, quarantined, fail_recover, fail_read, short_read;
+    bool fail_write, partial_write, fail_clear;
 } fake_flash_t;
 static fake_flash_t flash;
 static uint8_t plain[EFRP_AEAD_MAX_PLAINTEXT], wire[EFRP_AEAD_TX_MAX_BYTES];
@@ -44,6 +45,13 @@ static efrp_result_t write_flash(void *context, uint64_t lease, size_t offset,
     if (!f->busy || f->quarantined || lease != f->lease || f->fail_write ||
         offset > sizeof f->bytes || length > sizeof f->bytes - offset)
         return EFRP_STORAGE_ERROR;
+    if (f->partial_write && length) {
+        size_t partial = length / 2;
+        if (!partial) partial = 1;
+        memcpy(f->bytes + offset, bytes, partial);
+        ++f->partial_writes;
+        return EFRP_STORAGE_ERROR;
+    }
     memcpy(f->bytes + offset, bytes, length); ++f->writes;
     return EFRP_OK;
 }
@@ -52,6 +60,7 @@ static efrp_result_t read_flash(void *context, uint64_t lease, size_t offset,
 {
     fake_flash_t *f = context;
     if (!f->busy || f->quarantined || lease != f->lease || f->fail_read ||
+        (f->fail_read_after && f->reads >= f->fail_read_after) ||
         offset > sizeof f->bytes || length > sizeof f->bytes - offset)
         return EFRP_STORAGE_ERROR;
     if (f->short_read && length) {
@@ -308,6 +317,76 @@ static void failure_and_recovery(void)
     feed_all(&r, wire, size);
     assert(efrp_aead_flash_reader_close(&r) == EFRP_OK);
 }
+static void partial_write_failure(void)
+{
+    init_flash(); size_t size = make_record(plain, 6000), consumed = 0;
+    efrp_aead_flash_reader_t r = {0}; efrp_aead_flash_store_t s = store();
+    assert(efrp_aead_flash_reader_init(&r, key, &s, window, sizeof window) == EFRP_OK);
+    assert(efrp_aead_flash_feed(&r, wire, 1016, &consumed) == EFRP_OK && consumed == 1016);
+    assert(flash.busy && flash.writes == 1);
+    uint64_t stale_lease = r.lease;
+    flash.partial_write = true;
+    assert(efrp_aead_flash_feed(&r, wire + 1016, size - 1016, &consumed) == EFRP_STORAGE_ERROR);
+    assert(consumed == 0 && flash.partial_writes == 1 && flash.clears == 1 && !flash.busy);
+    assert(flash.bytes[1000] == wire[1016] && flash.bytes[3500] == 0xff);
+    assert(read_flash(&flash, stale_lease, 0, window, 1) == EFRP_STORAGE_ERROR);
+    const uint8_t *bytes = window; size_t length = 1;
+    assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_STORAGE_ERROR);
+    assert(!bytes && !length);
+    all_zero(window, sizeof window); all_zero(r.key, sizeof r.key);
+    assert(efrp_aead_flash_reader_close(&r) == EFRP_OK);
+}
+static void window_reread_failure(void)
+{
+    init_flash(); size_t size = make_record(plain, 9000);
+    efrp_aead_flash_reader_t r = {0}; efrp_aead_flash_store_t s = store();
+    assert(efrp_aead_flash_reader_init(&r, key, &s, window, sizeof window) == EFRP_OK);
+    feed_all(&r, wire, size);
+    assert(r.flash_records == 1 && r.flash_passes == 1 && flash.busy);
+    uint64_t stale_lease = r.lease;
+    size_t reads_before = flash.reads;
+    flash.fail_read_after = reads_before + 3;
+    const uint8_t *bytes = window; size_t length = 1;
+    assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_STORAGE_ERROR);
+    assert(!bytes && !length && flash.reads == reads_before + 3 && !flash.busy);
+    assert(r.flash_passes == 1 && r.flash_read_bytes == 9000 + 3 * 512);
+    assert(read_flash(&flash, stale_lease, 0, window, 1) == EFRP_STORAGE_ERROR);
+    all_zero(window, sizeof window); all_zero(r.key, sizeof r.key);
+    assert(efrp_aead_flash_reader_close(&r) == EFRP_OK);
+}
+static void clear_failure_after_authentication(void)
+{
+    init_flash(); size_t size = make_record(plain, 5000);
+    efrp_aead_flash_reader_t r = {0}; efrp_aead_flash_store_t s = store();
+    assert(efrp_aead_flash_reader_init(&r, key, &s, window, sizeof window) == EFRP_OK);
+    feed_all(&r, wire, size);
+    uint64_t stale_lease = r.lease;
+    const uint8_t *bytes; size_t length;
+    assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_OK);
+    assert(length == 4096 && memcmp(bytes, plain, length) == 0);
+    assert(efrp_aead_flash_consume_plaintext(&r, length) == EFRP_OK);
+    assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_OK);
+    assert(length == 904 && memcmp(bytes, plain + 4096, length) == 0);
+    flash.fail_clear = true;
+    assert(efrp_aead_flash_consume_plaintext(&r, length) == EFRP_STORAGE_ERROR);
+    assert(flash.busy && flash.quarantined && r.active && r.leased);
+    uint64_t denied_lease = 0;
+    assert(begin(&flash, &denied_lease) == EFRP_STORAGE_ERROR && denied_lease == 0);
+    all_zero(window, sizeof window); all_zero(r.key, sizeof r.key);
+    assert(read_flash(&flash, stale_lease, 0, window, 1) == EFRP_STORAGE_ERROR);
+    bytes = window; length = 1;
+    assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_STORAGE_ERROR);
+    assert(!bytes && !length);
+    assert(efrp_aead_flash_reader_close(&r) == EFRP_STORAGE_ERROR);
+    assert(r.active && r.leased && r.window == window && flash.busy && flash.quarantined);
+    flash.fail_clear = false;
+    assert(efrp_aead_flash_reader_close(&r) == EFRP_OK);
+    assert(!flash.busy && !flash.quarantined && flash.clears == 1);
+    all_zero(window, sizeof window);
+    uint64_t next_lease = 0;
+    assert(begin(&flash, &next_lease) == EFRP_OK && next_lease != stale_lease);
+    assert(clear(&flash, next_lease) == EFRP_OK);
+}
 static void recovery_precondition(void)
 {
     memset(&flash, 0, sizeof flash);
@@ -329,7 +408,9 @@ static void recovery_precondition(void)
 int main(void)
 {
     full_record(); small_and_boundary_records(); empty_record(); altered_record(); bad_max_tag_and_short_read();
-    mutated_scratch(); authenticated_substitution(); failure_and_recovery(); recovery_precondition();
+    mutated_scratch(); authenticated_substitution(); failure_and_recovery();
+    partial_write_failure(); window_reread_failure(); clear_failure_after_authentication();
+    recovery_precondition();
     puts("aead flash: ok");
     return 0;
 }

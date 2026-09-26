@@ -136,7 +136,7 @@ efrp_result_t efrp_aead_flash_feed(efrp_aead_flash_reader_t *r,
                                     bytes + *consumed, n) != EFRP_OK)
                 return fail(r, EFRP_STORAGE_ERROR);
         } else {
-            memcpy(r->tag + r->body_used - plain_length, bytes + *consumed, n);
+            memcpy(r->tag + (r->body_used - plain_length), bytes + *consumed, n);
         }
         r->body_used += n; *consumed += n;
         if (r->body_used != r->body_expected) continue;

@@ -50,8 +50,11 @@ typedef struct {
     efrp_result_t failure;
 } efrp_aead_flash_reader_t;
 
-/* recover must have succeeded in this boot before init. init cannot prove
- * that platform fact; the store provider and boot owner must enforce it. */
+/* Zero-initialize reader before init. recover must have succeeded in this
+ * boot; init cannot prove that platform fact, so the provider and boot owner
+ * must enforce it. Keep reader and exclusive window alive through a successful
+ * close. If close returns STORAGE_ERROR, both remain owned by the caller and
+ * must be retained for retry while the provider quarantines the lease. */
 efrp_result_t efrp_aead_flash_reader_init(efrp_aead_flash_reader_t *reader,
                                           const uint8_t key[32],
                                           const efrp_aead_flash_store_t *store,
