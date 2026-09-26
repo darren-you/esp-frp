@@ -110,3 +110,72 @@ done:
     EVP_CIPHER_CTX_free(ctx);
     return result;
 }
+
+static void copy_verified_window(uint8_t *window, size_t window_offset, size_t window_length,
+                                 size_t produced, const uint8_t *output, size_t length)
+{
+    if (!window_length || !length) return;
+    size_t first = produced > window_offset ? produced : window_offset;
+    size_t last = produced + length < window_offset + window_length ?
+        produced + length : window_offset + window_length;
+    if (first < last) memcpy(window + first - window_offset, output + first - produced, last - first);
+}
+efrp_result_t efrp_crypto_gcm_decrypt_store(const uint8_t key[32], const uint8_t nonce[12],
+                                           const uint8_t aad[16], uint64_t sequence,
+                                           efrp_crypto_store_read_t read_store, void *context,
+                                           size_t plain_length, const uint8_t tag[16],
+                                           size_t window_offset, uint8_t *window, size_t window_length,
+                                           const uint8_t expected_digest[32], uint8_t digest[32])
+{
+    if (!key || !nonce || !aad || !read_store || !tag || !digest ||
+        plain_length > EFRP_AEAD_MAX_PLAINTEXT || window_offset > plain_length ||
+        window_length > plain_length - window_offset || (window_length && !window))
+        return EFRP_INVALID_ARGUMENT;
+    efrp_crypto_zero(digest, 32);
+    EVP_CIPHER_CTX *cipher = EVP_CIPHER_CTX_new();
+    EVP_MD_CTX *hash = EVP_MD_CTX_new();
+    uint8_t input[512] = {0}, output[512] = {0}, final[16] = {0};
+    uint8_t sequence_be[8], actual_digest[32] = {0};
+    for (size_t i = 0; i < sizeof sequence_be; ++i)
+        sequence_be[i] = (uint8_t)(sequence >> (56u - 8u * i));
+    efrp_result_t result = EFRP_CRYPTO_ERROR;
+    int n = 0, tail = 0; unsigned hash_length = 0;
+    if (!cipher || !hash ||
+        EVP_DecryptInit_ex(cipher, EVP_aes_256_gcm(), NULL, key, nonce) != 1 ||
+        EVP_DecryptUpdate(cipher, NULL, &n, aad, 16) != 1 ||
+        EVP_CIPHER_CTX_ctrl(cipher, EVP_CTRL_AEAD_SET_TAG, 16, (void *)tag) != 1 ||
+        EVP_DigestInit_ex(hash, EVP_sha256(), NULL) != 1 ||
+        EVP_DigestUpdate(hash, aad, 16) != 1 || EVP_DigestUpdate(hash, nonce, 12) != 1 ||
+        EVP_DigestUpdate(hash, sequence_be, sizeof sequence_be) != 1 ||
+        EVP_DigestUpdate(hash, tag, 16) != 1) goto done;
+    for (size_t offset = 0; offset < plain_length;) {
+        size_t take = plain_length - offset;
+        if (take > sizeof input) take = sizeof input;
+        if (read_store(context, offset, input, take) != EFRP_OK) {
+            result = EFRP_STORAGE_ERROR; goto done;
+        }
+        if (EVP_DigestUpdate(hash, input, take) != 1 ||
+            EVP_DecryptUpdate(cipher, output, &n, input, (int)take) != 1 || n != (int)take)
+            goto done;
+        copy_verified_window(window, window_offset, window_length, offset, output, (size_t)n);
+        offset += take;
+    }
+    if (EVP_DecryptFinal_ex(cipher, final, &tail) != 1) {
+        result = EFRP_AUTHENTICATION_FAILED; goto done;
+    }
+    if (tail != 0 || EVP_DigestFinal_ex(hash, actual_digest, &hash_length) != 1 || hash_length != 32)
+        goto done;
+    if (expected_digest) {
+        unsigned mismatch = 0;
+        for (size_t i = 0; i < 32; ++i) mismatch |= expected_digest[i] ^ actual_digest[i];
+        if (mismatch) { result = EFRP_STORAGE_ERROR; goto done; }
+    }
+    memcpy(digest, actual_digest, 32); result = EFRP_OK;
+done:
+    if (result != EFRP_OK && window && window_length) efrp_crypto_zero(window, window_length);
+    efrp_crypto_zero(input, sizeof input); efrp_crypto_zero(output, sizeof output);
+    efrp_crypto_zero(final, sizeof final); efrp_crypto_zero(actual_digest, sizeof actual_digest);
+    efrp_crypto_zero(sequence_be, sizeof sequence_be);
+    EVP_MD_CTX_free(hash); EVP_CIPHER_CTX_free(cipher);
+    return result;
+}

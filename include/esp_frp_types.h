@@ -27,5 +27,6 @@ typedef enum {
     EFRP_NO_MEMORY = -20,
     EFRP_DNS_ERROR = -21,
     EFRP_PROXY_REJECTED = -22,
-    EFRP_WORK_REJECTED = -23
+    EFRP_WORK_REJECTED = -23,
+    EFRP_STORAGE_ERROR = -24
 } efrp_result_t;

@@ -42,6 +42,8 @@ ESP32 另有**默认关闭**的 `EFRP_LAB_ESP32_IRAM_AEAD_RX` 实验接收模式
 
 `feed` / `write` 返回消费的前缀长度；剩余输入由调用方保留。存在未消费明文时 feed 返回 WOULD_BLOCK；存在未消费输出时非空 write 返回 WOULD_BLOCK。消费可以分批，已消费数据立即清零；返回 OK 或消费数量不代表 transport 已发出或对端已执行。
 
+上表接收缓存是当前会话 RAM reader 的合同。另有独立的 [Flash 暂存 reader 软件候选](flash-backed-aead.md)：小记录在 4096 字节 RAM 中认证，满长记录只把密文暂存于调用方独占的 64 KiB scratch 并逐窗口复验；它尚未接入会话或设备分区，不能把当前会话的内存容量结论改写为通过。
+
 IDF 的 `MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS` 不保证重叠缓冲有效。适配器通过 multipart AEAD 的独立输入/输出小块运行，检查输出边界后复制回连续缓存或各动态块；最后 verify 成功前缓存仅供内部使用。此设计避免再申请一份完整 64 KiB 明文缓存。动态块只改变本地存储与分配形状，不改变官方记录长度、AAD、nonce 或认证条件。
 
 ## 验证与剩余工作
