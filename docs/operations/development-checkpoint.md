@@ -1,5 +1,7 @@
 # 开发检查点
 
+2026-09-26 双目标 Login 身份修正：ESP32 的 FRP Login `arch` 随固定 SDK target 写为 `xtensa`，C3 保持 `riscv32`；其他 IDF target 在编译期拒绝。两目标空输入样例分别在固定 IDF `578cf89c`／lwIP `2758df4` 完整编译链接，host OpenSSL ASan/UBSan CTest **11/11**，其中两目标各自对官方 FRP v0.71.0 完成 **9 组 Login/AEAD 往返、6 组拒绝**。这只证明字段和离线互操作，不代表 ESP32 真机 FRPS/TLS、双流或五组件资源已验收。
+
 2026-09-26 P6 连续内存候选：控制 AEAD 在合法长度头后按实际明文申请最多 16 个 4096 字节块，LoginResp 后清零释放独立的 4096 字节握手区；完整 64 KiB 记录与 tag 认证边界保持。官方 Mbed TLS/PSA 的 host ASan/UBSan 完整 CTest 17/17、固定 SDK C3 空输入构建通过。C3 会话/Yamux 编译尺寸为 17848/5552 字节；五组件 QEMU 的 guest 存活时最大连续块 45056 字节不再被单笔 65552 字节接收区阻挡，但总 free 和真实并发仍未通过，P6-03 保持未验收。完整数据见 [P6 连续内存检查点](p6-frp-chunked-aead.md)。
 
 2026-09-23 P4 热点复测：`p4-hotspot-linger-20260923` 使用当前 FRP 源码构建 867888 字节 C3 实验应用，SHA-256 为 `50c001c2634e6487b34a7cfbd03f5364ff3dfb26134afc971a9f370898412d80`。设备经近距手机热点接入，本轮验收状态采样 RSSI 为 -45 至 -44 dBm。官方 FRPS 初检先完成单流 1024 字节双向回显，再完成双流各 1024 字节双向回显；未放宽 FRPS 固定 10 秒 work 等待。`work-local-fin` 的交付与回显两个方向各 300001 字节、零 mismatch，完整交付证明均为 `valid=1`；`work-shared` 在活动流与预备流并存时确认暂停 socket 有未读字节，RST 后活动流 `work_error=-17`、预备流继续完成，最终 `completed=1`、`failed=1`。两场景各自销毁后均重新连接官方 FRPS 并通过双流回显；`acceptance-result.json` 为 `complete=true`，不代表十轮压力、Base/MQTT 组合或 P4 总验收完成。

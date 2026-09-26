@@ -18,7 +18,7 @@ import (
 	frpnet "github.com/fatedier/frp/pkg/util/net"
 )
 
-func handshakeRound(path string, step int, seconds int64, scenario string) {
+func handshakeRound(path, expectedArch string, step int, seconds int64, scenario string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, fmt.Sprint(step), fmt.Sprint(seconds))
@@ -62,7 +62,7 @@ func handshakeRound(path string, step int, seconds int64, scenario string) {
 	must(msg.NewV2ReadWriterWithConn(frames).ReadMsgInto(&login))
 	if reader.Len() != 0 || login.PoolCount != 0 || login.Timestamp != seconds || login.Version != "esp-frp/0.1.0" ||
 		login.Hostname != "board\"\\\n" || login.User != "公开测试" || login.ClientID != "fixture" || login.RunID != "old-id" ||
-		login.Os != "esp-idf" || login.Arch != "riscv32" {
+		login.Os != "esp-idf" || login.Arch != expectedArch {
 		panic("login field mismatch")
 	}
 	token := []byte("public-handshake-token")
@@ -134,13 +134,13 @@ func handshakeRound(path string, step int, seconds int64, scenario string) {
 	}
 }
 
-func runHandshake(path string) {
+func runHandshake(path, expectedArch string) {
 	for _, step := range []int{1, 7, 8, 15, 17, 128, 4096, 100000} {
-		handshakeRound(path, step, 1790000000, "ok")
+		handshakeRound(path, expectedArch, step, 1790000000, "ok")
 	}
-	handshakeRound(path, 100000, math.MaxInt64, "ok")
+	handshakeRound(path, expectedArch, 100000, math.MaxInt64, "ok")
 	for _, scenario := range []string{"algorithm", "random", "login-error", "transcript", "wrong-key", "truncated"} {
-		handshakeRound(path, 100000, 1790000000, scenario)
+		handshakeRound(path, expectedArch, 100000, 1790000000, scenario)
 	}
-	fmt.Println("Official FRP handshake: 9 login/AEAD round trips, 6 rejection cases passed")
+	fmt.Printf("Official FRP %s handshake: 9 login/AEAD round trips, 6 rejection cases passed\n", expectedArch)
 }

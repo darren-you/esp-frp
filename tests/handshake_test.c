@@ -34,6 +34,17 @@ static void start(efrp_handshake_t *h, uint8_t rx[EFRP_HANDSHAKE_RX_BYTES])
     assert(efrp_handshake_feed(h, (const uint8_t *)"x", 1, &used) == EFRP_WOULD_BLOCK && !used);
     assert(efrp_handshake_output(h, &p, &n) == EFRP_OK && n > 200);
     assert(!memcmp(p, efrp_wire_magic, 7));
+    const size_t login_offset = 7 + 8 + h->hello_length + 10;
+    assert(login_offset < n);
+    cJSON *login_body = cJSON_Parse((const char *)p + login_offset);
+    assert(login_body);
+    const cJSON *arch = cJSON_GetObjectItemCaseSensitive(login_body, "arch");
+#if defined(CONFIG_IDF_TARGET_ESP32) && CONFIG_IDF_TARGET_ESP32
+    assert(cJSON_IsString(arch) && !strcmp(arch->valuestring, "xtensa"));
+#else
+    assert(cJSON_IsString(arch) && !strcmp(arch->valuestring, "riscv32"));
+#endif
+    cJSON_Delete(login_body);
     assert(efrp_handshake_consume_output(h, n + 1) == EFRP_INVALID_ARGUMENT);
     while (efrp_handshake_output(h, &p, &n) == EFRP_OK) {
         if (n > 17) n = 17;

@@ -75,7 +75,7 @@ cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=thread \
 
 ASan 与 TSan 需分别构建。上述驱动验证所有权及竞争，不计作真实 SDK DNS 网络或 C3 调度验证，范围见 [连接生命周期](../docs/design/connection-lifecycle.md)。
 
-AES-256-GCM 和 Hello/Login 官方互操作需 Go >=1.25，添加 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON`，分别运行 `aead_upstream` 和 `handshake_upstream`。测试直接调用官方 FRP v0.71.0 的握手、Token 鉴权与读写 API；两方向、64 KiB、多记录及拒绝范围见 [crypto-interop](crypto-interop/README.md)。可以同时打开两个上游测试选项。
+AES-256-GCM 和 Hello/Login 官方互操作需 Go >=1.25，添加 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON`，运行 `aead_upstream`、`handshake_upstream` 和 `handshake_esp32_upstream`。后两项分别以 `riscv32`、`xtensa` 核对官方 FRP v0.71.0 解码出的 Login，并完成 Token 鉴权、加密往返与拒绝用例；两方向、64 KiB、多记录及拒绝范围见 [crypto-interop](crypto-interop/README.md)。可以同时打开两个上游测试选项。
 
 生产 PSA 适配器也能在 host 运行相同 CTest。准备官方 [TF-PSA-Crypto 1.1.0 发布包](https://github.com/Mbed-TLS/TF-PSA-Crypto/releases/tag/tf-psa-crypto-1.1.0)，使用完整 `tf-psa-crypto-1.1.0.tar.bz2`（SHA-256 `a0b011b7f2c427cc8ee70116bb2d859543014534ae4d7020a69613aec10dc1b4`），解包后显式传入其根目录：
 

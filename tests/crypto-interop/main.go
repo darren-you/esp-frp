@@ -137,6 +137,7 @@ func run(path string) {
 func main() {
 	path := flag.String("peer", "", "C AEAD peer executable")
 	handshake := flag.String("handshake-peer", "", "C Hello/Login peer executable")
+	handshakeArch := flag.String("handshake-arch", "riscv32", "expected FRP Login arch for the handshake peer")
 	tlsPeer := flag.String("tls-peer", "", "C Mbed TLS peer executable")
 	sessionPeer := flag.String("session-peer", "", "C composed control session peer")
 	clientPeer := flag.String("client-peer", "", "C single-worker lifecycle peer")
@@ -165,7 +166,7 @@ func main() {
 		return
 	}
 	if *handshake != "" {
-		runHandshake(*handshake)
+		runHandshake(*handshake, *handshakeArch)
 		return
 	}
 	if *path == "" {

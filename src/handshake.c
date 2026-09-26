@@ -5,6 +5,20 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef ESP_PLATFORM
+#include "sdkconfig.h"
+#endif
+
+#if defined(CONFIG_IDF_TARGET_ESP32) && CONFIG_IDF_TARGET_ESP32
+#define EFRP_LOGIN_ARCH "xtensa"
+#elif defined(CONFIG_IDF_TARGET_ESP32C3) && CONFIG_IDF_TARGET_ESP32C3
+#define EFRP_LOGIN_ARCH "riscv32"
+#elif defined(ESP_PLATFORM)
+#error "ESP FRP login architecture requires an explicit supported IDF target"
+#else
+/* The host fixture models the C3 unless a target is selected explicitly. */
+#define EFRP_LOGIN_ARCH "riscv32"
+#endif
 
 static const char base64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static void encode_random(const uint8_t random[32], char output[45])
@@ -153,7 +167,7 @@ efrp_result_t efrp_handshake_init(efrp_handshake_t *h, const efrp_handshake_conf
     cJSON *login = cJSON_CreateObject();
     char timestamp[21]; snprintf(timestamp, sizeof timestamp, "%" PRId64, c->unix_seconds);
     bool built = login && add_string(login, "version", "esp-frp/0.1.0") && add_string(login, "os", "esp-idf") &&
-        add_string(login, "arch", "riscv32") && add_string(login, "hostname", c->hostname) &&
+        add_string(login, "arch", EFRP_LOGIN_ARCH) && add_string(login, "hostname", c->hostname) &&
         add_string(login, "user", c->user) && add_string(login, "client_id", c->client_id) &&
         add_string(login, "run_id", c->previous_run_id) && add_string(login, "privilege_key", auth) &&
         cJSON_AddRawToObject(login, "timestamp", timestamp) && cJSON_AddNumberToObject(login, "pool_count", 0);
