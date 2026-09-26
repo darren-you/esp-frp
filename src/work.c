@@ -18,11 +18,15 @@ static void release_handshake(efrp_work_set_t *set)
 void efrp_work_status(const efrp_work_set_t *set, efrp_work_status_t *status)
 {
     *status = set->status; status->waiting = status->active = status->cleaning = 0;
-    for (unsigned i = 0; i < 3; ++i) switch (set->streams[i].phase) {
+    for (unsigned i = 0; i < 3; ++i) {
+        const efrp_work_stream_t *w = set->streams[i];
+        if (!w) continue;
+        switch (w->phase) {
         case EFRP_WORK_SENDING: case EFRP_WORK_WAITING: ++status->waiting; break;
         case EFRP_WORK_CONNECTING: case EFRP_WORK_ACTIVE: ++status->active; break;
         case EFRP_WORK_CLOSING: ++status->cleaning; break;
         default: break;
+        }
     }
 }
 void efrp_work_init(efrp_work_set_t *set, const efrp_session_config_t *config, const char *proxy_name)
@@ -104,8 +108,15 @@ static efrp_result_t new_work(efrp_work_stream_t *w, const char *run_id,
     w->outgoing[15] = 0; w->outgoing[16] = 6; w->outgoing_used = length + 17;
     return result;
 }
-static efrp_result_t cleanup_work(efrp_work_set_t *set, efrp_work_stream_t *w, efrp_yamux_t *mux, uint64_t now)
+static void release_stream(efrp_work_stream_t **slot)
 {
+    efrp_work_stream_t *w = *slot;
+    efrp_crypto_zero(w, sizeof *w);
+    free(w); *slot = NULL;
+}
+static efrp_result_t cleanup_work(efrp_work_set_t *set, efrp_work_stream_t **slot, efrp_yamux_t *mux, uint64_t now)
+{
+    efrp_work_stream_t *w = *slot;
     if (w->stream_id) {
         efrp_result_t r = w->result == EFRP_OK ? EFRP_OK : efrp_yamux_reset(mux, w->stream_id);
         if (r == EFRP_WOULD_BLOCK) return EFRP_OK;
@@ -128,7 +139,7 @@ static efrp_result_t cleanup_work(efrp_work_set_t *set, efrp_work_stream_t *w, e
         if (efrp_connect_destroy(&w->local) == EFRP_WOULD_BLOCK) return EFRP_OK;
     }
     if (w->result == EFRP_OK) ++set->status.completed;
-    efrp_crypto_zero(w, sizeof *w); return EFRP_OK;
+    release_stream(slot); return EFRP_OK;
 }
 static efrp_result_t handshake_work(efrp_work_set_t *set, efrp_work_stream_t *w, efrp_yamux_t *mux, uint64_t now)
 {
@@ -173,8 +184,10 @@ static efrp_result_t handshake_work(efrp_work_set_t *set, efrp_work_stream_t *w,
     efrp_crypto_zero(&w->reader, sizeof w->reader);
     efrp_work_status_t status; efrp_work_status(set, &status);
     unsigned closing_sockets = 0;
-    for (unsigned i = 0; i < 3; ++i)
-        if (set->streams[i].phase == EFRP_WORK_CLOSING && set->streams[i].local) ++closing_sockets;
+    for (unsigned i = 0; i < 3; ++i) {
+        const efrp_work_stream_t *closing = set->streams[i];
+        if (closing && closing->phase == EFRP_WORK_CLOSING && closing->local) ++closing_sockets;
+    }
     if (status.active + closing_sockets >= 2) { close_work(set, w, EFRP_CAPACITY_EXCEEDED); return EFRP_OK; }
     r = efrp_connect_create_ipv4(set->address, set->port, now, &w->local);
     if (r != EFRP_OK) { close_work(set, w, r); return EFRP_OK; }
@@ -259,11 +272,16 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
 {
     efrp_work_status_t status; efrp_work_status(set, &status);
     if (set->status.pending && !status.waiting) {
-        for (unsigned i = 0; i < 3; ++i) if (set->streams[i].phase == EFRP_WORK_UNUSED) {
-            efrp_work_stream_t *w = &set->streams[i];
+        for (unsigned i = 0; i < 3; ++i) if (!set->streams[i]) {
+            efrp_work_stream_t *w = calloc(1, sizeof *w);
+            if (!w) return EFRP_NO_MEMORY;
             efrp_result_t r = efrp_yamux_open(mux, &w->stream_id);
-            if (r == EFRP_WOULD_BLOCK) break;
-            if (r != EFRP_OK) return r;
+            if (r != EFRP_OK) {
+                release_stream(&w);
+                if (r == EFRP_WOULD_BLOCK) break;
+                return r;
+            }
+            set->streams[i] = w;
             --set->status.pending; w->proxy_name = set->proxy_name;
             w->phase = EFRP_WORK_SENDING; w->deadline = now + EFRP_SESSION_RESPONSE_MS;
             r = new_work(w, run_id, token, token_length, seconds);
@@ -272,8 +290,9 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
         }
     }
     for (unsigned offset = 0; offset < 3; ++offset) {
-        efrp_work_stream_t *w = &set->streams[(set->cursor + offset) % 3];
-        if (w->phase == EFRP_WORK_UNUSED) continue;
+        efrp_work_stream_t **slot = &set->streams[(set->cursor + offset) % 3];
+        efrp_work_stream_t *w = *slot;
+        if (!w) continue;
         efrp_result_t r = EFRP_OK;
         if (w->stream_id && w->phase != EFRP_WORK_CLOSING) {
             efrp_yamux_stream_info_t info;
@@ -283,7 +302,7 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
         }
         if (w->phase == EFRP_WORK_SENDING || w->phase == EFRP_WORK_WAITING) r = handshake_work(set, w, mux, now);
         if (r == EFRP_OK && (w->phase == EFRP_WORK_CONNECTING || w->phase == EFRP_WORK_ACTIVE)) r = forward_work(set, w, mux, now);
-        if (r == EFRP_OK && w->phase == EFRP_WORK_CLOSING) r = cleanup_work(set, w, mux, now);
+        if (r == EFRP_OK && w->phase == EFRP_WORK_CLOSING) r = cleanup_work(set, slot, mux, now);
         if (r != EFRP_OK) return r;
     }
     set->cursor = (set->cursor + 1) % 3; return EFRP_OK;
@@ -293,11 +312,12 @@ bool efrp_work_cancel(efrp_work_set_t *set)
     bool done = true; set->status.pending = 0;
     release_handshake(set);
     for (unsigned i = 0; i < 3; ++i) {
-        efrp_work_stream_t *w = &set->streams[i];
+        efrp_work_stream_t *w = set->streams[i];
+        if (!w) continue;
         if (w->local && efrp_connect_destroy(&w->local) == EFRP_WOULD_BLOCK) {
             efrp_crypto_zero(w->incoming, sizeof w->incoming);
             efrp_crypto_zero(w->outgoing, sizeof w->outgoing); w->phase = EFRP_WORK_CLOSING; done = false;
-        } else efrp_crypto_zero(w, sizeof *w);
+        } else release_stream(&set->streams[i]);
     }
     return done;
 }

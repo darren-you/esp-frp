@@ -19,7 +19,9 @@ typedef struct {
     bool started, partial_header, remote_eof, local_eof, local_fin, mux_fin;
 } efrp_work_stream_t;
 typedef struct {
-    efrp_work_stream_t streams[3];
+    /* A work stream owns two 1 KiB transfer buffers. Keep each of the three
+     * slots empty until a ReqWorkConn actually opens that stream. */
+    efrp_work_stream_t *streams[3];
     /* Only one stream can be SENDING/WAITING. Allocate its full 4 KiB parser
      * workspace on first input, then release it after StartWorkConn or abort.
      * A healthy pooled spare does not retain an unused parser buffer. */

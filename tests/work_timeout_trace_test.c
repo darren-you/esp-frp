@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "work_internal.h"
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void run(efrp_work_phase_t phase, bool incoming, bool outgoing, bool partial,
@@ -13,7 +14,8 @@ static void run(efrp_work_phase_t phase, bool incoming, bool outgoing, bool part
     efrp_work_set_t work;
     efrp_session_config_t config = {.local_ipv4 = {127, 0, 0, 1}, .local_port = 1};
     efrp_work_init(&work, &config, "timeout-fixture");
-    efrp_work_stream_t *stream = &work.streams[0];
+    efrp_work_stream_t *stream = calloc(1, sizeof *stream);
+    assert(stream); work.streams[0] = stream;
     stream->phase = phase;
     stream->stream_id = id;
     stream->deadline = deadline;
@@ -26,6 +28,7 @@ static void run(efrp_work_phase_t phase, bool incoming, bool outgoing, bool part
     efrp_work_status(&work, &status);
     assert(status.failed == 1 && status.last_error == EFRP_TIMEOUT);
     assert(status.active == 0 && status.waiting == 0 && status.cleaning == 0);
+    assert(!work.streams[0] && efrp_work_cancel(&work));
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     assert((unsigned)status.timeout_source == expected_source);
     assert(status.timeout_stream_id == id);

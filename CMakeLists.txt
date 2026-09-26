@@ -161,6 +161,12 @@ else()
             add_test(NAME work_faults_upstream COMMAND "${GO_EXECUTABLE}" run -mod=readonly . -work-peer $<TARGET_FILE:work_peer> -work-faults)
             set_tests_properties(work_faults_upstream PROPERTIES
                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/crypto-interop" TIMEOUT 180)
+            add_executable(work_allocation_test tests/work_allocation_test.c tests/work_memory_test.c
+                $<TARGET_OBJECTS:work_memory_fixture>)
+            target_include_directories(work_allocation_test PRIVATE src)
+            target_link_libraries(work_allocation_test PRIVATE esp_frp connect_host_test cjson)
+            target_compile_options(work_allocation_test PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+            add_test(NAME work_allocation COMMAND work_allocation_test)
             add_executable(work_timeout_trace_test tests/work_timeout_trace_test.c)
             target_include_directories(work_timeout_trace_test PRIVATE src)
             target_link_libraries(work_timeout_trace_test PRIVATE esp_frp connect_host_test cjson)
