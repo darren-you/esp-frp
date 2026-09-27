@@ -1,0 +1,29 @@
+2026-09-27 / esp-frp 98bab0c0fbac684a6f89772c50c8bcf37aafe4fc / ESP32-C3 QEMU MTD
+ESP-IDF 578cf89c343e388db43ba1f4ddcd602fedcb763c / lwIP 2758df4cd3666b3b2a5b53830148379326425c0d
+QEMU Homebrew 11.0.0 / qemu-system-riscv32 SHA-256 4f7c97e65cade8ed485fd5d0a6966f60db337b7772a6c21ed3e32ac961bbc5d9
+
+phase-1.log:
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+I (11) boot:  3 frp_scratch      Unknown data     01 06 00110000 00010000
+ESP_FRP_LAB_ONLY C3_FLASH_SCRATCH sdk=6.1 target=esp32c3
+EFRP_C3_FLASH partition label=frp_scratch type=1 subtype=6 offset=0x110000 size=65536 erase=4096 readonly=0 encrypted=0
+EFRP_C3_FLASH metrics recover_us=35371 feed_auth_us=658435 flash_feed_us=644105 windows_us=283537 flash_windows_us=132994 max_window_us=17833 bad_tag_us=248984 flash_bad_tag_us=238329 flash_operation_us=1050671 max_flash_operation_us=77769 flash_passes=17 flash_read_bytes=1114112 owner_calls=2437 baseline_free=328948 baseline_largest=188416 minimum_free=327740 minimum_largest=188416 final_free=327740 final_largest=188416
+EFRP_C3_FLASH PHASE1_PASS full_record=65536 bad_tag=rejected flash=persistent
+I (1314) main_task: Returned from app_main()
+
+phase-2.log:
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+I (11) boot:  3 frp_scratch      Unknown data     01 06 00110000 00010000
+ESP_FRP_LAB_ONLY C3_FLASH_SCRATCH sdk=6.1 target=esp32c3
+EFRP_C3_FLASH partition label=frp_scratch type=1 subtype=6 offset=0x110000 size=65536 erase=4096 readonly=0 encrypted=0
+EFRP_C3_FLASH recovery recover_us=35962 flash_operation_us=35836 max_flash_operation_us=35836 owner_calls=1 minimum_free=328948 minimum_largest=188416 final_free=328948 final_largest=188416
+EFRP_C3_FLASH PHASE2_PASS persisted_ciphertext=65536 recovered_erased=65536
+I (83) main_task: Returned from app_main()
+
+Host MTD checks:
+fixture_sha256=c5a73e30ed6b7b9cafb84e9051e348865d723006f88d59b768b4e1014d709399
+initial_flash_sha256=c6dfcf7e80be5ee9e7f2d31d938f3cdcc6a0ac6961491046f71a5c0af7f607d0
+phase_1_flash_sha256=80e2e3647451d7528b2b1b13cb90e6ab63bd9b96a52d1460df9619730b17d2d6
+phase_1_scratch_sha256=f608a64bc134caaadcee9c6344cd365a21bc63be9be5ff3b1822506aaa6a893b
+phase_2_flash_sha256=c6dfcf7e80be5ee9e7f2d31d938f3cdcc6a0ac6961491046f71a5c0af7f607d0
+phase_2_scratch_sha256=71189f7fb6aed638640078fba3a35fda6c39c8962e74dcc75935aac948da9063
