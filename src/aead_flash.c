@@ -125,6 +125,9 @@ efrp_result_t efrp_aead_flash_feed(efrp_aead_flash_reader_t *r,
                 r->leased = true;
             }
         }
+        /* A feed may end exactly at the header. Wait for ciphertext or tag
+         * instead of issuing a zero-length Flash write. */
+        if (*consumed == length) break;
         size_t plain_length = r->body_expected - EFRP_AEAD_TAG_BYTES;
         size_t n = r->body_expected - r->body_used;
         if (n > length - *consumed) n = length - *consumed;

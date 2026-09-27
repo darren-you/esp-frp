@@ -42,7 +42,7 @@ static efrp_result_t write_flash(void *context, uint64_t lease, size_t offset,
                                   const uint8_t *bytes, size_t length)
 {
     fake_flash_t *f = context;
-    if (!f->busy || f->quarantined || lease != f->lease || f->fail_write ||
+    if (!f->busy || f->quarantined || lease != f->lease || !length || f->fail_write ||
         offset > sizeof f->bytes || length > sizeof f->bytes - offset)
         return EFRP_STORAGE_ERROR;
     if (f->partial_write && length) {
@@ -150,6 +150,35 @@ static void full_record(void)
     assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_WOULD_BLOCK);
     assert(efrp_aead_flash_finish(&r) == EFRP_OK);
     assert(efrp_aead_flash_reader_close(&r) == EFRP_OK);
+}
+static void exact_header_boundary(void)
+{
+    for (unsigned split = 0; split < 2; ++split) {
+        init_flash();
+        for (size_t i = 0; i < sizeof plain; ++i)
+            plain[i] = (uint8_t)(i * 29u + 7u);
+        size_t size = make_record(plain, sizeof plain);
+        efrp_aead_flash_reader_t r = {0}; efrp_aead_flash_store_t s = store();
+        assert(efrp_aead_flash_reader_init(&r, key, &s, window, sizeof window) == EFRP_OK);
+        size_t consumed = 0;
+        if (split) {
+            assert(efrp_aead_flash_feed(&r, wire, 12, &consumed) == EFRP_OK && consumed == 12);
+            assert(!flash.busy && flash.begins == 0 && flash.writes == 0);
+            assert(efrp_aead_flash_feed(&r, wire + 12, 4, &consumed) == EFRP_OK && consumed == 4);
+        } else {
+            assert(efrp_aead_flash_feed(&r, wire, 16, &consumed) == EFRP_OK && consumed == 16);
+        }
+        assert(flash.busy && flash.begins == 1 && flash.writes == 0 && flash.reads == 0 && r.leased);
+        const uint8_t *bytes = NULL; size_t length = 0;
+        assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_WOULD_BLOCK &&
+               bytes == NULL && length == 0);
+        feed_all(&r, wire + 16, size - 16);
+        assert(flash.writes > 0 && r.flash_passes == 1 && r.flash_read_bytes == sizeof plain);
+        assert(efrp_aead_flash_plaintext(&r, &bytes, &length) == EFRP_OK &&
+               length == sizeof window && memcmp(bytes, plain, length) == 0);
+        assert(efrp_aead_flash_consume_plaintext(&r, length) == EFRP_OK);
+        assert(efrp_aead_flash_reader_close(&r) == EFRP_OK && !flash.busy && flash.clears == 1);
+    }
 }
 static void small_and_boundary_records(void)
 {
@@ -407,7 +436,7 @@ static void recovery_precondition(void)
 }
 int main(void)
 {
-    full_record(); small_and_boundary_records(); empty_record(); altered_record(); bad_max_tag_and_short_read();
+    full_record(); exact_header_boundary(); small_and_boundary_records(); empty_record(); altered_record(); bad_max_tag_and_short_read();
     mutated_scratch(); authenticated_substitution(); failure_and_recovery();
     partial_write_failure(); window_reread_failure(); clear_failure_after_authentication();
     recovery_precondition();
