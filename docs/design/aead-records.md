@@ -1,6 +1,6 @@
 # wire v2 控制 AEAD 记录层
 
-本层实现官方 FRP v0.71.0 的 `aes-256-gcm` 控制通道保护。协议与密码原语分离：`src/aead.c` 为独立增量实现；ESP-IDF 构建调用 `crypto_psa.c`，host 默认调用 `crypto_openssl.c`。不自研 AES、GCM、SHA-256、HKDF 或随机数。
+本层实现官方 FRP v0.71.0 的 `aes-256-gcm` 控制通道保护。`src/aead.c` 提供密钥派生与发送端，`src/aead_flash.c` 是控制会话唯一接收端；ESP-IDF 构建调用 `crypto_psa.c`，host 默认调用 `crypto_openssl.c`。不自研 AES、GCM、SHA-256、HKDF 或随机数。
 
 ## 握手与密钥
 
@@ -18,7 +18,7 @@
 每个方向先发送 12 字节随机 stream nonce，然后重复 `uint32be(ciphertext + tag 长度) + ciphertext + 16 字节 GCM tag`。每条记录的 AAD 是不变的 stream nonce 加该记录的四字节长度头；记录 nonce 从 stream nonce 开始按 96 位大端递增。
 
 - 单条明文最多 65536 字节；接收端允许认证有效的空记录。发送端的空 write 不产生记录或输出。
-- 完整记录认证成功后才由 `plaintext` 暴露。认证失败清空连续工作区或所有动态块、tag 与密钥；长度非法、计数耗尽、分配失败、密码库失败均为粘性错误，必须销毁对象并重建会话。
+- 完整记录认证成功后才由 `plaintext` 暴露。认证失败清空接收窗口、tag 与密钥；长度非法、计数耗尽、存储失败、密码库失败均为粘性错误，必须关闭 reader 并重建会话。
 - nonce 不允许回绕；全 `ff` 的 nonce 对应记录不交付。每方向最多 2^32 条记录；每次会话必须重新生成 Hello 随机数及方向密钥。
 - nonce、密文、tag、合法范围内长度头或握手原文被修改均不能通过认证；重放、乱序和方向反射也不能通过。
 - EOF 只检查 nonce/长度头/记录体是否截断。空流、恰好 nonce 或完整记录边界的 EOF **没有被认证**，不能据此判定业务或会话成功。
@@ -27,29 +27,26 @@
 
 ## 内存与 API 所有权
 
-所有公开对象先零初始化，单 owner 使用，destroy 后才可重新 init。调用方缓冲区必须独占，且不得与输入或对象存储重叠；不能直接读取内部工作区推断明文是否可信。
+所有公开对象先零初始化，单 owner 使用，成功关闭后才可重新 init。调用方缓冲区必须独占，且不得与输入或对象存储重叠；不能直接读取内部工作区推断明文是否可信。
 
 | 资源 | 合同 |
 | --- | --- |
-| 连续接收缓存 | 调用方提供至少 65552 字节；保留直接使用 reader 的接口 |
-| FRP 会话动态接收 | 先验证长度头，之后每块密文首字节抵达时才申请该块；仅收到合法长度头不申请明文块。按明文实际长度最多 16 个块，各块最多 4096 字节，末块按实际字节数申请；16 字节 tag 存在 reader 对象内。认证前所有块私有；已消费块立即清零释放，失败、取消与销毁清零释放剩余块。完整 65536 字节明文记录仍需同时持有全部 16 块 |
+| FRP 会话接收窗口 | 会话独占 4096 字节，与 wire parser 借用的 `json_rx` 分离；小记录在窗口中认证，大记录将密文写入独占 65536 字节 Flash scratch。大记录完成认证后，每次交付前重新读回并复验整条密文；已消费窗口立即清零 |
 | 发送缓存 | 33–65568 字节；4128 字节缓存每次最多接收 4096 字节明文 |
-| C3 reader 对象 | 固定 SDK C3 构建为 264 字节，含块指针、长度与 tag，不含动态块或密码库分配 |
+| Flash reader 对象 | C3 静态大小 248 字节；另由会话提供 4096 字节窗口，不含密码库临时内存或产品 provider 状态 |
 | PSA 单次工作块 | 512 字节输入和 SDK 上界输出，输出编译约束不超过 1024 字节；另有操作状态和 tag |
 | 密码库资源 | SDK 可内部动态分配；每记录导入 volatile AES key，最终 abort operation 并 destroy key |
 
-ESP32 另有**默认关闭**的 `EFRP_LAB_ESP32_IRAM_AEAD_RX` 实验接收模式。它保留 65536 字节记录上限和按密文字节到达逐块申请的时机；16 个块请求 `MALLOC_CAP_EXEC | MALLOC_CAP_32BIT`，每块仅使用对齐的 32 位读写，将字节逻辑打包到 word。分配器拒绝共享 D/IRAM，避免占用同时属于 8BIT 的能力池。PSA 的 `update`／`verify` 只接收、输出栈上 byte-accessible 缓冲；完整 tag 验证后，`efrp_aead_copy_plaintext` 才把明文复制到会话独立 1024 字节解析缓冲。字宽模式的 `efrp_aead_plaintext` 拒绝返回 I 总线裸指针。已消费字节与失败/取消块均以 32 位访问清零，再释放。默认会话仍调用普通分块 reader；实验模式只在显式 CMake 开关开启时接线。
-
 `feed` / `write` 返回消费的前缀长度；剩余输入由调用方保留。存在未消费明文时 feed 返回 WOULD_BLOCK；存在未消费输出时非空 write 返回 WOULD_BLOCK。消费可以分批，已消费数据立即清零；返回 OK 或消费数量不代表 transport 已发出或对端已执行。
 
-上表接收缓存是当前会话 RAM reader 的合同。另有独立的 [Flash 暂存 reader 软件候选](flash-backed-aead.md)：小记录在 4096 字节 RAM 中认证，满长记录只把密文暂存于调用方独占的 64 KiB scratch 并逐窗口复验；它尚未接入会话或设备分区，不能把当前会话的内存容量结论改写为通过。
+Flash scratch 的 lease、启动恢复、失败隔离与重试见 [Flash 暂存 reader](flash-backed-aead.md)。本候选尚未接入真实设备分区，不能据 host 软件测试推断设备容量通过。
 
-IDF 的 `MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS` 不保证重叠缓冲有效。适配器通过 multipart AEAD 的独立输入/输出小块运行，检查输出边界后复制回连续缓存或各动态块；最后 verify 成功前缓存仅供内部使用。此设计避免再申请一份完整 64 KiB 明文缓存。动态块只改变本地存储与分配形状，不改变官方记录长度、AAD、nonce 或认证条件。
+IDF 的 `MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS` 不保证重叠缓冲有效。适配器通过 multipart AEAD 的独立输入/输出小块运行，检查输出边界后将认证后的窗口交付。Flash 路径在每个窗口交付前重新认证并检查首次密文摘要；不会分配一份完整 64 KiB 明文。存储形状不改变官方记录长度、AAD、nonce 或认证条件。
 
 ## 验证与剩余工作
 
-ASan/UBSan 覆盖逐字节/边界拆分、部分读写、64 KiB 与多记录、空记录、篡改/错误密钥/重放、截断、计数边界及清零。可选测试直接调用官方 FRP 的 `NewClientCryptoContext` 和 `NewAEADCryptoReadWriter`，覆盖两后端各 12 组双向用例、10 组拒绝用例；小发送缓存 33 字节、4128 字节和最大缓存均有交叉验证。具体入口见 [tests](../../tests/README.md)。
+host 回归覆盖逐字节/边界拆分、部分读写、64 KiB 与多记录、空记录、篡改/错误密钥/重放、截断、计数边界、lease 争用和清理失败重试。可选测试直接调用官方 FRP 的 `NewClientCryptoContext` 和 `NewAEADCryptoReadWriter`，覆盖两后端各 12 组双向用例、10 组拒绝用例；小发送缓存 33 字节、4128 字节和最大缓存均有交叉验证。具体入口见 [tests](../../tests/README.md)。
 
-原分块适配已在官方 Mbed TLS 4.1.0 内含的 TF-PSA-Crypto 1.1.0 host 后端完成 ASan/UBSan、官方 FRPS 和 64 KiB 记录验证，并在固定 ESP-IDF v6.1 / ESP32-C3 中编译链接通过；完整输入、大小和未验边界见 [P6 连续内存检查点](../operations/p6-frp-chunked-aead.md)。后续逐块到达才申请的验证见[内存审计](../operations/p6-frp-lazy-aead-memory-audit.md)。host 软件实现不是 Espressif 芯片驱动运行面，C3 guest/FRP 并发容量与实板资源峰值尚未证明。
+历史 RAM reader 的容量结果见 [P6 连续内存检查点](../operations/p6-frp-chunked-aead.md)和[逐块分配审计](../operations/p6-frp-lazy-aead-memory-audit.md)。它们不代表当前 Flash reader 的设备容量。当前唯一接收路径已通过 OpenSSL、独立 PSA 与 Mbed TLS host 互操作；固定 ESP-IDF 双目标空输入 sample 已编译、分区表与 app size 已由官方工具核对。真实设备 Flash/PSA、掉电和 Base 产品容量尚待验证。
 
 协议依据：[FRP crypto](https://github.com/fatedier/frp/blob/v0.71.0/pkg/proto/wire/crypto.go)、[FRP 方向密钥装配](https://github.com/fatedier/frp/blob/v0.71.0/pkg/util/net/conn.go)、[golib AEAD](https://github.com/fatedier/golib/blob/v0.8.2/crypto/aead_stream.go)。

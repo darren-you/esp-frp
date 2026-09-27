@@ -13,8 +13,8 @@ flowchart LR
     owner["应用控制任务"] -->|"create / start / stop / destroy；有界队列"| client["src/client.c：唯一 worker、清理与退避"]
     qemu["官方 ESP32-C3 QEMU"] --> lifecycle["tests/c3-lifecycle：不可信时间与百次回收"]
     lifecycle --> client
-    qemu32["官方 ESP32 QEMU"] --> iram["tests/esp32-iram-aead：纯 IRAM 字宽接收实验"]
-    iram --> aead
+    sample --> scratch["partitions.csv：样例独占 64 KiB scratch"]
+    scratch --> provider["src/idf_flash_store.c：精确分区与 owner adapter"]
     sdk_lock["sdk-lock.json / tools/sdk.py：精确 SDK 源依赖"] --> idf
     sdk_lock --> fixed_lwip["公开 esp-lwip：零窗口 ACK 根因修正"]
     fixed_lwip --> lwip
@@ -33,7 +33,7 @@ flowchart LR
     api --> aead["src/aead.c：握手摘要、方向密钥、认证记录"]
     host --> aead
     idf --> aead
-    api --> flash_aead["src/aead_flash.c：未接 session 的 Flash 密文暂存候选"]
+    api --> flash_aead["src/aead_flash.c：会话唯一 AEAD 接收 reader"]
     host --> flash_aead
     idf --> flash_aead
     flash_aead --> crypto
@@ -69,6 +69,8 @@ flowchart LR
     session --> mux
     session --> handshake
     session --> aead
+    session --> flash_aead
+    flash_aead --> provider
     frps["session.go：官方 FRPS 回环服务"] <-->|"真实 TLS 与控制会话"| sp["session_peer.c"]
     sp --> session
     sp --> connect
@@ -85,7 +87,7 @@ ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公
 
 ## 独立开发
 
-[独立 TCP 样例](examples/tcp_proxy/README.md) 面向 C3 与 ESP32-D0WD-V3，使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。默认空输入只供编译，真实设备必须先核对其分区与恢复基线。ESP32 样例采用单核实验配置，目标构建与实板矩阵仍须分别验证。
+[独立 TCP 样例](examples/tcp_proxy/README.md) 面向 C3 与 ESP32-D0WD-V3，使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。样例专用 4 MiB 分区表含独占 `frp_scratch`，启动时核对并恢复后才允许联网；默认空输入只供编译，真实设备必须先核对其分区与恢复基线。ESP32 样例采用单核实验配置，目标构建与实板矩阵仍须分别验证。
 
 [C3 生命周期故障探针](tests/c3-lifecycle/README.md)使用公开占位输入，在官方 QEMU 检查真实 FreeRTOS worker 的不可信时间拒绝和百次销毁回收；验证范围与实板边界见[运行记录](docs/operations/p4-c3-qemu-lifecycle.md)。
 
@@ -101,9 +103,11 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_yamux.h` 提供单 owner、无 socket 的客户端核心。四流上限不变，但只在打开每条流时分别申请 1 KiB 接收 ring，`release` 或最终 `destroy` 清零释放；打开流的分配失败返回 `EFRP_NO_MEMORY`，不消耗流 ID 或控制队列。协议初始窗口保持 256 KiB，可增量接收大于 ring 的 DATA。调用方定期 tick，显式消费串流和输出；仅当完整 WindowUpdate 已交给 transport 才归还接收信用。慢流超时 RST、释放后数据有界排空、半关闭与 PING/GOAWAY 均有 host 回归。完整合同和限制见 [Yamux 核心](docs/design/yamux-core.md)。
 
-`esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生；接收端可使用调用方提供的 65552 字节连续工作区，FRP 会话最多使用 16 个不超过 4096 字节的块。分块模式在合法长度头后、对应密文字节抵达时才逐块申请；完整 64 KiB 记录仍需同时持有 65536 字节。完整 GCM tag 验证前不暴露明文，失败或取消后清零释放。ESP32 有显式关闭默认值的 32BIT-only IRAM 接收实验，使用 32 位打包访问和认证后字节复制；它不改变正式会话默认。发送端支持小记录与部分输出，nonce 来自密码随机源，单方向限制 2^32 条记录。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)、[C3 连续内存检查点](docs/operations/p6-frp-chunked-aead.md)、[逐块分配审计](docs/operations/p6-frp-lazy-aead-memory-audit.md)与[ESP32 IRAM 实验](docs/operations/p6-frp-esp32-iram-aead.md)。
+`esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生，并提供发送端；nonce 来自密码随机源，单方向限制 2^32 条记录。控制会话的唯一接收 reader 在 `esp_frp_flash_reader.h`：独占 4096 字节 RAM 窗口，小记录直接认证，大记录把密文写入独占 64 KiB scratch，完整验签并在每次窗口交付前复验。完整 GCM tag 验证前不暴露明文，失败或取消后清零窗口与 key。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)和[Flash 暂存合同](docs/design/flash-backed-aead.md)；[C3 分块审计](docs/operations/p6-frp-lazy-aead-memory-audit.md)及[ESP32 IRAM 实验](docs/operations/p6-frp-esp32-iram-aead.md)是旧 reader 的历史证据。
 
-`esp_frp_flash_reader.h` 另提供尚未接入会话的 Flash 暂存软件候选：小于等于 4096 字节的控制记录只用 RAM，较大记录以独占 64 KiB scratch 保存密文；整条 GCM 验签后每个明文窗口仍重新读回并验证原记录。它不定义分区或设备 provider，不能替代当前会话容量证据；存储、掉电和成本合同见 [Flash 暂存候选](docs/design/flash-backed-aead.md)。
+`esp_frp_idf_flash_store.h` 提供真实 IDF 分区 provider：调用方传入 label、type/subtype、精确 offset/size 和短持有的 storage owner 回调；bind 逐项核对实际分区，recover 擦除中断记录，write 回读校验，clear 只撤销 RAM lease。Base 可复用此 provider 并接自己的 owner，独立样例已绑定专用实验分区；它们仍需分别完成产品容量与实板验证。
+
+[会话 Flash 硬切收据](docs/operations/p6-frp-session-flash-hard-cut.md)记录三种 host 后端、固定 SDK 双目标样例、相同非空合成输入的容量差异与尚未验收的设备边界。
 
 `esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格 TLS 的 Yamux 控制流上；不自行建立网络连接。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。会话将握手输出区按阶段复用为接收区，消除独立 4 KiB 申请；[ESP32 Login 内存收据](docs/operations/p6-esp32-login-heap-reuse.md)记录固定 SDK 和 QEMU 对照边界。详见 [握手合同](docs/design/control-handshake.md)。
 
@@ -113,7 +117,7 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_connect.h` 在 IDF 提供一次 IPv4 DNS/TCP 尝试，也支持无需 DNS 的固定 IPv4 本地目标，使用现有 lwIP 任务与非阻塞 socket；必须开启 `CONFIG_LWIP_SO_LINGER=y`。取消后不再建连，已发 DNS 查询仍须等 SDK 回调收敛，destroy 只在资源释放后成功；close_write/finish 提供工作流的正常半关闭和排空路径，不自行重连。详见 [连接生命周期](docs/design/connection-lifecycle.md)。IDF 导出 `EFRP_HAS_CONNECT=1`，正常 host 库为 0；host 网络测试单独链接仅测试解析器。应用客户端同样只在 IDF 导出 `EFRP_HAS_CLIENT=1`；POSIX 调度适配仅供测试。
 
-`esp_frp_session.h` 在已 OPEN 的借用 TLS 上组合控制链路，注册单一 TCP proxy、执行 15 秒 Token 心跳并校验 10 秒响应期限。工作流执行 magic/NewWorkConn/StartWorkConn，向配置的唯一 IPv4/port 转发，最多两条活跃流和一条预备流；对端地址元数据不能更换本地目标。四层背压、握手后尾数据与独立半关闭保持完整，Yamux 信用在 TLS 实际排空后归还。destroy 返回 WOULD_BLOCK 时继续保留句柄，直到本地 socket 清理完成，再销毁 TLS 和外层连接。详见 [控制会话](docs/design/control-session.md) 与[工作流](docs/design/work-streams.md)。该模块在 IDF 或完整 Mbed TLS host 模式编译；host 会话测试显式链接连接测试适配库，不把 DNS fixture 发布为 host runtime。
+`esp_frp_session.h` 在已 OPEN 的借用 TLS 上组合控制链路，注册单一 TCP proxy、执行 15 秒 Token 心跳并校验 10 秒响应期限。`efrp_config_t` 到 session 的 Flash store 必填，启动 owner 必须先完成 recover。工作流执行 magic/NewWorkConn/StartWorkConn，向配置的唯一 IPv4/port 转发，最多两条活跃流和一条预备流；对端地址元数据不能更换本地目标。四层背压、握手后尾数据与独立半关闭保持完整，Yamux 信用在 TLS 实际排空后归还。destroy 返回 WOULD_BLOCK 或 STORAGE_ERROR 时继续保留句柄，直到本地 socket 与 Flash lease 清理完成，再销毁 TLS 和外层连接。详见 [控制会话](docs/design/control-session.md) 与[工作流](docs/design/work-streams.md)。该模块在 IDF 或完整 Mbed TLS host 模式编译；host 会话测试显式链接连接测试适配库，不把 DNS fixture 发布为 host runtime。
 
 - [来源](docs/design/source-provenance.md)
 - [客户端合同](docs/design/client-contract.md)

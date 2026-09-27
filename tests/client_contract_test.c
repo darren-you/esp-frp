@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp.h"
+#include "flash_store_fixture.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,14 +35,18 @@ static bool trusted(void *context) { (void)context; return true; }
 int main(void)
 {
     const uint8_t ca[] = "public placeholder PEM parsed only on start", token[] = "public-test-token";
+    static efrp_test_flash_t flash;
+    efrp_aead_flash_store_t store = efrp_test_flash_store(&flash);
+    assert(efrp_aead_flash_store_recover(&store) == EFRP_OK);
     efrp_config_t good = {.server_hostname = "frp.fixture.invalid", .server_port = 1234,
         .ca_pem = ca, .ca_length = sizeof ca - 1, .token = token, .token_length = sizeof token - 1,
-        .proxy_name = "fixture-contract", .local_ipv4 = {127, 0, 0, 1}, .local_port = 1, .time_is_trusted = trusted};
+        .proxy_name = "fixture-contract", .local_ipv4 = {127, 0, 0, 1}, .local_port = 1,
+        .time_is_trusted = trusted, .flash_store = &store};
     efrp_client_t *c = NULL;
     assert(efrp_create(NULL, &c) == EFRP_INVALID_ARGUMENT && !c);
     assert(efrp_create(&good, NULL) == EFRP_INVALID_ARGUMENT);
     char long_name[255]; memset(long_name, 'x', sizeof long_name - 1); long_name[254] = 0;
-    for (unsigned test = 0; test < 16; ++test) {
+    for (unsigned test = 0; test < 18; ++test) {
         efrp_config_t bad = good;
         switch (test) {
         case 0: bad.server_hostname = long_name; break;
@@ -60,6 +65,14 @@ int main(void)
         case 13: bad.time_is_trusted = NULL; break;
         case 14: bad.previous_run_id = long_name; break;
         case 15: bad.previous_run_id = "\xc0\xaf"; break;
+        case 16: bad.flash_store = NULL; break;
+        case 17: {
+            efrp_aead_flash_store_t missing = store;
+            missing.clear = NULL;
+            bad.flash_store = &missing;
+            assert(efrp_create(&bad, &c) == EFRP_INVALID_ARGUMENT && !c && !live);
+            continue;
+        }
         }
         assert(efrp_create(&bad, &c) == EFRP_INVALID_ARGUMENT && !c && !live);
     }

@@ -1,5 +1,7 @@
 # ESP32 32BIT-only AEAD 接收实验
 
+本目录是旧 RAM reader 的历史实验收据。当前 `esp_frp_aead.h` 已删除该 reader API，`session.c` 只使用 Flash reader；本目录源码不能直接与当前候选编译。需要重跑历史输入时应检出收据对应的旧 FRP 提交，不得把以下命令当作当前产品入口。
+
 本目录只在冻结五仓工程的仓外副本中装配实验。`prepare_qemu.py` 校验 Wi-Fi IRAM 两项关闭后的原 `sdkconfig`、已签名镜像和真实 AEAD fixture 摘要；复制工程，覆盖本分支 FRP 源码，加入 `word_capacity_probe.c`。输出目录须不存在。脚本不调用 `flash`，签名测试键只在构建机原仓外位置使用。
 
 在有固定 ESP-IDF `578cf89c343e388db43ba1f4ddcd602fedcb763c`、官方 Xtensa QEMU、已冻结 `/private/tmp/esp32-auth-wifi-iram-off-exact-20260927/probe` 及本分支独立副本的 mac-work-1：

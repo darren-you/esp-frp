@@ -9,6 +9,8 @@ static const char sample_ntp_server[] = "";
 /* Empty keeps the DHCP DNS server. A nonempty IPv4 explicitly selects one
  * lab resolver; backup/fallback slots are cleared, never guessed. */
 static const char sample_dns_ipv4[] = "";
+/* The sample itself binds its dedicated frp_scratch partition and recovers
+ * it before Wi-Fi/FRP startup; private inputs provide no fake store. */
 static const uint8_t sample_ca_pem[] = "";
 static const uint8_t sample_token[] = "";
 static const efrp_config_t sample_frp_config = {

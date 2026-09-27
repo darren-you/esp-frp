@@ -11,6 +11,7 @@
 struct efrp_client {
     efrp_port_t *port;
     efrp_config_t config;
+    efrp_aead_flash_store_t flash_store;
     char server[254], hostname[129], user[129], client_id[129], proxy[129];
     uint8_t token[EFRP_AEAD_MAX_TOKEN_BYTES];
     uint8_t *ca;
@@ -154,7 +155,8 @@ static void step(efrp_client_t *c, uint64_t now)
         efrp_session_config_t config = {.login = {.token = c->token, .token_length = c->config.token_length,
             .hostname = c->hostname, .user = c->user, .client_id = c->client_id,
             .previous_run_id = c->current.run_id, .unix_seconds = (int64_t)time(NULL)},
-            .proxy_name = c->proxy, .remote_port = c->config.remote_port, .local_port = c->config.local_port};
+            .proxy_name = c->proxy, .remote_port = c->config.remote_port, .local_port = c->config.local_port,
+            .flash_store = &c->flash_store};
         memcpy(config.local_ipv4, c->config.local_ipv4, sizeof config.local_ipv4);
         result = efrp_session_create(&config, c->tls, now, &c->session);
         if (result != EFRP_OK) { drain(c, result); return; }
@@ -213,7 +215,9 @@ efrp_result_t efrp_create(const efrp_config_t *config, efrp_client_t **out)
     if (!config || !config->server_port || !config->ca_pem || !config->ca_length ||
         config->ca_length > EFRP_TLS_MAX_CA_BYTES || memchr(config->ca_pem, 0, config->ca_length) ||
         !config->token || !config->token_length || config->token_length > EFRP_AEAD_MAX_TOKEN_BYTES ||
-        !config->local_port || !config->local_ipv4[0] || config->local_ipv4[0] >= 224 || !config->time_is_trusted)
+        !config->local_port || !config->local_ipv4[0] || config->local_ipv4[0] >= 224 || !config->time_is_trusted ||
+        !config->flash_store || !config->flash_store->recover || !config->flash_store->begin ||
+        !config->flash_store->write || !config->flash_store->read || !config->flash_store->clear)
         return EFRP_INVALID_ARGUMENT;
     efrp_client_t *c = calloc(1, sizeof *c); if (!c) return EFRP_NO_MEMORY;
     if (!copy_string(c->server, config->server_hostname, 253, true, true) ||
@@ -226,9 +230,11 @@ efrp_result_t efrp_create(const efrp_config_t *config, efrp_client_t **out)
     if (!c->ca) { free(c); return EFRP_NO_MEMORY; }
     memcpy(c->ca, config->ca_pem, config->ca_length); memcpy(c->token, config->token, config->token_length);
     c->config = *config;
+    c->flash_store = *config->flash_store;
     c->config.server_hostname = c->server; c->config.hostname = c->hostname; c->config.user = c->user;
     c->config.client_id = c->client_id; c->config.proxy_name = c->proxy; c->config.token = c->token; c->config.ca_pem = c->ca;
     c->config.previous_run_id = c->current.run_id;
+    c->config.flash_store = &c->flash_store;
     c->current.phase = EFRP_PHASE_STOPPED; c->current.tls_verify_flags = UINT32_MAX; c->snapshot = c->current;
     efrp_result_t result = efrp_port_create(&c->port);
     if (result == EFRP_OK) result = efrp_port_launch(c->port, worker, c);

@@ -5,7 +5,7 @@ elseif(IDF_TARGET STREQUAL "esp32")
 else()
     message(FATAL_ERROR "FRP sample supports only esp32c3 and esp32")
 endif()
-idf_component_register(SRCS "sample_main.c" "sample_echo.c" "sample_resources.c"
+idf_component_register(SRCS "sample_main.c" "sample_echo.c" "sample_resources.c" "sample_flash_store.c"
     INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}"
     REQUIRES esp-frp esp_wifi esp_event esp_netif esp_timer ${sample_console_component} lwip)
 if(NOT EFRP_SAMPLE_INPUTS)

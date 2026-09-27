@@ -29,21 +29,6 @@ efrp_result_t efrp_aead_derive(const uint8_t *token, size_t token_length,
                                efrp_aead_keys_t *keys);
 void efrp_aead_clear_keys(efrp_aead_keys_t *keys);
 
-/* Caller-owned; zero-initialize before init, destroy before reuse; one owner.
- * Fields are exposed for static allocation, not mutation. SDK may allocate. */
-typedef struct {
-    uint8_t key[32], stream_nonce[12], nonce[12], header[4];
-    uint8_t *storage;
-    uint8_t *chunks[EFRP_AEAD_RX_MAX_CHUNKS];
-    size_t chunk_sizes[EFRP_AEAD_RX_MAX_CHUNKS], chunk_count;
-    uint8_t tag[EFRP_AEAD_TAG_BYTES];
-    void *(*allocate)(size_t count, size_t size);
-    void (*release)(void *pointer);
-    size_t nonce_used, header_used, body_used, body_expected, plain_used, plain_offset;
-    uint64_t records;
-    bool active, chunked, words_only;
-    efrp_result_t failure;
-} efrp_aead_reader_t;
 typedef struct {
     uint8_t key[32], stream_nonce[12], nonce[12];
     uint8_t *storage;
@@ -52,35 +37,6 @@ typedef struct {
     bool active, nonce_sent;
     efrp_result_t failure;
 } efrp_aead_writer_t;
-
-/* Fixed reader requires >=65552 bytes. Chunked reader validates the record
- * length first, then allocates each of at most sixteen blocks <=4096 bytes
- * only when ciphertext for that block arrives; the tag stays in the reader.
- * Both modes accept a full 64 KiB plaintext.
- * Storage is exclusive until destroy. Only plaintext() exposes authenticated contents.
- * Feed reports consumed prefix; retain suffix on WOULD_BLOCK and consume
- * plaintext before resuming. No callbacks or borrowed input pointers. */
-efrp_result_t efrp_aead_reader_init(efrp_aead_reader_t *reader, const uint8_t key[32],
-                                    uint8_t *storage, size_t capacity);
-efrp_result_t efrp_aead_reader_init_chunked(efrp_aead_reader_t *reader, const uint8_t key[32],
-                                           void *(*allocate)(size_t, size_t), void (*release)(void *));
-/* Explicit 32-bit-only storage mode. allocate must return aligned storage of
- * the requested rounded size; release accepts that same pointer. The caller
- * owns its memory-region policy. Never dereference chunks as byte pointers. */
-efrp_result_t efrp_aead_reader_init_words(efrp_aead_reader_t *reader, const uint8_t key[32],
-                                         void *(*allocate)(size_t, size_t), void (*release)(void *));
-efrp_result_t efrp_aead_feed(efrp_aead_reader_t *reader, const uint8_t *bytes,
-                             size_t length, size_t *consumed);
-efrp_result_t efrp_aead_plaintext(const efrp_aead_reader_t *reader,
-                                  const uint8_t **bytes, size_t *length);
-/* Copies at most one authenticated chunk into byte-accessible caller storage.
- * Required for 32-bit-only chunks; plaintext() rejects that storage mode. */
-efrp_result_t efrp_aead_copy_plaintext(const efrp_aead_reader_t *reader,
-                                      uint8_t *bytes, size_t capacity, size_t *copied);
-efrp_result_t efrp_aead_consume_plaintext(efrp_aead_reader_t *reader, size_t length);
-/* Record-boundary EOF is NOT authenticated and does not prove session success. */
-efrp_result_t efrp_aead_finish(const efrp_aead_reader_t *reader);
-void efrp_aead_reader_destroy(efrp_aead_reader_t *reader);
 
 /* Writer capacity 33..65568. Smaller buffers create smaller legal records.
  * Init generates a fresh CSPRNG nonce; derive new session/direction keys.

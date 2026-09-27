@@ -4,7 +4,7 @@
 
 ## 输入与所有权
 
-create 接收已经 OPEN、无待发数据的 TLS 句柄和配置。Token、代理名称、Login 输入与固定本地目标复制到会话；TLS 始终借用。create 失败不取消调用方 TLS；成功后的取消、终止或销毁会取消 TLS、终止本地连接并清零内部密码、数据缓存和 Yamux，禁止继续使用失败实例。`efrp_session_destroy(&session)` 在 socket 清理未完成时返回 WOULD_BLOCK 并保留句柄，只有 OK 才释放并置空；随后才可销毁 TLS 和外层连接。终止状态的 step/cancel 仍继续清理。
+create 接收已经 OPEN、无待发数据的 TLS 句柄和必填 Flash store。Token、代理名称、Login 输入、固定本地目标及 store 回调表复制到会话；TLS 始终借用，store `context` 必须存活至会话销毁成功。启动 owner 须先完成 scratch `recover`；provider 拒绝未恢复的 `begin`。create 失败不取消调用方 TLS；成功后的取消、终止或销毁会取消 TLS、终止本地连接并清零内部密码、数据缓存和 Yamux，禁止继续使用失败实例。`efrp_session_destroy(&session)` 在 socket 清理未完成时返回 WOULD_BLOCK，在 Flash clear 失败时返回 STORAGE_ERROR；两者均保留句柄，只有 OK 才释放并置空，随后才可销毁 TLS 和外层连接。重复 destroy 可继续重试 Flash clear，失败的 lease 必须由 provider 隔离。
 
 `proxy_name` 是完整 wire 名称，要求非空、有效 UTF-8、最多 128 字节；调用方显式提供任何 user 前缀。`remote_port=0` 请求 FRPS 分配端口；配置不支持压缩和代理级额外加密。服务端返回的 remote address 是展示事实，官方 TCP proxy 通常只返回 `:端口`，不能直接作为未校验的本地目标使用。
 
@@ -12,7 +12,7 @@ create 接收已经 OPEN、无待发数据的 TLS 句柄和配置。Token、代�
 
 ## 协议、背压与期限
 
-首条 Yamux 流承载 magic、ClientHello/Login。会话将握手对象的 4096 字节输出区交给 Yamux 并逐段清零，输出全部消费后将同一区域借给握手接收；LoginResp 完成后复制方向密钥与 run ID、销毁握手，联合区再交给控制解析器并初始化按实际记录长度分块的 AEAD reader。未消费的控制尾数据保持原顺序，认证成功后才交给 wire parser。控制 JSON payload（含两字节消息编号）最多 4096 字节；共享预检限制 UTF-8、深度、字段规模与重复解码键，不接受未知消息、字段或错误顺序。
+首条 Yamux 流承载 magic、ClientHello/Login。会话将握手对象的 4096 字节输出区交给 Yamux 并逐段清零，输出全部消费后将同一区域借给握手接收；LoginResp 完成后复制方向密钥与 run ID、销毁握手，联合区再交给控制解析器并初始化唯一 Flash AEAD reader。reader 拥有独立的 4096 字节窗口；`json_rx` 同时借给 wire parser，不能复用为窗口。未消费的控制尾数据保持原顺序，认证成功后才交给 wire parser。控制 JSON payload（含两字节消息编号）最多 4096 字节；共享预检限制 UTF-8、深度、字段规模与重复解码键，不接受未知消息、字段或错误顺序。
 
 NewProxyResp 必须匹配配置的名称，成功时 remote address 非空且最多 256 字节；错误返回 `EFRP_PROXY_REJECTED`。注册后立即发送 Ping，此后每 15 秒一次，始终使用官方 Token 公式签名。只有已有未完成 Ping 才接受 Pong，错误返回 `EFRP_AUTHENTICATION_FAILED`。注册响应和 Pong 各有 10 秒绝对期限，包含本地排队时间；TLS、Yamux 和握手更早到期时保留其错误。
 
@@ -28,8 +28,8 @@ TLS 已复制一段 Yamux 输出并不意味着该段已发完。会话记录暂
 
 另外 28 个场景复用相同官方 TLS/Yamux/wire/Token/AEAD API，并在 TLS 后注入固定非法 Yamux header。覆盖握手后同包 AEAD、4096 字节控制 payload 跨暂存边界、单条 64 KiB AEAD 明文、超长控制帧/AEAD 记录、名称/类型/重复键/未知消息拒绝、重复或失败 Pong、超量工作请求、FIN、TLS close_notify、帧/密文截断、tag 篡改、两类响应超时，以及 Yamux 版本/类型/旗标/信用/窗口/流 ID、RST 与截断。这些协议 fixture 不冒充完整 FRPS；两类对端共同验证组合行为。单设备入口和证据边界见 [crypto-interop](../../tests/crypto-interop/README.md#单设备协议-fixture)。
 
-固定 ESP-IDF v6.1 / C3 的上一候选会话对象为 17848 字节、Yamux 为 1488 字节，登录时另需 4096 字节握手接收区与控制流 1024 字节 ring。会话内原本预留三个完整工作对象，共占 6576 字节；当前候选将工作槽组从 6672 字节改为三个指针等 104 字节，会话对象降至 11280 字节，工作对象只在实际打开对应流时申请、清零释放。Yamux 的四个 1024 字节 ring 仍按活跃流申请，四流上限、信用窗口与工作流限制不变。[同输入 C3 QEMU 复测](../operations/p6-frp-lazy-work-stream-capacity.md)中旧侧在 `AUTHENTICATING` 后遇到固定 SDK OpenETH 1522 字节 RX 申请失败；新侧完成官方 FRPS 登录、注册、Pong 和清理。ESP32 字宽 AEAD 模式的会话对象虽从 18872 降至 12304 字节，但 Base 和 64 KiB guest 同存时 TLS OPEN 后该笔申请仍失败，Login 未发送。两目标都尚无会话内满长记录的设备成功证据。登录后释放握手区；合法 AEAD 长度头只确定容量，直到对应密文字节抵达才逐块申请最多十六个不超过 4096 字节的块。64 KiB 明文仍需合计 65536 字节动态块，tag 留在 reader 内。会话保留 1056 字节 AEAD 发送区和阶段复用的握手/控制区；另需 TLS 对象、SDK 内部内存、cJSON 临时分配和工作连接对象。编译尺寸不是运行峰值或 MCU 泄漏结论；证据与 P6-03 未验边界见[容量复测](../operations/p6-frp-lazy-work-stream-capacity.md)及[逐块分配审计](../operations/p6-frp-lazy-aead-memory-audit.md)。
+历史 RAM reader 的会话对象、QEMU 与容量结果见[容量复测](../operations/p6-frp-lazy-work-stream-capacity.md)及[逐块分配审计](../operations/p6-frp-lazy-aead-memory-audit.md)，不能移作当前 Flash 路径的容量结论。当前 reader 对象约 248 字节，另在会话内独占 4096 字节窗口；大记录占 64 KiB ciphertext scratch 而不分配 64 KiB 明文块。会话还保留 1056 字节 AEAD 发送区和阶段复用的握手/控制区；TLS 对象、SDK 内部内存、cJSON 临时分配和工作连接对象仍须计入设备峰值。C3/ESP32 双板满长记录、Base 产品镜像和 OTA 并发期限尚未验收。
 
 登录握手和认证后的控制区在会话内复用同一存储：只有 `take_result` 复制密钥/run_id、销毁握手并释放借用后，才建立控制 writer 与 JSON parser。清理按实际初始化阶段执行，不能将控制字节解释为握手对象。控制明文输出最多 1024 字节，AEAD 发送区为 1056 字节；对端仍可发送完整 65552 字节密文加 tag 记录及 4 KiB JSON 边界，不把本地发送大小当成对端 record 上限。
 
-显式 `EFRP_LAB_ESP32_IRAM_AEAD_RX` 实验模式把控制 AEAD 接收块放入 ESP32 纯 IRAM 的 EXEC／32BIT 能力池，并在会话对象中增加独立 1024 字节 byte-accessible 明文暂存。控制输入只在完整 tag 认证后调用 `efrp_aead_copy_plaintext`，交给 wire parser 后立即清零暂存，随后按已消费前缀清零释放字宽块。该缓冲不与 TLS、Yamux 或待处理密文暂存别名；关闭开关时会话布局和接收路径保持原样。host 官方 FRPS 矩阵检验这个模式下的双流、背压、取消与异常结束，实际设备组合峰值仍需另测。
+ESP32 纯 IRAM 字宽 reader 属于历史实验；当前公开会话只有 Flash reader，不再编译该实验模式。host 官方 FRPS 矩阵验证当前路径的双流、背压、取消、清理失败重试及 64 KiB 控制记录；实际设备组合峰值仍需另测。

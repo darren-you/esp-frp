@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp.h"
 #include "sample_echo.h"
+#include "sample_flash_store.h"
 #include "sample_resources.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
@@ -116,6 +117,7 @@ static efrp_result_t create_client(void)
 {
     efrp_config_t config=sample_frp_config;
     config.time_is_trusted=trusted; config.previous_run_id=previous_run_id;
+    config.flash_store=sample_flash_store_callbacks();
     efrp_result_t result=efrp_create(&config, &client);
     if (result == EFRP_OK) result=efrp_start(client);
     printf("EFRP_SAMPLE start_error=%d cycle=%u\n", result, cycle); return result;
@@ -207,6 +209,10 @@ void app_main(void)
     setvbuf(stdout,NULL,_IONBF,0);
     printf("ESP_FRP_LAB_ONLY TCP_PROXY sdk=6.1 target=%s\n", CONFIG_IDF_TARGET);
     if (!inputs_valid()) { puts("EFRP_SAMPLE valid_private_inputs_required; no_network_started"); return; }
+    efrp_result_t scratch_result=sample_flash_store_init();
+    if (scratch_result != EFRP_OK) {
+        printf("EFRP_SAMPLE flash_store_error=%d; no_network_started\n", scratch_result); return;
+    }
     sample_resources_init();
 #if CONFIG_IDF_TARGET_ESP32C3
     usb_serial_jtag_vfs_use_nonblocking();

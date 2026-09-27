@@ -2,7 +2,7 @@
 
 首版固定官方 FRPS v0.71.0，TCP + 严格 TLS + Yamux + wire v2 + Token，一条 TCP proxy，最多两条活跃业务流、一条预备流和一条控制流。`esp_frp.h` 已组合单 worker 生命周期、严格传输、控制/工作会话与退避；独立 sample、实板和组合资源尚未完成。[生命周期正文](client-lifecycle.md)定义具体接口与停止语义。
 
-生命周期为 create/start/stop/destroy，公开符号统一 efrp_。每个实例单 worker 独占 transport、parser、会话和计时器；外部经有界队列请求。create 深拷贝配置和证书输入；事件载荷只在回调内有效。stop 等待 I/O 和回调收敛，destroy 返回后无回调；不在回调中同步 stop/destroy。
+生命周期为 create/start/stop/destroy，公开符号统一 efrp_。每个实例单 worker 独占 transport、parser、会话和计时器；外部经有界队列请求。create 深拷贝配置、证书输入及必填 Flash store 回调表；store `context` 指向的 provider 必须由应用保持到 destroy 成功，并在 start 前完成启动 recover。事件载荷只在回调内有效。stop 等待 I/O、Flash lease 和回调收敛，destroy 返回后无回调；不在回调中同步 stop/destroy。
 
 启动成功只表示任务开始，不等于 connected。状态区分 stopped/connecting/tls_handshaking/authenticating/registering/ready/draining/backoff/failed；错误区分网络、TLS 信任、Token、wire、AEAD、容量、取消和 deadline，认证失败不得关闭校验重试。只保留一个队列等待的重连截止时刻与一次连接尝试，不创建额外软件定时器。
 

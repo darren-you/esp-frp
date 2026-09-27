@@ -1,361 +1,67 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp_aead.h"
-#include "crypto_backend.h"
 #include <assert.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-static const uint8_t token[] = "esp-frp-public-fixture-token";
-static const uint8_t client[] = " {\"fixture\":\"client\", \"raw\":\"bytes\"} ";
-static const uint8_t server[] = "{\"fixture\": \"server\"}";
-static void all_zero(const void *bytes, size_t n)
+static void all_zero(const void *bytes, size_t length)
 {
     const uint8_t *p = bytes;
-    for (size_t i = 0; i < n; ++i) assert(!p[i]);
+    for (size_t i = 0; i < length; ++i) assert(p[i] == 0);
 }
-static efrp_aead_keys_t keys(void)
-{
-    efrp_aead_keys_t value;
-    assert(efrp_aead_derive(token, sizeof token - 1, client, sizeof client - 1, server, sizeof server - 1, &value) == EFRP_OK);
-    return value;
-}
-static struct { void *pointer; size_t size; } chunk_blocks[EFRP_AEAD_RX_MAX_CHUNKS];
-static size_t chunk_calls, chunk_live, chunk_largest, chunk_peak_bytes, chunk_live_bytes, chunk_fail_at;
-static void chunk_reset(void)
-{
-    assert(!chunk_live);
-    memset(chunk_blocks, 0, sizeof chunk_blocks);
-    chunk_calls = chunk_largest = chunk_peak_bytes = chunk_live_bytes = chunk_fail_at = 0;
-}
-static void *chunk_allocate(size_t count, size_t size)
-{
-    assert(count == 1 && size && size <= EFRP_AEAD_RX_CHUNK_BYTES);
-    if (++chunk_calls == chunk_fail_at) return NULL;
-    void *pointer = calloc(count, size); assert(pointer);
-    for (size_t i = 0; i < EFRP_AEAD_RX_MAX_CHUNKS; ++i) if (!chunk_blocks[i].pointer) {
-        chunk_blocks[i].pointer = pointer; chunk_blocks[i].size = size;
-        ++chunk_live; chunk_live_bytes += size;
-        if (chunk_largest < size) chunk_largest = size;
-        if (chunk_peak_bytes < chunk_live_bytes) chunk_peak_bytes = chunk_live_bytes;
-        return pointer;
-    }
-    abort();
-}
-static void chunk_release(void *pointer)
-{
-    for (size_t i = 0; i < EFRP_AEAD_RX_MAX_CHUNKS; ++i) if (chunk_blocks[i].pointer == pointer) {
-        all_zero(pointer, chunk_blocks[i].size);
-        chunk_live_bytes -= chunk_blocks[i].size; --chunk_live;
-        chunk_blocks[i].pointer = NULL; free(pointer); return;
-    }
-    abort();
-}
-static size_t encode(uint8_t *wire, const uint8_t *plain, size_t length, size_t capacity)
-{
-    efrp_aead_keys_t k = keys();
-    uint8_t *storage = malloc(capacity); assert(storage);
-    efrp_aead_writer_t w = {0};
-    assert(efrp_aead_writer_init(&w, k.client_to_server, storage, capacity) == EFRP_OK);
-    size_t accepted = 0, total = 0, n;
-    assert(efrp_aead_write(&w, NULL, 0, &n) == EFRP_OK && !n && !w.nonce_sent);
-    while (accepted < length) {
-        assert(efrp_aead_write(&w, plain + accepted, length - accepted, &n) == EFRP_OK && n);
-        accepted += n;
-        const uint8_t *p; size_t count;
-        assert(efrp_aead_output(&w, &p, &count) == EFRP_OK);
-        assert(efrp_aead_write(&w, plain, 1, &n) == EFRP_WOULD_BLOCK && !n);
-        assert(efrp_aead_consume_output(&w, count + 1) == EFRP_INVALID_ARGUMENT);
-        while (efrp_aead_output(&w, &p, &count) == EFRP_OK) {
-            size_t take = count < 37 ? count : 37;
-            memcpy(wire + total, p, take); total += take;
-            assert(efrp_aead_consume_output(&w, take) == EFRP_OK);
-        }
-        all_zero(storage, capacity);
-    }
-    efrp_aead_writer_destroy(&w); all_zero(&w, sizeof w); all_zero(storage, capacity);
-    efrp_aead_clear_keys(&k); all_zero(&k, sizeof k); free(storage);
-    return total;
-}
-static void round_trips(void)
-{
-    uint8_t *plain = malloc(70001), *wire = malloc(200000), *rx = malloc(EFRP_AEAD_RX_BYTES);
-    assert(plain && wire && rx);
-    for (size_t i = 0; i < 70001; ++i) plain[i] = (uint8_t)(i * 31);
-    const size_t lengths[] = {1,15,16,17,511,512,513,65535,65536,65537,70001};
-    const size_t steps[] = {1,11,12,13,15,16,17,511,4096,200000};
-    for (size_t item = 0; item < sizeof lengths / sizeof lengths[0]; ++item) {
-        size_t size = encode(wire, plain, lengths[item], EFRP_AEAD_TX_MAX_BYTES);
-        for (size_t split = 0; split < sizeof steps / sizeof steps[0]; ++split) {
-            efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0};
-            assert(efrp_aead_reader_init(&r, k.client_to_server, rx, EFRP_AEAD_RX_BYTES) == EFRP_OK);
-            assert(efrp_aead_reader_init(&r, k.client_to_server, rx, EFRP_AEAD_RX_BYTES) == EFRP_INVALID_STATE);
-            size_t fed = 0, verified = 0;
-            while (fed < size) {
-                size_t n = size - fed, used;
-                if (n > steps[split]) n = steps[split];
-                efrp_result_t result = efrp_aead_feed(&r, wire + fed, n, &used);
-                assert(result == EFRP_OK || result == EFRP_WOULD_BLOCK); fed += used;
-                const uint8_t *p; size_t count;
-                while (efrp_aead_plaintext(&r, &p, &count) == EFRP_OK) {
-                    assert(verified + count <= lengths[item]);
-                    size_t take = count < 193 ? count : 193;
-                    assert(!memcmp(p, plain + verified, take)); verified += take;
-                    assert(efrp_aead_consume_plaintext(&r, take) == EFRP_OK);
-                }
-            }
-            assert(verified == lengths[item] && efrp_aead_finish(&r) == EFRP_OK);
-            all_zero(rx, EFRP_AEAD_RX_BYTES);
-            efrp_aead_reader_destroy(&r); efrp_aead_clear_keys(&k);
-        }
-    }
-    /* Small output buffers still produce valid record sequences. */
-    size_t size = encode(wire, plain, 100, 33);
-    assert(size == 12 + 100 * 21);
-    free(plain); free(wire); free(rx);
-}
-static void failure_cases(void)
-{
-    uint8_t plain[65], wire[256], bad[256], rx[EFRP_AEAD_RX_BYTES];
-    memset(plain, 0xab, sizeof plain);
-    size_t size = encode(wire, plain, sizeof plain, EFRP_AEAD_TX_MAX_BYTES), used;
-    efrp_aead_keys_t k = keys();
-    const size_t changes[] = {0,11,16,31,70,96};
-    assert(size == 97);
-    for (size_t i = 0; i < sizeof changes / sizeof changes[0] + 1; ++i) {
-        efrp_aead_reader_t r = {0}; memcpy(bad, wire, size);
-        if (i < sizeof changes / sizeof changes[0]) bad[changes[i]] ^= 1;
-        uint8_t key[32]; memcpy(key, k.client_to_server, 32);
-        if (i == sizeof changes / sizeof changes[0]) key[0] ^= 1;
-        assert(efrp_aead_reader_init(&r, key, rx, sizeof rx) == EFRP_OK);
-        assert(efrp_aead_feed(&r, bad, size - 1, &used) == EFRP_OK && used == size - 1);
-        const uint8_t *p; size_t n;
-        assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_WOULD_BLOCK && !p && !n);
-        assert(efrp_aead_feed(&r, bad + size - 1, 1, &used) == EFRP_AUTHENTICATION_FAILED);
-        assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_AUTHENTICATION_FAILED && !p && !n);
-        assert(efrp_aead_feed(&r, wire, size, &used) == EFRP_AUTHENTICATION_FAILED && !used);
-        all_zero(rx, sizeof rx); all_zero(r.key, sizeof r.key); efrp_aead_reader_destroy(&r);
-    }
-    for (size_t cut = 0; cut < size; ++cut) {
-        efrp_aead_reader_t r = {0};
-        assert(efrp_aead_reader_init(&r, k.client_to_server, rx, sizeof rx) == EFRP_OK);
-        assert(efrp_aead_feed(&r, wire, cut, &used) == EFRP_OK);
-        assert(efrp_aead_finish(&r) == ((!cut || cut == 12) ? EFRP_OK : EFRP_TRUNCATED));
-        efrp_aead_reader_destroy(&r);
-    }
-    for (unsigned i = 0; i < 4; ++i) {
-        efrp_aead_reader_t r = {0}; memcpy(bad, wire, size);
-        uint32_t value = i == 0 ? 0 : i == 1 ? 15 : i == 2 ? 65553 : UINT32_MAX;
-        for (unsigned b = 0; b < 4; ++b) bad[12+b] = (uint8_t)(value >> (24-8*b));
-        assert(efrp_aead_reader_init(&r, k.client_to_server, rx, sizeof rx) == EFRP_OK);
-        assert(efrp_aead_feed(&r, bad, size, &used) == EFRP_PROTOCOL_ERROR && used == 16);
-        all_zero(rx, sizeof rx); efrp_aead_reader_destroy(&r);
-    }
-    /* A changed length inside the legal range must also fail authentication. */
-    {
-        efrp_aead_reader_t altered = {0}; memcpy(bad, wire, size); --bad[15];
-        assert(efrp_aead_reader_init(&altered, k.client_to_server, rx, sizeof rx) == EFRP_OK);
-        assert(efrp_aead_feed(&altered, bad, size, &used) == EFRP_AUTHENTICATION_FAILED && used == size - 1);
-        all_zero(rx, sizeof rx); efrp_aead_reader_destroy(&altered);
-    }
-    efrp_aead_reader_t r = {0};
-    assert(efrp_aead_reader_init(&r, k.client_to_server, rx, sizeof rx) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, size, &used) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire + 12, size - 12, &used) == EFRP_WOULD_BLOCK && !used);
-    assert(efrp_aead_consume_plaintext(&r, sizeof plain) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire + 12, size - 12, &used) == EFRP_AUTHENTICATION_FAILED);
-    efrp_aead_reader_destroy(&r); efrp_aead_clear_keys(&k);
-}
-static void empty_and_limits(void)
-{
-    efrp_aead_keys_t k = keys(); uint8_t tx[4128], rx[EFRP_AEAD_RX_BYTES], wire[32] = {0};
-    wire[15] = 16;
-    assert(efrp_crypto_gcm(true, k.client_to_server, wire, wire, wire + 16, 0) == EFRP_OK);
-    efrp_aead_reader_t r = {0}; size_t n; const uint8_t *p;
-    assert(efrp_aead_reader_init(&r, k.client_to_server, rx, sizeof rx) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, sizeof wire, &n) == EFRP_OK && n == 32 && r.records == 1);
-    assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_WOULD_BLOCK);
-    efrp_aead_reader_destroy(&r);
-    for (unsigned scenario = 0; scenario < 2; ++scenario) {
-        efrp_aead_writer_t w = {0};
-        assert(efrp_aead_writer_init(&w, k.client_to_server, tx, sizeof tx) == EFRP_OK);
-        if (scenario == 0) w.records = EFRP_AEAD_MAX_RECORDS;
-        else memset(w.nonce, 255, sizeof w.nonce);
-        assert(efrp_aead_write(&w, wire, 1, &n) == EFRP_COUNTER_EXHAUSTED && !n);
-        assert(efrp_aead_output(&w, &p, &n) == EFRP_COUNTER_EXHAUSTED && !p && !n);
-        all_zero(tx, sizeof tx); efrp_aead_writer_destroy(&w);
-        assert(efrp_aead_reader_init(&r, k.client_to_server, rx, sizeof rx) == EFRP_OK);
-        if (scenario == 0) r.records = EFRP_AEAD_MAX_RECORDS;
-        else memset(wire, 255, 12);
-        assert(efrp_aead_feed(&r, wire, sizeof wire, &n) == EFRP_COUNTER_EXHAUSTED);
-        efrp_aead_reader_destroy(&r);
-    }
-    uint8_t previous[12] = {0};
-    for (unsigned cycle = 0; cycle < 100; ++cycle) {
-        efrp_aead_writer_t w = {0};
-        assert(efrp_aead_writer_init(&w, k.client_to_server, tx, sizeof tx) == EFRP_OK);
-        assert(memcmp(previous, w.stream_nonce, 12)); memcpy(previous, w.stream_nonce, 12);
-        assert(efrp_aead_write(&w, wire, sizeof wire, &n) == EFRP_OK && n == sizeof wire);
-        efrp_aead_writer_destroy(&w); all_zero(tx, sizeof tx); all_zero(&w, sizeof w);
-    }
-    efrp_aead_keys_t changed;
-    assert(efrp_aead_derive(token, sizeof token - 1, client + 1, sizeof client - 2, server, sizeof server - 1, &changed) == EFRP_OK);
-    assert(memcmp(changed.transcript_hash, k.transcript_hash, 32));
-    assert(memcmp(k.client_to_server, k.server_to_client, 32));
-    assert(efrp_aead_derive(token, 0, client, sizeof client - 1, server, sizeof server - 1, &changed) == EFRP_INVALID_ARGUMENT);
-    all_zero(&changed, sizeof changed); efrp_aead_clear_keys(&k);
-}
-static void chunked_reader(void)
-{
-    uint8_t *plain = malloc(EFRP_AEAD_MAX_PLAINTEXT), *wire = malloc(EFRP_AEAD_RX_BYTES + 16);
-    assert(plain && wire);
-    for (size_t i = 0; i < EFRP_AEAD_MAX_PLAINTEXT; ++i) plain[i] = (uint8_t)(i * 29);
-    const size_t lengths[] = {1, 4096, 4097, 65535, 65536};
-    for (size_t item = 0; item < sizeof lengths / sizeof lengths[0]; ++item) {
-        size_t wire_length = encode(wire, plain, lengths[item], EFRP_AEAD_TX_MAX_BYTES);
-        for (size_t step = 1; step <= 4096; step *= 4096) {
-            efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0}; chunk_reset();
-            assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-            size_t fed = 0, verified = 0;
-            while (fed < wire_length) {
-                size_t take = wire_length - fed, used = 0;
-                if (take > step) take = step;
-                assert(efrp_aead_feed(&r, wire + fed, take, &used) == EFRP_OK && used == take);
-                fed += used;
-                const uint8_t *p; size_t n;
-                if (fed < wire_length) assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_WOULD_BLOCK && !p && !n);
-                while (efrp_aead_plaintext(&r, &p, &n) == EFRP_OK) {
-                    size_t consumed = n > 193 ? 193 : n;
-                    assert(!memcmp(p, plain + verified, consumed)); verified += consumed;
-                    assert(efrp_aead_consume_plaintext(&r, consumed) == EFRP_OK);
-                }
-            }
-            assert(verified == lengths[item] && efrp_aead_finish(&r) == EFRP_OK);
-            assert(chunk_calls == (lengths[item] + 4095) / 4096 && chunk_peak_bytes == lengths[item]);
-            assert(chunk_largest <= 4096 && !chunk_live);
-            efrp_aead_reader_destroy(&r); efrp_aead_clear_keys(&k);
-        }
-    }
-    {
-        uint8_t empty[32] = {0}; empty[15] = 16;
-        efrp_aead_keys_t empty_keys = keys(); efrp_aead_reader_t empty_reader = {0}; size_t used;
-        assert(efrp_crypto_gcm(true, empty_keys.client_to_server, empty, empty, empty + 16, 0) == EFRP_OK);
-        chunk_reset();
-        assert(efrp_aead_reader_init_chunked(&empty_reader, empty_keys.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-        assert(efrp_aead_feed(&empty_reader, empty, sizeof empty, &used) == EFRP_OK && used == sizeof empty);
-        assert(empty_reader.records == 1 && !chunk_calls && !chunk_live);
-        efrp_aead_reader_destroy(&empty_reader); efrp_aead_clear_keys(&empty_keys);
-    }
-    size_t wire_length = encode(wire, plain, EFRP_AEAD_MAX_PLAINTEXT, EFRP_AEAD_TX_MAX_BYTES);
-    efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0}; size_t used;
-    /* A valid header alone must not reserve the whole advertised record.
-     * Each arriving ciphertext block reserves only its own private storage. */
-    chunk_reset();
-    assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, 16, &used) == EFRP_OK && used == 16);
-    assert(!chunk_calls && !chunk_live && efrp_aead_finish(&r) == EFRP_TRUNCATED);
-    const uint8_t *p; size_t n;
-    assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_WOULD_BLOCK && !p && !n);
-    assert(efrp_aead_feed(&r, wire + 16, 1, &used) == EFRP_OK && used == 1);
-    assert(chunk_calls == 1 && chunk_live_bytes == 4096);
-    assert(efrp_aead_feed(&r, wire + 17, 4095, &used) == EFRP_OK && used == 4095);
-    assert(chunk_calls == 1 && chunk_live_bytes == 4096);
-    assert(efrp_aead_feed(&r, wire + 4112, 1, &used) == EFRP_OK && used == 1);
-    assert(chunk_calls == 2 && chunk_live_bytes == 8192);
-    assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_WOULD_BLOCK && !p && !n);
-    efrp_aead_reader_destroy(&r); assert(!chunk_live);
-    /* A valid maximum record has sixteen blocks, but the last-byte tag failure
-     * may never expose plaintext and must wipe all sixteen blocks. */
-    wire[wire_length - 1] ^= 1; chunk_reset();
-    assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_AUTHENTICATION_FAILED);
-    assert(chunk_calls == 16 && !chunk_live);
-    assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_AUTHENTICATION_FAILED && !p && !n);
-    efrp_aead_reader_destroy(&r); wire[wire_length - 1] ^= 1;
-    /* A partial record cancelled by its owner and a failure at any block
-     * both wipe all private bytes already received. */
-    chunk_reset();
-    assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, wire_length - 1, &used) == EFRP_OK);
-    assert(efrp_aead_finish(&r) == EFRP_TRUNCATED && chunk_live == 16);
-    efrp_aead_reader_destroy(&r); assert(!chunk_live);
-    for (size_t failed = 1; failed <= EFRP_AEAD_RX_MAX_CHUNKS; ++failed) {
-        chunk_reset(); chunk_fail_at = failed;
-        assert(efrp_aead_reader_init_chunked(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-        assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_NO_MEMORY);
-        assert(used == 16 + (failed - 1) * EFRP_AEAD_RX_CHUNK_BYTES);
-        assert(chunk_calls == failed && !chunk_live);
-        assert(efrp_aead_plaintext(&r, &p, &n) == EFRP_NO_MEMORY && !p && !n);
-        efrp_aead_reader_destroy(&r);
-    }
-    efrp_aead_clear_keys(&k);
-    free(plain); free(wire);
-}
-static void word_reader(void)
-{
-    uint8_t *plain = malloc(EFRP_AEAD_MAX_PLAINTEXT);
-    uint8_t *wire = malloc(EFRP_AEAD_TX_MAX_BYTES);
-    assert(plain && wire);
-    for (size_t i = 0; i < EFRP_AEAD_MAX_PLAINTEXT; ++i) plain[i] = (uint8_t)(i * 37u + 11u);
-    const size_t lengths[] = {1, 3, 4, 4095, 4096, 4097, 65535, 65536};
-    for (size_t item = 0; item < sizeof lengths / sizeof lengths[0]; ++item) {
-        size_t wire_length = encode(wire, plain, lengths[item], EFRP_AEAD_TX_MAX_BYTES);
-        for (size_t step = 1; step <= 4096; step *= 4096) {
-            efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0}; chunk_reset();
-            assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-            size_t fed = 0, verified = 0;
-            while (fed < wire_length) {
-                size_t take = wire_length - fed, used = 0;
-                if (take > step) take = step;
-                assert(efrp_aead_feed(&r, wire + fed, take, &used) == EFRP_OK && used == take);
-                fed += used;
-                uint8_t output[193]; size_t n;
-                if (fed < wire_length)
-                    assert(efrp_aead_copy_plaintext(&r, output, sizeof output, &n) == EFRP_WOULD_BLOCK && !n);
-                while (efrp_aead_copy_plaintext(&r, output, sizeof output, &n) == EFRP_OK) {
-                    const uint8_t *raw; size_t raw_length;
-                    assert(efrp_aead_plaintext(&r, &raw, &raw_length) == EFRP_INVALID_STATE && !raw && !raw_length);
-                    assert(n && verified + n <= lengths[item]);
-                    assert(!memcmp(output, plain + verified, n));
-                    assert(efrp_aead_consume_plaintext(&r, n) == EFRP_OK);
-                    verified += n;
-                }
-            }
-            assert(verified == lengths[item] && !chunk_live && efrp_aead_finish(&r) == EFRP_OK);
-            assert(chunk_calls == (lengths[item] + 4095) / 4096);
-            efrp_aead_reader_destroy(&r); efrp_aead_clear_keys(&k);
-        }
-    }
-    size_t wire_length = encode(wire, plain, EFRP_AEAD_MAX_PLAINTEXT, EFRP_AEAD_TX_MAX_BYTES);
-    efrp_aead_keys_t k = keys(); efrp_aead_reader_t r = {0}; size_t used, copied;
-    uint8_t output[193];
-    chunk_reset();
-    assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, 16, &used) == EFRP_OK && used == 16 && !chunk_calls);
-    assert(efrp_aead_feed(&r, wire + 16, wire_length - 17, &used) == EFRP_OK && used == wire_length - 17);
-    assert(efrp_aead_copy_plaintext(&r, output, sizeof output, &copied) == EFRP_WOULD_BLOCK && !copied);
-    assert(efrp_aead_finish(&r) == EFRP_TRUNCATED && chunk_live == 16);
-    efrp_aead_reader_destroy(&r); assert(!chunk_live);
-    wire[wire_length - 1] ^= 1;
-    chunk_reset();
-    assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-    assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_AUTHENTICATION_FAILED);
-    assert(chunk_calls == 16 && !chunk_live);
-    assert(efrp_aead_copy_plaintext(&r, output, sizeof output, &copied) == EFRP_AUTHENTICATION_FAILED && !copied);
-    efrp_aead_reader_destroy(&r); wire[wire_length - 1] ^= 1;
-    for (size_t failed = 1; failed <= EFRP_AEAD_RX_MAX_CHUNKS; ++failed) {
-        chunk_reset(); chunk_fail_at = failed;
-        assert(efrp_aead_reader_init_words(&r, k.client_to_server, chunk_allocate, chunk_release) == EFRP_OK);
-        assert(efrp_aead_feed(&r, wire, wire_length, &used) == EFRP_NO_MEMORY);
-        assert(used == 16 + (failed - 1) * EFRP_AEAD_RX_CHUNK_BYTES);
-        assert(!chunk_live);
-        efrp_aead_reader_destroy(&r);
-    }
-    efrp_aead_clear_keys(&k); free(plain); free(wire);
-}
+
 int main(void)
 {
-    round_trips(); failure_cases(); empty_and_limits(); chunked_reader(); word_reader();
-    puts("AEAD: boundaries, authentication-before-delivery, replay, truncation, counters and zeroization passed");
+    static const uint8_t token[] = "esp-frp-public-fixture-token";
+    static const uint8_t client[] = " {\"fixture\":\"client\", \"raw\":\"bytes\"} ";
+    static const uint8_t server[] = "{\"fixture\": \"server\"}";
+    efrp_aead_keys_t keys = {0}, changed = {0};
+    assert(efrp_aead_derive(token, sizeof token - 1, client, sizeof client - 1,
+                            server, sizeof server - 1, &keys) == EFRP_OK);
+    assert(memcmp(keys.client_to_server, keys.server_to_client, 32));
+    assert(efrp_aead_derive(token, sizeof token - 1, client + 1, sizeof client - 2,
+                            server, sizeof server - 1, &changed) == EFRP_OK);
+    assert(memcmp(changed.transcript_hash, keys.transcript_hash, 32));
+    assert(efrp_aead_derive(token, 0, client, sizeof client - 1,
+                            server, sizeof server - 1, &changed) == EFRP_INVALID_ARGUMENT);
+    all_zero(&changed, sizeof changed);
+
+    uint8_t storage[4128];
+    efrp_aead_writer_t writer = {0};
+    assert(efrp_aead_writer_init(&writer, keys.client_to_server, storage, 32) == EFRP_INVALID_ARGUMENT);
+    assert(efrp_aead_writer_init(&writer, keys.client_to_server, storage, sizeof storage) == EFRP_OK);
+    assert(efrp_aead_writer_init(&writer, keys.client_to_server, storage, sizeof storage) == EFRP_INVALID_STATE);
+    const uint8_t plaintext[] = "authenticated control record";
+    size_t written = 0, length = 0;
+    const uint8_t *output = NULL;
+    assert(efrp_aead_write(&writer, NULL, 0, &written) == EFRP_OK && !written);
+    assert(efrp_aead_write(&writer, plaintext, sizeof plaintext - 1, &written) == EFRP_OK);
+    assert(written == sizeof plaintext - 1);
+    assert(efrp_aead_output(&writer, &output, &length) == EFRP_OK && length == written + 32);
+    assert(efrp_aead_write(&writer, plaintext, 1, &written) == EFRP_WOULD_BLOCK && !written);
+    assert(efrp_aead_consume_output(&writer, length + 1) == EFRP_INVALID_ARGUMENT);
+    while (efrp_aead_output(&writer, &output, &length) == EFRP_OK) {
+        size_t take = length > 7 ? 7 : length;
+        assert(efrp_aead_consume_output(&writer, take) == EFRP_OK);
+    }
+    all_zero(storage, sizeof storage);
+    writer.records = EFRP_AEAD_MAX_RECORDS;
+    assert(efrp_aead_write(&writer, plaintext, 1, &written) == EFRP_COUNTER_EXHAUSTED && !written);
+    efrp_aead_writer_destroy(&writer);
+    all_zero(&writer, sizeof writer);
+    all_zero(storage, sizeof storage);
+
+    uint8_t previous_nonce[12] = {0};
+    for (unsigned cycle = 0; cycle < 100; ++cycle) {
+        efrp_aead_writer_t next = {0};
+        assert(efrp_aead_writer_init(&next, keys.client_to_server, storage, sizeof storage) == EFRP_OK);
+        assert(memcmp(previous_nonce, next.stream_nonce, sizeof previous_nonce));
+        memcpy(previous_nonce, next.stream_nonce, sizeof previous_nonce);
+        efrp_aead_writer_destroy(&next);
+        all_zero(storage, sizeof storage);
+    }
+    efrp_aead_clear_keys(&keys);
+    all_zero(&keys, sizeof keys);
+    puts("AEAD key derivation and sender boundaries passed; receiver is Flash-only");
     return 0;
 }

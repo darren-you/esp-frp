@@ -53,8 +53,8 @@ static efrp_result_t flash_clear(void *context, uint64_t lease)
     f->busy = false; f->lease = 0;
     return EFRP_OK;
 }
-static void check_flash_reader(const uint8_t key[32], const uint8_t *wire, size_t wire_length,
-                                const uint8_t *expected, size_t expected_length)
+static bool decode_flash_reader(const uint8_t key[32], const uint8_t *wire, size_t wire_length,
+                                uint8_t *plain, size_t capacity, size_t *plain_length)
 {
     efrp_aead_flash_store_t store = {.context = &flash, .recover = flash_recover,
         .begin = flash_begin, .write = flash_write, .read = flash_read, .clear = flash_clear};
@@ -63,24 +63,30 @@ static void check_flash_reader(const uint8_t key[32], const uint8_t *wire, size_
     assert(efrp_aead_flash_store_recover(&store) == EFRP_OK);
     assert(efrp_aead_flash_reader_init(&reader, key, &store, window, sizeof window) == EFRP_OK);
     size_t offset = 0, total = 0;
+    bool valid = true;
     while (offset < wire_length) {
         size_t take = wire_length - offset, consumed;
         if (take > 17) take = 17;
         efrp_result_t result = efrp_aead_flash_feed(&reader, wire + offset, take, &consumed);
-        assert(result == EFRP_OK || result == EFRP_WOULD_BLOCK);
+        if (result != EFRP_OK && result != EFRP_WOULD_BLOCK) { valid = false; break; }
         offset += consumed;
         const uint8_t *bytes; size_t n;
         for (;;) {
             efrp_result_t state = efrp_aead_flash_plaintext(&reader, &bytes, &n);
             if (state == EFRP_WOULD_BLOCK) break;
-            assert(state == EFRP_OK && total <= expected_length);
-            assert(n <= expected_length - total && memcmp(bytes, expected + total, n) == 0);
+            if (state != EFRP_OK || total > capacity || n > capacity - total) {
+                valid = false; break;
+            }
+            memcpy(plain + total, bytes, n);
             total += n;
             assert(efrp_aead_flash_consume_plaintext(&reader, n) == EFRP_OK);
         }
+        if (!valid) break;
     }
-    assert(total == expected_length && efrp_aead_flash_finish(&reader) == EFRP_OK);
+    if (valid) valid = efrp_aead_flash_finish(&reader) == EFRP_OK;
     assert(efrp_aead_flash_reader_close(&reader) == EFRP_OK);
+    *plain_length = total;
+    return valid;
 }
 
 static uint32_t number(void)
@@ -104,38 +110,14 @@ int main(void)
     uint8_t *tx = malloc(capacity);
     assert(plain && tx && getchar() == EOF);
     efrp_aead_keys_t keys;
-    efrp_aead_reader_t r = {0}; efrp_aead_writer_t w = {0};
+    efrp_aead_writer_t w = {0};
     int exit_code = 10;
     assert(efrp_aead_derive(token, tn, client, cn, server, sn, &keys) == EFRP_OK);
-#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
-    assert(efrp_aead_reader_init_words(&r, keys.server_to_client, calloc, free) == EFRP_OK);
-#else
-    assert(efrp_aead_reader_init_chunked(&r, keys.server_to_client, calloc, free) == EFRP_OK);
-#endif
-    size_t offset = 0, total = 0;
-    while (offset < wn) {
-        size_t take = wn - offset, consumed;
-        if (take > 17) take = 17;
-        efrp_result_t result = efrp_aead_feed(&r, wire + offset, take, &consumed);
-        if (result != EFRP_OK && result != EFRP_WOULD_BLOCK) goto done;
-        offset += consumed;
-        size_t n;
-#if defined(EFRP_LAB_ESP32_IRAM_AEAD_RX)
-        while (efrp_aead_copy_plaintext(&r, plain + total, 400001 - total, &n) == EFRP_OK) {
-            total += n;
-#else
-        const uint8_t *p;
-        while (efrp_aead_plaintext(&r, &p, &n) == EFRP_OK) {
-            assert(n <= 400001 - total); memcpy(plain + total, p, n); total += n;
-#endif
-            assert(efrp_aead_consume_plaintext(&r, n) == EFRP_OK);
-        }
-    }
-    if (efrp_aead_finish(&r) != EFRP_OK) goto done;
-    check_flash_reader(keys.server_to_client, wire, wn, plain, total);
+    size_t total = 0;
+    if (!decode_flash_reader(keys.server_to_client, wire, wn, plain, 400001, &total)) goto done;
     assert(fwrite(keys.transcript_hash, 1, 32, stdout) == 32);
     assert(efrp_aead_writer_init(&w, keys.client_to_server, tx, capacity) == EFRP_OK);
-    offset = 0;
+    size_t offset = 0;
     while (offset < total) {
         size_t n;
         assert(efrp_aead_write(&w, plain + offset, total - offset, &n) == EFRP_OK && n);
@@ -149,7 +131,7 @@ int main(void)
     }
     assert(fflush(stdout) == 0); exit_code = 0;
 done:
-    efrp_aead_reader_destroy(&r); efrp_aead_writer_destroy(&w); efrp_aead_clear_keys(&keys);
+    efrp_aead_writer_destroy(&w); efrp_aead_clear_keys(&keys);
     free(token); free(client); free(server); free(wire); free(plain); free(tx);
     return exit_code;
 }

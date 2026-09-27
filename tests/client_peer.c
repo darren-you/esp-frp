@@ -3,6 +3,7 @@
 #include "esp_frp.h"
 #include "client_port.h"
 #include "dns_fixture.h"
+#include "flash_store_fixture.h"
 #include <assert.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -93,7 +94,10 @@ int main(int argc, char **argv)
     FILE *f = fopen(argv[2], "rb"); assert(f);
     uint8_t ca[EFRP_TLS_MAX_CA_BYTES]; size_t n = fread(ca, 1, sizeof ca, f); assert(n && n < sizeof ca && !ferror(f)); fclose(f);
     unsigned baseline = open_fds();
+    static efrp_test_flash_t flash;
+    efrp_aead_flash_store_t store = efrp_test_flash_store(&flash);
     for (unsigned i = 0; i < rounds; ++i) {
+        assert(efrp_aead_flash_store_recover(&store) == EFRP_OK);
         events_t events = {.trusted = true, .release = false, .pause_phase = EFRP_PHASE_FAILED};
         /* FAILED callbacks do not block unless explicitly selected below. */
         events.pause_phase = (efrp_phase_t)-1;
@@ -116,7 +120,8 @@ int main(int argc, char **argv)
             .ca_pem = ca_copy, .ca_length = n, .token = (const uint8_t *)token, .token_length = strlen(token),
             .hostname = "fixture-worker-board", .client_id = proxy, .proxy_name = proxy,
             .local_ipv4 = {127, 0, 0, 1}, .local_port = argc == 6 ? (uint16_t)strtoul(argv[5], NULL, 10) : 1,
-            .time_is_trusted = trusted, .on_event = event, .context = &events};
+            .time_is_trusted = trusted, .on_event = event, .context = &events,
+            .flash_store = &store};
         assert(efrp_create(&config, &events.client) == EFRP_OK);
         assert(efrp_create(&config, &events.client) == EFRP_INVALID_STATE);
         memset(ca_copy, 0, n); free(ca_copy);
@@ -246,6 +251,7 @@ int main(int argc, char **argv)
         assert(efrp_destroy(&events.client, 0) == EFRP_OK);
         poll(NULL, 0, 3); assert(atomic_load(&events.events) == before);
         assert(!fixture_dns_active() && open_fds() == baseline);
+        assert(!flash.busy && flash.clears == flash.begins);
         if ((i + 1) % 20 == 0) fprintf(stderr, "client %s %u/%u destroy/join/fd passed\n", mode, i + 1, rounds);
     }
     fprintf(stderr, "Client %s: %u lifecycle(s), callbacks/owner/cleanup passed\n", mode, rounds);

@@ -47,8 +47,8 @@ flowchart LR
     session <-->|"真实重启与双流"| client
     qemu["官方 ESP32-C3 QEMU"] --> lifecycle["c3-lifecycle：真实 FreeRTOS worker 失败与回收"]
     lifecycle --> lib
-    qemu32["官方 ESP32 QEMU"] --> iram["esp32-iram-aead：字宽 reader／五仓容量 A/B"]
-    iram --> lib
+    cmake --> idf_store["idf_flash_store_test.c：真实 IDF adapter／假分区和 owner"]
+    idf_store --> lib
     dependency["esp-lwip/tests/zero-window：依赖独立回归"] --> sdk["显式实际 lwIP 源码"]
     sdk --> zero["双向零窗口、序号边界与回绕"]
 ```
@@ -64,7 +64,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-`aead_flash` 在 OpenSSL 与官方 PSA host 模式使用伪 Flash 覆盖大小边界、最大记录认证、读写/清理故障和模拟掉电恢复；真实分区与 FRP 会话仍按 [Flash 暂存候选](../docs/design/flash-backed-aead.md)单独验证。
+`aead_flash` 在 OpenSSL 与官方 PSA host 模式使用伪 Flash 覆盖大小边界、最大记录认证、读写/清理故障和模拟掉电恢复。`idf_flash_store` 直接编译真实 IDF adapter，配假 `esp_partition` 与 owner，覆盖精确分区、完整 64 KiB 记录及 17 次复读、OTA owner 占用时小记录无 scratch 访问、大记录写入或窗口复读中安全失败、写回读发现短写、clear 争用重试及 owner 错误漏调/重调/吞错。完整 Mbed TLS host 的 `session_upstream` 还让当前会话接收官方 64 KiB 控制记录，验证错误 tag 与 clear 失败时保留句柄重试；边界见 [Flash 暂存合同](../docs/design/flash-backed-aead.md)。
 
 [lwIP 零窗口回环回归](https://github.com/esp-space/esp-lwip/blob/master/tests/zero-window/README.md) 是单独的 SDK 缺陷复现入口，直接编译显式提供的依赖源码，不混入 FRP host 通过结论。原始官方 SDK 会失败；[sdk-lock.json](../sdk-lock.json) 已锁定通过该回归的修正源依赖，不用预期失败规则将原始 SDK 标绿。SDK 身份与脏内容守卫使用 `python3 -m unittest discover -s tools/tests -p 'test_*.py'` 验证。
 
@@ -109,7 +109,7 @@ ctest --test-dir build-tls --output-on-failure
 
 该模式自动增加 `tls_upstream`，由 Go 标准 TLS 服务端生成临时 CA/证书并启动 C peer；包含 TLS 1.2/1.3、四类证书拒绝、部分 I/O、100 次连接、取消和期限。`MBEDTLS_PLATFORM_MEMORY` 仅为 host 分配失败注入；未开启时不执行分配注入段，其余合同测试仍执行。PSA 的独占输入模式与 SDK 对齐。TLS 测试总期限 180 秒，证书输入和监听均在测试内清理，详见 [TLS 合同](../docs/design/tls-transport.md)。
 
-完整 Mbed TLS 模式也增加 `session_upstream`，总期限 240 秒。它在本机启动实际官方 FRPS，验证百次注册、Token 心跳、工作请求、部分 I/O、拒绝和取消；另有 28 种尾数据、容量、Yamux 非法 header、解析、认证、EOF 和超时场景。host 配置使用公开 fixture，监听仅回环，子进程和临时证书结束后清理；范围见 [控制会话](../docs/design/control-session.md)。[单设备入口](crypto-interop/README.md#单设备协议-fixture) 可用显式私有配置复用协议场景；它不负责刷机，服务端成功也不等于设备验收。
+完整 Mbed TLS 模式也增加 `session_upstream`，总期限 240 秒。它在本机启动实际官方 FRPS，验证百次注册、Token 心跳、工作请求、部分 I/O、拒绝和取消；另有 29 种尾数据、容量、Yamux 非法 header、解析、认证、Flash 清理失败、EOF 和超时场景。host 配置使用公开 fixture，监听仅回环，子进程和临时证书结束后清理；范围见 [控制会话](../docs/design/control-session.md)。[单设备入口](crypto-interop/README.md#单设备协议-fixture) 可用显式私有配置复用协议场景；它不负责刷机，服务端成功也不等于设备验收。
 
 同一模式的 `work_upstream` 用实际 FRPS 验证 100 轮双业务流，共 200 条本地连接，每流双向各 300001 字节；总期限 240 秒。`work_faults_upstream` 总期限 180 秒，包含四个真实 FRPS 拒绝/取消场景和 13 个官方 API 半关闭、尾数据、解析、期限与慢流场景。连接目标是独立回环业务 listener；正常结束与取消均检查 fd 基线，详情见 [工作流](../docs/design/work-streams.md)。
 
@@ -131,6 +131,6 @@ Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回�
 
 可以把完整 Mbed TLS 命令中的 `-fsanitize=address,undefined` 替换为 `-fsanitize=thread`，在独立构建目录运行 `ctest --test-dir <目录> -R '^client_' --output-on-failure`，检查 worker、外部 API、状态副本与迟到测试 DNS 的竞争。不可同时开启 TSan 和 ASan。停止和线程退出检查见[客户端生命周期](../docs/design/client-lifecycle.md)。
 
-`session_peer` 将实际 `session.c` 的 allocator 单独替换为测试计数器，并传给分块 AEAD reader；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手接收复用输出区，不另申请 4096 字节。正常/失败/取消会话销毁均检查所有持有块已清零且无残留。`aead` 另以同一后端覆盖仅合法头不分配、密文逐块到达才分配、64 KiB 记录的 16 块、tag 篡改、末字节截断和任意一块分配失败；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)记录原分块实现的 C3 编译尺寸与组合边界，[逐块分配审计](../docs/operations/p6-frp-lazy-aead-memory-audit.md)记录本次行为变化。
+`session_peer` 将实际 `session.c` 的对象分配单独替换为测试计数器；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手接收复用输出区，Flash reader 另占 4096 字节窗口。正常/失败/取消会话销毁均检查持有对象已清零且无残留，clear 失败时保留 session handle 后重试。`aead_flash` 覆盖记录边界、满长坏 tag 和 lease 争用；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)与[逐块分配审计](../docs/operations/p6-frp-lazy-aead-memory-audit.md)仅记录旧 RAM reader 的历史容量，不代表当前产品。
 
-ESP32 32BIT-only IRAM 接收实验用 `-DEFRP_LAB_ESP32_IRAM_AEAD_RX=ON` 另建 host 构建目录；完整 Mbed TLS／PSA 命令其余参数同上。这个开关让实际 `session.c` 的官方 FRPS 会话测试及 `aead_upstream` 使用字宽块模式；host 分配器仍为 byte-accessible，只证明协议、认证、背压、双流和清理合同。`aead` 单元测试另外覆盖 1、3、4、4095、4096、4097、65535 和 65536 字节、单字节拆包、满长坏 tag、取消及十六个分配失败点。固定 ESP32 QEMU 的真实 I 总线访问与容量入口见 [esp32-iram-aead](esp32-iram-aead/README.md)，其结果不能冒充真实 FRPS／TLS 与 guest 同时运行的设备峰值。
+ESP32 32BIT-only IRAM 接收实验已退出当前运行路径。其固定 QEMU 输入和历史结果保留在 [esp32-iram-aead](esp32-iram-aead/README.md)，需要按该页锁定的旧提交重放；当前 `session.c` 与 `aead_upstream` 只使用 Flash reader。

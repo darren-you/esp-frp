@@ -9,6 +9,8 @@ flowchart LR
     input["仓外 inputs.h：Wi-Fi / FRP / CA / NTP / 可选 DNS"] --> main["main/sample_main.c：控制任务"]
     sdk["官方 ESP-IDF Wi-Fi / DNS / SNTP"] <-->|"RAM 配置、唯一解析器、IP 与可信时间"| main
     main --> client["本仓 esp_frp.h：唯一 FRP worker"]
+    partition["partitions.csv：独占 frp_scratch 64 KiB"] --> store["sample_flash_store.c：真实 IDF 分区 provider"]
+    store --> client
     client <-->|"DNS / TCP / 严格 TLS / FRP"| frps["隔离的官方 FRPS v0.71.0"]
     test["外部测试 TCP 客户端"] <-->|"双向业务"| frps
     client <-->|"固定 127.0.0.1 / port，最多两条连接"| echo["main/sample_echo.c：有界回显、半关闭与背压实验"]
@@ -20,7 +22,7 @@ flowchart LR
 
 ## 构建与输入
 
-默认占位输入可以编译，运行时在初始化网络前停止。通过显式路径注入本轮私有 header；它的字节会复制进 build 并编入镜像，输入、build、镜像和运行日志均须存放在受限目录，不提交真实资料：
+默认占位输入可以编译，运行时在初始化网络前停止。样例固定使用本目录 `partitions.csv`：factory app `0x10000..0x110000`、独占且未加密的 `frp_scratch` `0x110000..0x120000`。样例先逐项核对运行设备上的实际分区，再以独立样例 owner 调用真实 IDF 分区 provider 的 `recover`；任一步失败都在 Wi-Fi 前停止。通过显式路径注入本轮私有 header；它的字节会复制进 build 并编入镜像，输入、build、镜像和运行日志均须存放在受限目录，不提交真实资料：
 
 ```bash
 source "$IDF_PATH/export.sh"
@@ -36,9 +38,9 @@ ESP32-D0WD-V3 使用独立的 build、sdkconfig 和相同私有输入格式，�
 
 `sample_dns_ipv4` 为空时使用 DHCP 提供的正常 DNS；填入明确 IPv4 时，每次获得 IP 后将其设置为唯一主 DNS，并清空备用位置，适合本机隔离 DNS fixture。SDK 的 `esp_netif_set_dns_info` 拒绝零地址，因此备用位置通过 `tcpip_callback_wait` 在 lwIP 线程清空，完成后才启动 SNTP。证书身份仍是 `server_hostname`，不能用绕过身份校验替代 DNS。NTP 应是可信且可达的时间来源；收到实际同步后才启动 FRP，超过两小时未再次同步则可信条件失效。
 
-默认两目标均按 4 MiB 和 SDK 默认分区构建，并不等于某块既有设备的可刷布局。给已有板测试时，在仓外准备其已核对的完整 sdkconfig/分区表或额外 `SDKCONFIG_DEFAULTS`；样例不导入其他仓的分区文件。编译不执行 flash。必须重新枚举、验证芯片/Flash/UUID和活动分区，保存两份一致的完整基线，再单独决定应用槽写入。测试后恢复整个原应用槽并核对非应用分区及身份；禁止照抄 build 输出里的全盘写入命令。
+默认两目标均按 4 MiB 和上述样例专用分区构建，并不等于某块既有设备的可刷布局。运行时的 `frp_scratch` label/type/subtype/offset/size/erase_size/只读/加密属性与本样例合同不一致即拒绝启动；只刷 app 而设备没有该分区时不会运行。给已有板测试时，必须先在仓外确认分区表、应用槽和完整恢复基线；样例不导入其他仓的分区文件。编译不执行 flash。必须重新枚举、验证芯片/Flash/UUID 和活动分区，保存两份一致的完整基线，再单独决定分区表及应用槽变更。测试后恢复完整基线并核对非应用分区及身份；禁止照抄 build 输出里的全盘写入命令。
 
-Wi-Fi 使用 `nvs_enable=false` 和 RAM storage，PHY 校准持久化必须关闭；样例不初始化、擦除、读写 NVS，不驱动 GPIO。已有身份和配置不是本例的运行依赖，也不是通过串口端点猜出的身份。
+Wi-Fi 使用 `nvs_enable=false` 和 RAM storage，PHY 校准持久化必须关闭；样例不初始化、擦除、读写 NVS，不驱动 GPIO。`recover` 与大于 4096 字节的控制记录只访问专用 `frp_scratch`，小控制记录走 RAM。已有身份和配置不是本例的运行依赖，也不是通过串口端点猜出的身份。
 
 ## 实验操作
 

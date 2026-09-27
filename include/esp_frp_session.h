@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 #include "esp_frp_handshake.h"
+#include "esp_frp_flash_reader.h"
 #include "esp_frp_tls.h"
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,9 @@ typedef struct {
      * StartWorkConn address metadata. IPv4 bytes and nonzero port are copied. */
     uint8_t local_ipv4[4];
     uint16_t local_port;
+    /* Required exclusive ciphertext scratch provider. Boot owner must call
+     * efrp_aead_flash_store_recover before opening a session. */
+    const efrp_aead_flash_store_t *flash_store;
 } efrp_session_config_t;
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
 typedef enum {
@@ -66,8 +70,8 @@ efrp_result_t efrp_session_create(const efrp_session_config_t *config, efrp_tls_
 efrp_result_t efrp_session_step(efrp_session_t *session, uint64_t now_ms, int64_t unix_seconds);
 efrp_result_t efrp_session_status(const efrp_session_t *session, efrp_session_status_t *status);
 efrp_result_t efrp_session_cancel(efrp_session_t *session);
-/* WOULD_BLOCK retains *session while local socket cleanup must retry. Keep
- * stepping/destroying; only OK frees and nulls the handle. */
+/* WOULD_BLOCK or STORAGE_ERROR retains *session while local socket or Flash
+ * cleanup must retry. Only OK frees and nulls the handle. */
 efrp_result_t efrp_session_destroy(efrp_session_t **session);
 #ifdef __cplusplus
 }

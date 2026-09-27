@@ -46,6 +46,9 @@ typedef struct {
     uint16_t remote_port;
     uint8_t local_ipv4[4]; uint16_t local_port; /* sole fixed allowlist entry */
     efrp_time_trusted_t time_is_trusted;
+    /* Required, exclusive 64 KiB ciphertext scratch provider. The callback
+     * table is copied at create; context must outlive the client. */
+    const efrp_aead_flash_store_t *flash_store;
     efrp_event_t on_event;
     void *context;
 } efrp_config_t;

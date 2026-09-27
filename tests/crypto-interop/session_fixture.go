@@ -37,7 +37,7 @@ type sessionFixtureOptions struct {
 	timeout                          time.Duration
 }
 
-var sessionFixtureModes = []string{"fixture-tail", "fixture-record", "fixture-aead-max", "fixture-control-oversized",
+var sessionFixtureModes = []string{"fixture-tail", "fixture-record", "fixture-aead-max", "fixture-aead-max-clear-fail", "fixture-control-oversized",
 	"fixture-aead-oversized", "fixture-login-fin", "fixture-bad-name", "fixture-bad-type",
 	"fixture-bad-duplicate", "fixture-bad-unknown", "fixture-frame-truncated", "fixture-fin", "fixture-tls-fin",
 	"fixture-aead-truncated", "fixture-aead-tamper", "fixture-pong-error", "fixture-bad-pong", "fixture-work-overflow",
@@ -222,7 +222,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 			return err
 		}
 		return awaitStop()
-	case "fixture-record", "fixture-aead-max":
+	case "fixture-record", "fixture-aead-max", "fixture-aead-max-clear-fail":
 		p, _ := json.Marshal(response)
 		// A 4096-byte wire payload crosses every intermediate 1 KiB staging
 		// boundary; add a second frame in the same authenticated record.
@@ -232,7 +232,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 		if err = wire.NewConn(&plaintext).WriteFrame(&wire.Frame{Type: wire.FrameTypeMessage, Payload: append([]byte{0, 4}, p...)}); err != nil {
 			return err
 		}
-		if mode == "fixture-aead-max" {
+		if mode == "fixture-aead-max" || mode == "fixture-aead-max-clear-fail" {
 			// Pack legal bounded ReqWorkConn frames into one maximum-sized
 			// authenticated record; overflow requests must remain bounded.
 			for plaintext.Len() < 65536 {
@@ -259,8 +259,11 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 		if _, err = crypto.Write(plaintext.Bytes()); err != nil {
 			return err
 		}
+		if mode == "fixture-aead-max-clear-fail" {
+			return awaitStop()
+		}
 	}
-	if mode != "fixture-record" && mode != "fixture-aead-max" {
+	if mode != "fixture-record" && mode != "fixture-aead-max" && mode != "fixture-aead-max-clear-fail" {
 		if err = control.WriteMsg(response); err != nil {
 			return err
 		}

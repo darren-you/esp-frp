@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "esp_frp_connect.h"
 #include "esp_frp_session.h"
+#include "flash_store_fixture.h"
 #include <assert.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -44,10 +45,14 @@ int main(int argc, char **argv)
     do { result = efrp_tls_step(tls, now_ms()); if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1); } while (result == EFRP_WOULD_BLOCK);
     assert(result == EFRP_OK);
     const char *token = "public-session-token";
+    static efrp_test_flash_t flash;
+    efrp_aead_flash_store_t store = efrp_test_flash_store(&flash);
+    assert(efrp_aead_flash_store_recover(&store) == EFRP_OK);
     char proxy_name[128]; snprintf(proxy_name, sizeof proxy_name, "fixture-work-proxy-%s-%u", argv[4], local_port);
     efrp_session_config_t config = {.login = {.token = (const uint8_t *)token, .token_length = strlen(token),
         .hostname = "fixture-work-board", .client_id = proxy_name, .unix_seconds = (int64_t)time(NULL)},
-        .proxy_name = proxy_name, .local_ipv4 = {127, 0, 0, 1}, .local_port = (uint16_t)local_port};
+        .proxy_name = proxy_name, .local_ipv4 = {127, 0, 0, 1}, .local_port = (uint16_t)local_port,
+        .flash_store = &store};
     assert(efrp_session_create(&config, tls, now_ms(), &session) == EFRP_OK);
     memset(config.local_ipv4, 0, sizeof config.local_ipv4); config.local_port = 0;
     assert(fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL) | O_NONBLOCK) == 0);
@@ -90,6 +95,7 @@ int main(int argc, char **argv)
     if (!strcmp(argv[4], "duplex")) assert(peak == 2 && !status.work.failed && status.work.completed == expected);
     assert(efrp_session_cancel(session) == EFRP_CANCELLED);
     do { result = efrp_session_destroy(&session); if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1); } while (result == EFRP_WOULD_BLOCK);
+    assert(!flash.busy && flash.clears == flash.begins);
     assert(result == EFRP_OK && !session); efrp_tls_destroy(tls);
     assert(efrp_connect_destroy(&connection) == EFRP_OK);
     fixture_work_released();
