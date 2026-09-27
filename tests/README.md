@@ -51,6 +51,9 @@ flowchart LR
     flash_probe --> lib
     cmake --> idf_store["idf_flash_store_test.c：真实 IDF adapter／假分区和 owner"]
     idf_store --> lib
+    cmake --> idf_session["session_idf_flash_peer：真实 session + IDF provider"]
+    idf_session --> session
+    idf_session --> idf_store
     dependency["esp-lwip/tests/zero-window：依赖独立回归"] --> sdk["显式实际 lwIP 源码"]
     sdk --> zero["双向零窗口、序号边界与回绕"]
 ```
@@ -69,6 +72,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 `aead_flash` 在 OpenSSL 与官方 PSA host 模式使用伪 Flash 覆盖大小边界、最大记录认证、读写/清理故障和模拟掉电恢复。`idf_flash_store` 直接编译真实 IDF adapter，配假 `esp_partition` 与 owner，覆盖精确分区、完整 64 KiB 记录及 17 次复读、OTA owner 占用时小记录无 scratch 访问、大记录写入或窗口复读中安全失败、写回读发现短写、clear 争用重试及 owner 错误漏调/重调/吞错。完整 Mbed TLS host 的 `session_upstream` 还让当前会话接收官方 64 KiB 控制记录，验证错误 tag 与 clear 失败时保留句柄重试；边界见 [Flash 暂存合同](../docs/design/flash-backed-aead.md)。
+
+完整 Mbed TLS host 模式另有 `session_idf_flash_upstream`：正式 `session.c` 与正式 `idf_flash_store.c` 经测试分区 shim 组合，在随机回环端口与官方 FRPS 完成三轮注册/心跳，并用官方协议 fixture 验证 64 KiB 正确记录、64 KiB 错 tag 的零控制消息交付及小记录坏 tag。每轮重建 provider 并执行 boot recover，核对 owner 成对释放、64 KiB 擦写和逐窗口读取计数。运行范围与数据见[集成回归收据](../docs/operations/p6-frp-session-idf-provider-interop.md)。
 
 [lwIP 零窗口回环回归](https://github.com/esp-space/esp-lwip/blob/master/tests/zero-window/README.md) 是单独的 SDK 缺陷复现入口，直接编译显式提供的依赖源码，不混入 FRP host 通过结论。原始官方 SDK 会失败；[sdk-lock.json](../sdk-lock.json) 已锁定通过该回归的修正源依赖，不用预期失败规则将原始 SDK 标绿。SDK 身份与脏内容守卫使用 `python3 -m unittest discover -s tools/tests -p 'test_*.py'` 验证。
 

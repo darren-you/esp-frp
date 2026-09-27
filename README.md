@@ -96,6 +96,8 @@ ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公
 
 [C3 Flash scratch 探针](tests/c3-flash-scratch/README.md)在支持 ESP32-C3 的 QEMU MTD 上调用正式 IDF provider 与会话所用 Flash reader，完成独立实验分区的满长密文擦写、GCM 认证、窗口复验、坏 tag 拒绝与跨启动恢复；[运行记录](docs/operations/p6-c3-flash-scratch-qemu.md)明确区分该设备软件切片和完整 FRPS session、Base 产品分区及实板验收。
 
+[会话与 IDF Flash provider 集成回归](docs/operations/p6-frp-session-idf-provider-interop.md)在 host 上让正式 session、正式 provider、严格 TLS 和官方 FRPS 同路运行，并对 64 KiB 正确/错误 tag 记录验证 Flash owner、清理与认证边界；它使用测试分区 shim，不代替 QEMU 或实板。
+
 ```bash
 cmake -S . -B build -DBUILD_TESTING=ON
 cmake --build build
