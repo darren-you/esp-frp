@@ -3,18 +3,12 @@
 #include "esp_frp_yamux.h"
 #include "crypto_backend.h"
 #include "json_internal.h"
+#include "memory_internal.h"
 #include "work_internal.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef ESP_PLATFORM
-#include "sdkconfig.h"
-#if defined(CONFIG_IDF_TARGET_ESP32) && defined(CONFIG_ESP32_IRAM_AS_8BIT_ACCESSIBLE_MEMORY)
-#include "esp_heap_caps.h"
-#define EFRP_SESSION_IRAM_8BIT 1
-#endif
-#endif
 _Static_assert(EFRP_TLS_TX_BYTES >= EFRP_YAMUX_HEADER_BYTES + EFRP_YAMUX_RING_BYTES,
     "session TLS staging must hold one complete Yamux output frame");
 
@@ -51,18 +45,6 @@ struct efrp_session {
     efrp_result_t frame_error;
     bool proxy_queued, ping_pending, tls_eof, control_ready, other_cleared;
 };
-
-static efrp_session_t *new_session(void)
-{
-#ifdef EFRP_SESSION_IRAM_8BIT
-    /* This capability is available only in ESP32 single-core mode. Keep the
-     * byte-addressed session out of the DRAM needed by TLS and the guest. */
-    return heap_caps_calloc(1, sizeof(efrp_session_t),
-                            MALLOC_CAP_INTERNAL | MALLOC_CAP_IRAM_8BIT);
-#else
-    return calloc(1, sizeof(efrp_session_t));
-#endif
-}
 
 static efrp_result_t clear(efrp_session_t *s)
 {
@@ -139,7 +121,7 @@ efrp_result_t efrp_session_create(const efrp_session_config_t *c, efrp_tls_t *tl
     efrp_tls_status_t status;
     if (efrp_tls_status(tls, &status) != EFRP_OK || status.state != EFRP_TLS_OPEN || status.pending_bytes)
         return EFRP_INVALID_STATE;
-    efrp_session_t *s = new_session(); if (!s) return EFRP_NO_MEMORY;
+    efrp_session_t *s = efrp_heap_calloc(sizeof *s); if (!s) return EFRP_NO_MEMORY;
     s->mux = calloc(1, sizeof *s->mux);
     if (!s->mux) { clear(s); efrp_crypto_zero(s, sizeof *s); free(s); return EFRP_NO_MEMORY; }
     efrp_result_t result = efrp_handshake_init(&s->storage.handshake, &c->login,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp_tls.h"
 #include "crypto_backend.h"
+#include "memory_internal.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509_crt.h"
 #include "psa/crypto.h"
@@ -116,7 +117,7 @@ efrp_result_t efrp_tls_create(const efrp_tls_config_t *c, uint64_t now, efrp_tls
     psa_status_t initialized = psa_crypto_init();
     if (initialized != PSA_SUCCESS)
         return initialized == PSA_ERROR_INSUFFICIENT_MEMORY ? EFRP_NO_MEMORY : EFRP_CRYPTO_ERROR;
-    efrp_tls_t *t = calloc(1, sizeof *t);
+    efrp_tls_t *t = efrp_heap_calloc(sizeof *t);
     if (!t) return EFRP_NO_MEMORY;
     mbedtls_ssl_init(&t->ssl); mbedtls_ssl_config_init(&t->config); mbedtls_x509_crt_init(&t->ca);
     t->resources = true; t->status.verify_flags = UINT32_MAX;

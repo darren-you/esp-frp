@@ -4,6 +4,7 @@
 #include "client_port.h"
 #include "crypto_backend.h"
 #include "json_internal.h"
+#include "memory_internal.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -222,7 +223,7 @@ efrp_result_t efrp_create(const efrp_config_t *config, efrp_client_t **out)
         !config->flash_store || !config->flash_store->recover || !config->flash_store->begin ||
         !config->flash_store->write || !config->flash_store->read || !config->flash_store->clear)
         return EFRP_INVALID_ARGUMENT;
-    efrp_client_t *c = calloc(1, sizeof *c); if (!c) return EFRP_NO_MEMORY;
+    efrp_client_t *c = efrp_heap_calloc(sizeof *c); if (!c) return EFRP_NO_MEMORY;
     if (!copy_string(c->server, config->server_hostname, 253, true, true) ||
         !copy_string(c->hostname, config->hostname, 128, false, false) ||
         !copy_string(c->user, config->user, 128, false, false) ||

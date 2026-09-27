@@ -2,6 +2,7 @@
 #include "work_internal.h"
 #include "crypto_backend.h"
 #include "json_internal.h"
+#include "memory_internal.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -170,7 +171,7 @@ static efrp_result_t handshake_work(efrp_work_set_t *set, efrp_work_stream_t *w,
     if (r == EFRP_WOULD_BLOCK) return EFRP_OK;
     if (r != EFRP_OK) { close_work(set, w, r == EFRP_EOF ? EFRP_TRUNCATED : r); return EFRP_OK; }
     if (!set->handshake_json) {
-        set->handshake_json = calloc(1, EFRP_JSON_MAX_BYTES);
+        set->handshake_json = efrp_heap_calloc(EFRP_JSON_MAX_BYTES);
         if (!set->handshake_json) { close_work(set, w, EFRP_NO_MEMORY); return EFRP_OK; }
         r = efrp_wire_init(&w->reader, set->handshake_json, EFRP_JSON_MAX_BYTES, false, start_work, w);
         if (r != EFRP_OK) { close_work(set, w, r); return EFRP_OK; }
@@ -273,7 +274,7 @@ efrp_result_t efrp_work_step(efrp_work_set_t *set, efrp_yamux_t *mux, uint64_t n
     efrp_work_status_t status; efrp_work_status(set, &status);
     if (set->status.pending && !status.waiting) {
         for (unsigned i = 0; i < 3; ++i) if (!set->streams[i]) {
-            efrp_work_stream_t *w = calloc(1, sizeof *w);
+            efrp_work_stream_t *w = efrp_heap_calloc(sizeof *w);
             if (!w) return EFRP_NO_MEMORY;
             efrp_result_t r = efrp_yamux_open(mux, &w->stream_id);
             if (r != EFRP_OK) {

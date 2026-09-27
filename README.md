@@ -118,6 +118,7 @@ ctest --test-dir build --output-on-failure
 [会话阶段复用检查点](docs/operations/p6-frp-session-phase-union.md)记录握手与 Flash 窗口复用后的对象尺寸、资源清理和官方协议回归。
 
 [ESP32 会话 IRAM 放置检查点](docs/operations/p6-esp32-session-iram-placement.md)记录单核 8BIT IRAM 条件分配、签名 QEMU 的严格 TLS/FRPS 容量与正式 Base owner 尚未验证的边界。
+[ESP32 工作流 IRAM 放置检查点](docs/operations/p6-esp32-work-iram-placement.md)记录 300,001 字节官方 FRPS 双向工作流、普通堆低水与正式 Base 组合尚未验证的边界。
 
 `esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格 TLS 的 Yamux 控制流上；不自行建立网络连接。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。会话将握手输出区按阶段复用为接收区，消除独立 4 KiB 申请；[ESP32 Login 内存收据](docs/operations/p6-esp32-login-heap-reuse.md)记录固定 SDK 和 QEMU 对照边界。详见 [握手合同](docs/design/control-handshake.md)。
 
