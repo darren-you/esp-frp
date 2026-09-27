@@ -2,7 +2,11 @@
 #define _POSIX_C_SOURCE 200809L
 #include "esp_frp_connect.h"
 #include "esp_frp_session.h"
+#ifdef EFRP_SESSION_IDF_FLASH_TEST
+#include "session_idf_flash_fixture.h"
+#else
 #include "flash_store_fixture.h"
+#endif
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -29,7 +33,8 @@ static efrp_result_t expected_result(const char *mode)
     if (!strcmp(mode,"fixture-aead-max-clear-fail")) return EFRP_STORAGE_ERROR;
     if (!strcmp(mode,"fixture-control-oversized")) return EFRP_CAPACITY_EXCEEDED;
     if (!strcmp(mode, "fixture-fin") || !strcmp(mode, "fixture-tls-fin")) return EFRP_SESSION_CLOSED;
-    if (!strcmp(mode, "fixture-pong-error") || !strcmp(mode, "fixture-aead-tamper")) return EFRP_AUTHENTICATION_FAILED;
+    if (!strcmp(mode, "fixture-pong-error") || !strcmp(mode, "fixture-aead-tamper") ||
+        !strcmp(mode, "fixture-aead-max-tamper")) return EFRP_AUTHENTICATION_FAILED;
     if (!strcmp(mode, "fixture-register-timeout") || !strcmp(mode, "fixture-pong-timeout")) return EFRP_TIMEOUT;
     if (!strncmp(mode, "fixture-bad-", 12)) return EFRP_PROTOCOL_ERROR;
     return EFRP_OK;
@@ -66,15 +71,20 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
     snprintf(proxy, sizeof proxy, "fixture-control-%s-%u", mode, round);
     snprintf(client_id, sizeof client_id, "fixture-client-%s-%u", mode, round);
     const char *token = !strcmp(mode, "wrong-token") ? "wrong-public-token" : "public-session-token";
+#ifdef EFRP_SESSION_IDF_FLASH_TEST
+    const efrp_aead_flash_store_t *store = efrp_session_idf_flash_prepare();
+#else
     static efrp_test_flash_t flash;
     memset(&flash, 0, sizeof flash);
-    efrp_aead_flash_store_t store = efrp_test_flash_store(&flash);
-    assert(efrp_aead_flash_store_recover(&store) == EFRP_OK);
+    efrp_aead_flash_store_t store_value = efrp_test_flash_store(&flash);
+    const efrp_aead_flash_store_t *store = &store_value;
+    assert(efrp_aead_flash_store_recover(store) == EFRP_OK);
     flash.fail_clear = !strcmp(mode, "fixture-aead-max-clear-fail");
+#endif
     efrp_session_config_t config = {.login = {.token = (const uint8_t *)token, .token_length = strlen(token),
         .hostname = "fixture-control-board", .client_id = client_id, .unix_seconds = (int64_t)time(NULL)},
         .proxy_name = proxy, .remote_port = (uint16_t)proxy_port, .local_ipv4 = {127, 0, 0, 1},
-        .local_port = 9, .flash_store = &store};
+        .local_port = 9, .flash_store = store};
     assert(efrp_session_create(NULL, tls, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
     assert(efrp_session_create(&config, NULL, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
     efrp_session_config_t invalid = config;
@@ -111,11 +121,14 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
         poll(NULL, 0, 1);
     }
     if (result != expected) { fprintf(stderr, "session mode=%s result=%d expected=%d phase=%d\n", mode, result, expected, status.phase); abort(); }
+    if (!strcmp(mode, "fixture-aead-max-tamper"))
+        assert(status.work.requests == 0 && status.work.rejected_requests == 0);
     if (expected != EFRP_OK) assert(efrp_session_step(session, now_ms(), (int64_t)time(NULL)) == expected);
     assert(efrp_session_cancel(session) == (expected == EFRP_OK ? EFRP_CANCELLED : expected));
     assert(efrp_session_status(session, &status) == EFRP_OK);
     assert(status.work.pending == 0 && !status.work.active && !status.work.waiting && !status.work.cleaning);
     assert(status.phase == ((expected == EFRP_OK || expected == EFRP_CANCELLED) ? EFRP_SESSION_STOPPED : EFRP_SESSION_FAILED));
+#ifndef EFRP_SESSION_IDF_FLASH_TEST
     if (flash.fail_clear) {
         assert(flash.busy && flash.quarantined && flash.begins == 1);
         assert(efrp_session_destroy(&session) == EFRP_STORAGE_ERROR && session);
@@ -123,9 +136,14 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
         assert(flash.busy && flash.quarantined);
         flash.fail_clear = false;
     }
+#endif
     assert(efrp_session_destroy(&session) == EFRP_OK && !session); efrp_tls_destroy(tls);
+#ifdef EFRP_SESSION_IDF_FLASH_TEST
+    efrp_session_idf_flash_check(mode);
+#else
     assert(!flash.busy && flash.clears == flash.begins);
     if (!strcmp(mode, "fixture-aead-max") || !strcmp(mode, "fixture-aead-max-clear-fail")) assert(flash.begins > 0);
+#endif
     fixture_session_released();
     assert(efrp_connect_destroy(&connection) == EFRP_OK && !connection);
     assert(fcntl(fd, F_GETFD) == -1 && errno == EBADF);

@@ -222,7 +222,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 			return err
 		}
 		return awaitStop()
-	case "fixture-record", "fixture-aead-max", "fixture-aead-max-clear-fail":
+	case "fixture-record", "fixture-aead-max", "fixture-aead-max-clear-fail", "fixture-aead-max-tamper":
 		p, _ := json.Marshal(response)
 		// A 4096-byte wire payload crosses every intermediate 1 KiB staging
 		// boundary; add a second frame in the same authenticated record.
@@ -232,7 +232,7 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 		if err = wire.NewConn(&plaintext).WriteFrame(&wire.Frame{Type: wire.FrameTypeMessage, Payload: append([]byte{0, 4}, p...)}); err != nil {
 			return err
 		}
-		if mode == "fixture-aead-max" || mode == "fixture-aead-max-clear-fail" {
+		if mode == "fixture-aead-max" || mode == "fixture-aead-max-clear-fail" || mode == "fixture-aead-max-tamper" {
 			// Pack legal bounded ReqWorkConn frames into one maximum-sized
 			// authenticated record; overflow requests must remain bounded.
 			for plaintext.Len() < 65536 {
@@ -255,6 +255,21 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 			if err = msg.NewV2ReadWriter(&plaintext).WriteMsg(&msg.ReqWorkConn{}); err != nil {
 				return err
 			}
+		}
+		if mode == "fixture-aead-max-tamper" {
+			var captured bytes.Buffer
+			duplex.Writer = &captured
+			_, err = crypto.Write(plaintext.Bytes())
+			duplex.Writer = stream
+			if err != nil {
+				return err
+			}
+			data := captured.Bytes()
+			data[len(data)-1] ^= 1
+			if _, err = stream.Write(data); err != nil {
+				return err
+			}
+			return awaitStop()
 		}
 		if _, err = crypto.Write(plaintext.Bytes()); err != nil {
 			return err
@@ -322,10 +337,13 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 }
 
 func runSessionFixtures(path, dir string) {
+	runSessionFixtureModes(path, dir, sessionFixtureModes)
+}
+
+func runSessionFixtureModes(path, dir string, modes []string) {
 	cert, ca := certificate("ok")
 	caPath := filepath.Join(dir, "fixture-ca.pem")
 	must(os.WriteFile(caPath, ca, 0600))
-	modes := sessionFixtureModes
 	for _, mode := range modes {
 		listener := localListener()
 		result := make(chan error, 1)

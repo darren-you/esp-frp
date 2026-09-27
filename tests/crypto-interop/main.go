@@ -140,6 +140,7 @@ func main() {
 	handshakeArch := flag.String("handshake-arch", "riscv32", "expected FRP Login arch for the handshake peer")
 	tlsPeer := flag.String("tls-peer", "", "C Mbed TLS peer executable")
 	sessionPeer := flag.String("session-peer", "", "C composed control session peer")
+	sessionIDFFlashPeer := flag.String("session-idf-flash-peer", "", "C control session with the production IDF Flash provider")
 	clientPeer := flag.String("client-peer", "", "C single-worker lifecycle peer")
 	workPeer := flag.String("work-peer", "", "C composed local TCP forwarding peer")
 	workFaults := flag.Bool("work-faults", false, "Run work rejection/half-close fixtures instead of the 100 dual-flow rounds")
@@ -159,6 +160,10 @@ func main() {
 	}
 	if *sessionPeer != "" {
 		runSession(*sessionPeer)
+		return
+	}
+	if *sessionIDFFlashPeer != "" {
+		runSessionIDFFlash(*sessionIDFFlashPeer)
 		return
 	}
 	if *tlsPeer != "" {

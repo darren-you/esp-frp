@@ -157,6 +157,17 @@ else()
                 -session-peer $<TARGET_FILE:session_peer>)
             set_tests_properties(session_upstream PROPERTIES
                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/crypto-interop" TIMEOUT 240)
+            add_executable(session_idf_flash_peer tests/session_peer.c tests/session_memory_test.c
+                tests/session_idf_flash_fixture.c src/idf_flash_store.c
+                $<TARGET_OBJECTS:session_memory_fixture>)
+            target_include_directories(session_idf_flash_peer PRIVATE tests/idf-flash-stub tests)
+            target_compile_definitions(session_idf_flash_peer PRIVATE EFRP_SESSION_IDF_FLASH_TEST=1)
+            target_link_libraries(session_idf_flash_peer PRIVATE esp_frp connect_host_test)
+            target_compile_options(session_idf_flash_peer PRIVATE -Wall -Wextra -Werror -Wconversion -UNDEBUG)
+            add_test(NAME session_idf_flash_upstream COMMAND "${GO_EXECUTABLE}" run -mod=readonly .
+                -session-idf-flash-peer $<TARGET_FILE:session_idf_flash_peer>)
+            set_tests_properties(session_idf_flash_upstream PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/crypto-interop" TIMEOUT 90)
             add_library(work_memory_fixture OBJECT src/work.c)
             target_include_directories(work_memory_fixture PRIVATE include src)
             target_link_libraries(work_memory_fixture PRIVATE cjson)

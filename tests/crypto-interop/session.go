@@ -169,3 +169,13 @@ func runSession(path string) {
 		runSessionFixtures(path, dir)
 	})
 }
+
+func runSessionIDFFlash(path string) {
+	withSessionServer(func(port int, caPath, dir string) {
+		sessionCase(path, caPath, "ok", port, 0, 3)
+		runSessionFixtureModes(path, dir, []string{
+			"fixture-aead-max", "fixture-aead-max-tamper", "fixture-aead-tamper",
+		})
+		fmt.Println("Official FRPS and protocol fixtures: composed session with IDF Flash provider passed")
+	})
+}
