@@ -152,6 +152,9 @@ static void step(efrp_client_t *c, uint64_t now)
         result = efrp_tls_step(c->tls, now);
         if (result == EFRP_WOULD_BLOCK) return;
         if (result != EFRP_OK) { drain(c, result); return; }
+        efrp_tls_status_t tls_status;
+        (void)efrp_tls_status(c->tls, &tls_status);
+        c->current.tls_verify_flags = tls_status.verify_flags;
         efrp_session_config_t config = {.login = {.token = c->token, .token_length = c->config.token_length,
             .hostname = c->hostname, .user = c->user, .client_id = c->client_id,
             .previous_run_id = c->current.run_id, .unix_seconds = (int64_t)time(NULL)},

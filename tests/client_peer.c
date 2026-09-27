@@ -177,7 +177,7 @@ int main(int argc, char **argv)
                 assert(!fixture_dns_active()); fixture_dns_mode(FIXTURE_DNS_READY); attempts = 2;
             }
             efrp_status_t s = wait_phase(events.client, EFRP_PHASE_READY, attempts);
-            assert(s.ready_sessions == 1 && s.pongs && s.run_id[0]);
+            assert(s.ready_sessions == 1 && s.pongs && s.run_id[0] && s.tls_verify_flags == 0);
             char first_run_id[EFRP_RUN_ID_BYTES]; memcpy(first_run_id, s.run_id, sizeof first_run_id);
             if (!strcmp(mode, "duplex")) {
                 printf("READY %s\n", s.remote_address); fflush(stdout); command_wait('q');
@@ -204,7 +204,8 @@ int main(int argc, char **argv)
                 assert(b.retry_delay_ms >= 500 && b.retry_delay_ms <= 1000);
                 assert(!b.work.active && !b.work.waiting && !b.work.cleaning);
                 printf("BACKOFF\n"); fflush(stdout); command_wait('c');
-                s = wait_phase(events.client, EFRP_PHASE_READY, 2); assert(s.ready_sessions == 2 && s.retries >= 1);
+                s = wait_phase(events.client, EFRP_PHASE_READY, 2);
+                assert(s.ready_sessions == 2 && s.retries >= 1 && s.tls_verify_flags == 0);
                 assert(!strcmp(first_run_id, s.run_id));
                 printf("RECOVERED %s\n", s.remote_address); fflush(stdout);
                 if (!strcmp(mode, "restart-active")) {
