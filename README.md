@@ -117,6 +117,8 @@ ctest --test-dir build --output-on-failure
 [会话 Flash 硬切收据](docs/operations/p6-frp-session-flash-hard-cut.md)记录三种 host 后端、固定 SDK 双目标样例、相同非空合成输入的容量差异与尚未验收的设备边界。
 [会话阶段复用检查点](docs/operations/p6-frp-session-phase-union.md)记录握手与 Flash 窗口复用后的对象尺寸、资源清理和官方协议回归。
 
+[ESP32 会话 IRAM 放置检查点](docs/operations/p6-esp32-session-iram-placement.md)记录单核 8BIT IRAM 条件分配、签名 QEMU 的严格 TLS/FRPS 容量与正式 Base owner 尚未验证的边界。
+
 `esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格 TLS 的 Yamux 控制流上；不自行建立网络连接。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。会话将握手输出区按阶段复用为接收区，消除独立 4 KiB 申请；[ESP32 Login 内存收据](docs/operations/p6-esp32-login-heap-reuse.md)记录固定 SDK 和 QEMU 对照边界。详见 [握手合同](docs/design/control-handshake.md)。
 
 可选上游 Yamux 互操作检查需要 POSIX 宿主和 Go >= 1.23，以 `-DEFRP_TEST_UPSTREAM_YAMUX=ON` 配置后运行 CTest。AEAD 官方交叉验证使用 Go >=1.25 与 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON`。两者各自固定公开 Go 依赖，不读取相邻仓或生产 FRPS；默认 host 检查不依赖 Go 或外网，POSIX 连接测试会使用回环 TCP。具体命令见[测试入口](tests/README.md)。
