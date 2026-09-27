@@ -47,6 +47,8 @@ flowchart LR
     session <-->|"真实重启与双流"| client
     qemu["官方 ESP32-C3 QEMU"] --> lifecycle["c3-lifecycle：真实 FreeRTOS worker 失败与回收"]
     lifecycle --> lib
+    flash_qemu["C3 QEMU MTD：两次启动"] --> flash_probe["c3-flash-scratch：正式 provider / reader 的满长记录"]
+    flash_probe --> lib
     cmake --> idf_store["idf_flash_store_test.c：真实 IDF adapter／假分区和 owner"]
     idf_store --> lib
     dependency["esp-lwip/tests/zero-window：依赖独立回归"] --> sdk["显式实际 lwIP 源码"]
@@ -54,6 +56,8 @@ flowchart LR
 ```
 
 [C3 生命周期故障探针](c3-lifecycle/README.md)使用相同的 `esp-frp` 设备源码与 FreeRTOS port，在官方 QEMU 检验不可信时间拒绝和百次回收；这条设备软件路径不依赖 host POSIX 调度，结果见[运行记录](../docs/operations/p4-c3-qemu-lifecycle.md)。
+
+[C3 Flash scratch 探针](c3-flash-scratch/README.md)使用正式 IDF 分区 provider 和当前 session 使用的 Flash reader，在两次 QEMU 启动中以同一个 MTD 文件验证 64 KiB 密文实写实读、满长 GCM、16 个窗口复验、坏 tag 与 boot recovery；[运行记录](../docs/operations/p6-c3-flash-scratch-qemu.md)保留固定工具链、原始证据摘要与完整会话未测边界。
 
 默认 host 测试需 C11、CMake >= 3.16、OpenSSL >=3.0 和 cJSON 1.7.19 开发库；在仓库根执行：
 

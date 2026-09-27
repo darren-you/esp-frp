@@ -13,6 +13,9 @@ flowchart LR
     owner["应用控制任务"] -->|"create / start / stop / destroy；有界队列"| client["src/client.c：唯一 worker、清理与退避"]
     qemu["官方 ESP32-C3 QEMU"] --> lifecycle["tests/c3-lifecycle：不可信时间与百次回收"]
     lifecycle --> client
+    flash_qemu["C3 QEMU MTD：两次启动"] --> flash_probe["tests/c3-flash-scratch：真实 64 KiB 擦写与满长认证"]
+    flash_probe --> provider
+    flash_probe --> flash_aead
     sample --> scratch["partitions.csv：样例独占 64 KiB scratch"]
     scratch --> provider["src/idf_flash_store.c：精确分区与 owner adapter"]
     sdk_lock["sdk-lock.json / tools/sdk.py：精确 SDK 源依赖"] --> idf
@@ -90,6 +93,8 @@ ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公
 [独立 TCP 样例](examples/tcp_proxy/README.md) 面向 C3 与 ESP32-D0WD-V3，使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。样例专用 4 MiB 分区表含独占 `frp_scratch`，启动时核对并恢复后才允许联网；默认空输入只供编译，真实设备必须先核对其分区与恢复基线。ESP32 样例采用单核实验配置，目标构建与实板矩阵仍须分别验证。
 
 [C3 生命周期故障探针](tests/c3-lifecycle/README.md)使用公开占位输入，在官方 QEMU 检查真实 FreeRTOS worker 的不可信时间拒绝和百次销毁回收；验证范围与实板边界见[运行记录](docs/operations/p4-c3-qemu-lifecycle.md)。
+
+[C3 Flash scratch 探针](tests/c3-flash-scratch/README.md)在支持 ESP32-C3 的 QEMU MTD 上调用正式 IDF provider 与会话所用 Flash reader，完成独立实验分区的满长密文擦写、GCM 认证、窗口复验、坏 tag 拒绝与跨启动恢复；[运行记录](docs/operations/p6-c3-flash-scratch-qemu.md)明确区分该设备软件切片和完整 FRPS session、Base 产品分区及实板验收。
 
 ```bash
 cmake -S . -B build -DBUILD_TESTING=ON
