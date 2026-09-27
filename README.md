@@ -115,6 +115,7 @@ ctest --test-dir build --output-on-failure
 `esp_frp_idf_flash_store.h` 提供真实 IDF 分区 provider：调用方传入 label、type/subtype、精确 offset/size 和短持有的 storage owner 回调；bind 逐项核对实际分区，recover 擦除中断记录，write 回读校验，clear 只撤销 RAM lease。Base 可复用此 provider 并接自己的 owner，独立样例已绑定专用实验分区；它们仍需分别完成产品容量与实板验证。
 
 [会话 Flash 硬切收据](docs/operations/p6-frp-session-flash-hard-cut.md)记录三种 host 后端、固定 SDK 双目标样例、相同非空合成输入的容量差异与尚未验收的设备边界。
+[会话阶段复用检查点](docs/operations/p6-frp-session-phase-union.md)记录握手与 Flash 窗口复用后的对象尺寸、资源清理和官方协议回归。
 
 `esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格 TLS 的 Yamux 控制流上；不自行建立网络连接。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。会话将握手输出区按阶段复用为接收区，消除独立 4 KiB 申请；[ESP32 Login 内存收据](docs/operations/p6-esp32-login-heap-reuse.md)记录固定 SDK 和 QEMU 对照边界。详见 [握手合同](docs/design/control-handshake.md)。
 

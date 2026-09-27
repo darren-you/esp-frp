@@ -140,6 +140,6 @@ Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回�
 
 可以把完整 Mbed TLS 命令中的 `-fsanitize=address,undefined` 替换为 `-fsanitize=thread`，在独立构建目录运行 `ctest --test-dir <目录> -R '^client_' --output-on-failure`，检查 worker、外部 API、状态副本与迟到测试 DNS 的竞争。不可同时开启 TSan 和 ASan。停止和线程退出检查见[客户端生命周期](../docs/design/client-lifecycle.md)。
 
-`session_peer` 将实际 `session.c` 的对象分配单独替换为测试计数器；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手接收复用输出区，Flash reader 另占 4096 字节窗口。正常/失败/取消会话销毁均检查持有对象已清零且无残留，clear 失败时保留 session handle 后重试。`aead_flash` 覆盖记录边界、满长坏 tag 和 lease 争用；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)与[逐块分配审计](../docs/operations/p6-frp-lazy-aead-memory-audit.md)仅记录旧 RAM reader 的历史容量，不代表当前产品。
+`session_peer` 将实际 `session.c` 的对象分配单独替换为测试计数器；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手结束后，Flash reader 的 4096 字节窗口复用握手所占联合区，并与控制 wire parser 的 `json_rx` 同时保持独立。正常/失败/取消会话销毁均检查持有对象已清零且无残留，clear 失败时保留 session handle 后重试。`aead_flash` 覆盖记录边界、满长坏 tag 和 lease 争用；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)与[逐块分配审计](../docs/operations/p6-frp-lazy-aead-memory-audit.md)仅记录旧 RAM reader 的历史容量，不代表当前产品。
 
 ESP32 32BIT-only IRAM 接收实验已退出当前运行路径。其固定 QEMU 输入和历史结果保留在 [esp32-iram-aead](esp32-iram-aead/README.md)，需要按该页锁定的旧提交重放；当前 `session.c` 与 `aead_upstream` 只使用 Flash reader。

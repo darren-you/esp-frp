@@ -15,24 +15,24 @@ struct efrp_session {
     efrp_tls_t *tls;
     efrp_yamux_t *mux;
     /* Login and authenticated control never overlap. take_result releases
-     * handshake storage before the control parser/writer borrow this union. */
+     * handshake storage before the reader/parser/writer borrow this union. */
     union {
         efrp_handshake_t handshake;
         struct {
             /* control_tx is at most 1024 plaintext bytes; AEAD adds 32. */
             uint8_t aead_tx[1024 + 32], json_rx[EFRP_JSON_MAX_BYTES];
+            uint8_t flash_window[EFRP_AEAD_RX_CHUNK_BYTES];
         } control;
     } storage;
     efrp_aead_flash_reader_t reader;
     efrp_aead_flash_store_t flash_store;
-    uint8_t flash_window[EFRP_AEAD_RX_CHUNK_BYTES];
     efrp_aead_writer_t writer;
     efrp_wire_reader_t frames;
     efrp_session_status_t status;
     efrp_work_set_t work;
     /* Login receives into handshake.output after its bytes enter Yamux.
-     * Authenticated control keeps its own 4096-byte Flash reader window;
-     * json_rx is concurrently borrowed by the wire parser. */
+     * Authenticated control keeps a separate Flash reader window alongside
+     * json_rx, which the wire parser borrows concurrently. */
     uint8_t transport_rx[1024], control_rx[1024], control_tx[1024];
     uint8_t token[EFRP_AEAD_MAX_TOKEN_BYTES];
     char proxy_name[129];
@@ -141,7 +141,8 @@ static efrp_result_t finish_login(efrp_session_t *s)
     efrp_handshake_destroy(&s->storage.handshake);
     s->control_ready = true;
     result = efrp_aead_flash_reader_init(&s->reader, keys.server_to_client,
-                                         &s->flash_store, s->flash_window, sizeof s->flash_window);
+                                         &s->flash_store, s->storage.control.flash_window,
+                                         sizeof s->storage.control.flash_window);
     if (result == EFRP_OK) result = efrp_aead_writer_init(&s->writer, keys.client_to_server, s->storage.control.aead_tx, sizeof s->storage.control.aead_tx);
     efrp_aead_clear_keys(&keys);
     if (result == EFRP_OK)

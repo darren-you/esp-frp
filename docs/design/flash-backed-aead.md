@@ -24,6 +24,6 @@ IDF provider 在 bind 时逐项核对固定 `frp_scratch` label、data/undefined
 
 每次窗口调用会同步读取、哈希和解密整条记录。宿主时长不能推断 C3 的 Flash、PSA、Wi-Fi 和 watchdog 时长；实际设备需测最坏单步耗时、完整记录耗时与既有控制/心跳期限，并确认不会阻塞业务流或 OTA 的 Flash owner。真实设备的擦除失败、写入中断、并发和掉电恢复，以及独立样例双板峰值与 Base 产品装配，均尚未验收。
 
-`efrp_config_t.flash_store` 和 `efrp_session_config_t.flash_store` 都是必填项；client/session 复制回调表，provider 对象和 `context` 必须存活至 destroy 成功。session 在登录完成后初始化唯一 Flash reader，独立 4096 字节窗口不与 wire parser 的 `json_rx` 重叠。`efrp_session_cancel` 后如 clear 失败，reader 保留 lease 与窗口；`efrp_session_destroy` 返回 `EFRP_STORAGE_ERROR` 并保留 handle，调用方应在 owner 可用后重试。client worker 的清理循环也等待此成功，才销毁 TLS/连接并允许重连。旧 RAM reader 和 ESP32 IRAM 实验分支不在当前运行路径。
+`efrp_config_t.flash_store` 和 `efrp_session_config_t.flash_store` 都是必填项；client/session 复制回调表，provider 对象和 `context` 必须存活至 destroy 成功。session 在登录结果移交并销毁握手对象后，复用握手所在联合区初始化唯一 Flash reader 的 4096 字节窗口；窗口不与同一控制阶段的 wire parser `json_rx` 重叠。`efrp_session_cancel` 后如 clear 失败，reader 保留 lease 与窗口；`efrp_session_destroy` 返回 `EFRP_STORAGE_ERROR` 并保留 handle，调用方应在 owner 可用后重试。client worker 的清理循环也等待此成功，才销毁 TLS/连接并允许重连。旧 RAM reader 和 ESP32 IRAM 实验分支不在当前运行路径。
 
 host fake Flash 回归覆盖 4096/4097 边界、64 KiB 正例与错 tag、tag 前零交付、部分写入后报错、窗口复读中途报错、末窗消费时 clear 失败与重试、双 reader 争用、认证后篡改和有效记录替换、掉电后的旧 lease 失效。假 IDF 分区回归另验证精确几何、完整 64 KiB 记录的 17 次复读、OTA owner 占用时小记录绕过 scratch、大记录 begin/写入或窗口复读中安全失败、写回读发现短写、clear 隔离重试，以及错误 `with_owner` 调用次数和操作结果。OpenSSL、独立 PSA 与完整 Mbed TLS host 还运行官方 FRP/FRPS 互操作，包括会话内 64 KiB 正例、坏 tag 和 clear 失败重试。它们证明软件合同，不代替设备 Flash/PSA 芯片运行面与 Base 容量验收。
