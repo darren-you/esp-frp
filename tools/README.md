@@ -16,7 +16,7 @@ flowchart LR
 
 ```bash
 python3 tools/sdk.py prepare --path "$HOME/.espressif/frameworks/esp-frp-idf"
-bash "$HOME/.espressif/frameworks/esp-frp-idf/install.sh" esp32c3
+bash "$HOME/.espressif/frameworks/esp-frp-idf/install.sh" esp32c3 esp32
 source "$HOME/.espressif/frameworks/esp-frp-idf/export.sh"
 python3 tools/sdk.py check --path "$IDF_PATH"
 idf.py -C examples/tcp_proxy build

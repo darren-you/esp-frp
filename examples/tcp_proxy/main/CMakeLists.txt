@@ -1,6 +1,13 @@
+if(IDF_TARGET STREQUAL "esp32c3")
+    set(sample_console_component esp_driver_usb_serial_jtag)
+elseif(IDF_TARGET STREQUAL "esp32")
+    set(sample_console_component esp_driver_uart)
+else()
+    message(FATAL_ERROR "FRP sample supports only esp32c3 and esp32")
+endif()
 idf_component_register(SRCS "sample_main.c" "sample_echo.c" "sample_resources.c"
     INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}"
-    REQUIRES esp-frp esp_wifi esp_event esp_netif esp_timer esp_driver_usb_serial_jtag lwip)
+    REQUIRES esp-frp esp_wifi esp_event esp_netif esp_timer ${sample_console_component} lwip)
 if(NOT EFRP_SAMPLE_INPUTS)
     set(EFRP_SAMPLE_INPUTS "${CMAKE_CURRENT_LIST_DIR}/../inputs.example.h")
 endif()
