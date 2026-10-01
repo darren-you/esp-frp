@@ -1,5 +1,9 @@
 # 开发检查点
 
+## 2026-10-01 源仓整合
+
+隔离产品链候选整合源仓 `0fb7d2129ccf85ef4fdf97d8d4d057cdc3e61626` 的双目标样例历史；保留候选的独占 scratch 分区、实际 provider 装配和分区验证，未退回无 scratch 的旧样例。全部非文档执行输入逐项 Git blob／子模块指针与整合前 `8f056273b3b93ea3273b4637038ddd0c6aea82a8` 一致，两目标的控制台分流保持。此次不含代码、SDK 锁、设备写入或发布变化，不据此扩大既有实板和组合资源验收。
+
 2026-09-27 Flash reader 与 Login 内存修正组合检查点：独立候选将握手缓冲复用 `6609fbc9b324c5e10615731a1a994ec0bfacd258` 与 Flash reader 故障合同 `2f5b93862cbf5ad7d11e66aa08579066dad60bfe` 合入同一源码；第一项 cherry-pick 只在 README 与变更摘要产生说明冲突，代码无需冲突改写。组合代码提交为 `89b07a9921336379b3556df3421ea96984b2714e`，与 `6609fbc9` 对比，`src/session.c`、`src/client.c`、`src/work.c` 均无差异。Flash reader 已随 IDF 组件编译，现有会话仍使用 RAM reader。
 
 - AppleClang ASan/UBSan 主机测试：OpenSSL 与官方 TF-PSA-Crypto 各 **12/12**，完整 Mbed TLS／PSA **21/21**；后者包含真实官方 FRPS 的注册、心跳、工作流与客户端回归。新增 `aead_flash` 在两种密码后端通过。测试使用公开 fixture，不触及正式 FRPS。
