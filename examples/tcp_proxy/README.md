@@ -34,7 +34,7 @@ idf.py -C examples/tcp_proxy -B /private/path/frp-build \
 
 ESP32-D0WD-V3 使用独立的 build、sdkconfig 和相同私有输入格式，将 `IDF_TARGET` 改为 `esp32`。该 target 读取 `sdkconfig.defaults.esp32`，经 UART0 控制台收发实验命令，并以单核实验配置保证任务名快照不会与另一核的任务删除竞争；它只验证 ESP32 芯片上的本样例，不替代未来 Base 双核组合资源验收。C3 读取 `sdkconfig.defaults.esp32c3`，保留原 USB Serial/JTAG 路径。`dependencies.lock.esp32` 与原 C3 锁分离，构建后须核对最终 target、组件摘要及镜像身份，不得混用两套制品。
 
-从 `inputs.example.h` 开始，填写自己的 Wi-Fi、NTP、唯一 FRPS 域名/端口、CA、Token 和代理身份。样例只允许 `127.0.0.1` 作为本地目标，port 指定回显 listener；库本身仍支持配置中的单一固定 IPv4 目标。`remote_port=0` 让隔离 FRPS 分配端口，成功状态中的 `remote=` 用于本轮连接。这里不读取相邻 ESP Base、私有工作区配置或生产 FRPS catalog。
+从 `inputs_example.h` 开始，填写自己的 Wi-Fi、NTP、唯一 FRPS 域名/端口、CA、Token 和代理身份。样例只允许 `127.0.0.1` 作为本地目标，port 指定回显 listener；库本身仍支持配置中的单一固定 IPv4 目标。`remote_port=0` 让隔离 FRPS 分配端口，成功状态中的 `remote=` 用于本轮连接。这里不读取相邻 ESP Base、私有工作区配置或生产 FRPS catalog。
 
 `sample_dns_ipv4` 为空时使用 DHCP 提供的正常 DNS；填入明确 IPv4 时，每次获得 IP 后将其设置为唯一主 DNS，并清空备用位置，适合本机隔离 DNS fixture。SDK 的 `esp_netif_set_dns_info` 拒绝零地址，因此备用位置通过 `tcpip_callback_wait` 在 lwIP 线程清空，完成后才启动 SNTP。证书身份仍是 `server_hostname`，不能用绕过身份校验替代 DNS。NTP 应是可信且可达的时间来源；收到实际同步后才启动 FRP，超过两小时未再次同步则可信条件失效。
 
