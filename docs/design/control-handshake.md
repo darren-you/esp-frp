@@ -4,13 +4,13 @@
 
 ## 输入与字节顺序
 
-init 深拷贝 Token 并构建全部输出，不保留配置指针。Token 非空、最多 1024 字节；hostname/user/client_id/previous_run_id 各最多 128 字节且为有效 UTF-8；时间为调用方提供的正 Unix 秒。主机、端口、证书及时间可信性由后续 transport owner 负责。
+init 深拷贝 Token 并构建全部输出，不保留配置指针。Token 非空、最多 1024 字节；hostname/user/client_id 各最多 128 字节，run_id 最多 64 字节，均为有效 UTF-8；时间为调用方提供的正 Unix 秒。主机、端口、证书及时间可信性由后续 transport owner 负责。
 
-输出顺序是 magic、ClientHello、Login。Hello 声明 TCP、TLS、TCPMux、JSON 与唯一 `aes-256-gcm`，不广告 UDP；32 字节 client random 来自密码随机源。Login 使用产品身份 `esp-frp/0.1.0`、`esp-idf`、`riscv32`，pool_count 固定 0，允许提交上次 run ID。版本身份不冒充官方 frpc。
+输出顺序是 magic、ClientHello、Login。Hello 声明 TCP、TLS、TCPMux、JSON 与唯一 `aes-256-gcm`，不广告 UDP；32 字节 client random 来自密码随机源。Login 使用产品身份 `esp-frp/0.2.0`、`esp-idf`、`riscv32`，pool_count 固定 0，允许提交调用方选择的稳定 run ID 或上次已鉴权 run ID。版本身份不冒充官方 frpc。
 
 Token 鉴权按官方要求为 `hex_lower(MD5(Token || decimal(unix_seconds)))`；SDK/OpenSSL 实现 MD5，本仓只装配输入。它不替代外层严格 TLS 或后续控制 AEAD。时间直接以经过整数格式化的 JSON number 输出，不经过 double，host 验证覆盖 `INT64_MAX`。公开 `efrp_token_auth` 可由后续 heartbeat/work scope 装配调用；本轮未实现这些消息的 scope 状态。
 
-ServerHello 必须先于 LoginResp，算法只能为已广告的 AES，message codec 必须为 JSON、UDP codec 必须为空，server random 必须为 32 字节的规范 Base64。ServerHello 非空 error 返回 NEGOTIATION_FAILED。LoginResp 必须为 wire message type 2，error 非空返回 LOGIN_REJECTED，成功必须有非空且不超过 128 字节的 run_id。服务端 version 可缺省，不用于放宽协议校验。
+ServerHello 必须先于 LoginResp，算法只能为已广告的 AES，message codec 必须为 JSON、UDP codec 必须为空，server random 必须为 32 字节的规范 Base64。ServerHello 非空 error 返回 NEGOTIATION_FAILED。LoginResp 必须为 wire message type 2，error 非空返回 LOGIN_REJECTED，成功必须有非空且不超过 64 字节的 run_id。服务端 version 可缺省，不用于放宽协议校验。
 
 派生使用实际发送的 ClientHello 与收到的 ServerHello 原始 payload；不重新编码服务端 JSON。密钥仅在合法 LoginResp 后移交给调用方，登录拒绝会清除已派生密钥。
 

@@ -84,6 +84,8 @@ flowchart LR
     frps <-->|"真实用户连接与业务字节"| wp
 ```
 
+组件 0.2.0 将可选配置字段硬切为 `run_id`，最大 64 UTF-8 字节，与官方 FRPS 合同一致。调用方可以提交稳定设备 UUID，使冷启动在完成严格 TLS 和 Token 鉴权后替换旧控制连接；状态中的 run ID 只报告已鉴权结果。官方 FRPS 旧连接存活与错误 Token 回归已通过 host 检查，C3/Base 组合实板与容量仍待验收，见[稳定 run ID 检查点](docs/operations/stable_run_id_checkpoint.md)。
+
 `esp_frp.h` 是应用入口：create 深拷贝配置并创建一个空闲 worker；start 只表示命令入队，READY 需完成代理注册和首次认证 Pong。stop 等待连接、迟到 DNS 和回调收敛；超时保留句柄和停止请求，destroy 成功后任务及配置均已释放。网络中断使用单个退避截止时刻，证书、认证和协议错误进入 failed。详见[客户端生命周期](docs/design/client-lifecycle.md)。
 
 ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公开维护 fork `578cf89c343e388db43ba1f4ddcd602fedcb763c` 与公开 ESP lwIP 修正提交；fork 从官方 `fff9895c82d744c7237be8847347bdd1b07c6643` 派生，依次修复 `esp_ota_begin` 擦除失败后的句柄泄漏和 HTTP 客户端初始化失败时的传输句柄泄漏；准备及验证见 [SDK 工具](tools/README.md)。原 SDK 存在已实板复现的双向零窗口 ACK 循环，构建会拒绝原始 lwIP、版本漂移或外部组件替换。修正不改变 FRP/TLS 容量；最新独立样例双流压力测试的最低 heap 已超过 48 KiB，但 Base/MQTT 组合预算和完整实板矩阵仍待验收，详见 [C3 问题记录](docs/issues/c3-loopback-memory-pressure.md)。

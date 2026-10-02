@@ -14,6 +14,7 @@ struct efrp_client {
     efrp_config_t config;
     efrp_aead_flash_store_t flash_store;
     char server[254], hostname[129], user[129], client_id[129], proxy[129];
+    char requested_run_id[EFRP_RUN_ID_BYTES];
     uint8_t token[EFRP_AEAD_MAX_TOKEN_BYTES];
     uint8_t *ca;
     /* API lock owns these fields, status lock owns completed_ticket/snapshot. */
@@ -158,7 +159,8 @@ static void step(efrp_client_t *c, uint64_t now)
         c->current.tls_verify_flags = tls_status.verify_flags;
         efrp_session_config_t config = {.login = {.token = c->token, .token_length = c->config.token_length,
             .hostname = c->hostname, .user = c->user, .client_id = c->client_id,
-            .previous_run_id = c->current.run_id, .unix_seconds = (int64_t)time(NULL)},
+            .run_id = c->current.run_id[0] ? c->current.run_id : c->requested_run_id,
+            .unix_seconds = (int64_t)time(NULL)},
             .proxy_name = c->proxy, .remote_port = c->config.remote_port, .local_port = c->config.local_port,
             .flash_store = &c->flash_store};
         memcpy(config.local_ipv4, c->config.local_ipv4, sizeof config.local_ipv4);
@@ -228,7 +230,7 @@ efrp_result_t efrp_create(const efrp_config_t *config, efrp_client_t **out)
         !copy_string(c->hostname, config->hostname, 128, false, false) ||
         !copy_string(c->user, config->user, 128, false, false) ||
         !copy_string(c->client_id, config->client_id, 128, false, false) ||
-        !copy_string(c->current.run_id, config->previous_run_id, 128, false, false) ||
+        !copy_string(c->requested_run_id, config->run_id, EFRP_RUN_ID_BYTES - 1U, false, false) ||
         !copy_string(c->proxy, config->proxy_name, 128, false, true)) { free(c); return EFRP_INVALID_ARGUMENT; }
     c->ca = malloc(config->ca_length);
     if (!c->ca) { free(c); return EFRP_NO_MEMORY; }
@@ -237,7 +239,7 @@ efrp_result_t efrp_create(const efrp_config_t *config, efrp_client_t **out)
     c->flash_store = *config->flash_store;
     c->config.server_hostname = c->server; c->config.hostname = c->hostname; c->config.user = c->user;
     c->config.client_id = c->client_id; c->config.proxy_name = c->proxy; c->config.token = c->token; c->config.ca_pem = c->ca;
-    c->config.previous_run_id = c->current.run_id;
+    c->config.run_id = c->requested_run_id;
     c->config.flash_store = &c->flash_store;
     c->current.phase = EFRP_PHASE_STOPPED; c->current.tls_verify_flags = UINT32_MAX; c->snapshot = c->current;
     efrp_result_t result = efrp_port_create(&c->port);

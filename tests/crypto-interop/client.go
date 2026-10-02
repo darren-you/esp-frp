@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -174,6 +175,58 @@ func clientActiveRestartCase(path, caPath string, port int, stop, start func()) 
 	fmt.Print(stderr.String())
 	fmt.Println("Official FRPS: two active streams interrupted, local sockets retired, same worker recovered and two new full-duplex streams passed")
 }
+
+// Keep the old authenticated control alive while a fresh process requests the
+// same stable identity. No prior run ID or device storage reaches the new peer.
+func clientColdReplacementCase(path, caPath string, port int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	start := func() (*exec.Cmd, io.WriteCloser, *bufio.Scanner, *bytes.Buffer) {
+		cmd := exec.CommandContext(ctx, path, strconv.Itoa(port), caPath, "stable-live", "1")
+		stderr := new(bytes.Buffer)
+		cmd.Stderr = stderr
+		stdout, err := cmd.StdoutPipe()
+		must(err)
+		stdin, err := cmd.StdinPipe()
+		must(err)
+		must(cmd.Start())
+		return cmd, stdin, bufio.NewScanner(stdout), stderr
+	}
+	old, oldInput, oldOutput, oldError := start()
+	defer func() { _ = old.Process.Kill(); _ = old.Wait() }()
+	if !oldOutput.Scan() || !strings.HasPrefix(oldOutput.Text(), "READY ") {
+		panic(fmt.Sprintf("old stable control not ready: %s", oldError.String()))
+	}
+	must(old.Process.Signal(syscall.SIGSTOP))
+	clientCase(path, caPath, "stable-wrong-token", port, 1, nil, nil)
+	must(old.Process.Signal(syscall.SIGCONT))
+	time.Sleep(100 * time.Millisecond)
+	_, err := io.WriteString(oldInput, "v")
+	must(err)
+	if !oldOutput.Scan() || oldOutput.Text() != "STILL_READY" {
+		panic(fmt.Sprintf("bad Token altered the old authenticated control: %s", oldError.String()))
+	}
+	must(old.Process.Signal(syscall.SIGSTOP))
+	before := time.Now()
+	fresh, freshInput, freshOutput, freshError := start()
+	defer func() { _ = fresh.Process.Kill(); _ = fresh.Wait() }()
+	if !freshOutput.Scan() || !strings.HasPrefix(freshOutput.Text(), "READY ") {
+		panic(fmt.Sprintf("fresh stable control did not replace suspended peer: %s", freshError.String()))
+	}
+	if time.Since(before) >= 15*time.Second {
+		panic("replacement did not precede old control heartbeat expiry")
+	}
+	_, err = io.WriteString(freshInput, "q")
+	must(err)
+	must(freshInput.Close())
+	if err := fresh.Wait(); err != nil {
+		panic(fmt.Sprintf("fresh stable control cleanup: %v\n%s", err, freshError.String()))
+	}
+	must(freshOutput.Err())
+	fmt.Print(freshError.String())
+	fmt.Println("Official FRPS: fresh process reused stable run identity before old control expired; wrong Token preserved old authenticated control")
+}
+
 func runClient(path string) {
 	withControlledSessionServer(func(port int, caPath, dir string, stop, start func()) {
 		clientCase(path, caPath, "lifecycle", port, 100, stop, start)
@@ -182,6 +235,7 @@ func runClient(path string) {
 		for _, mode := range []string{"replacement", "concurrent-stop", "pause-stopped", "backoff-matrix", "reuse", "dns-pending", "dns-retry", "no-memory", "untrusted", "wrong-token", "wrong-host", "pause-tls", "pause-login", "pause-register", "pause-ready", "stop-backoff", "trust-lost", "restart"} {
 			clientCase(path, caPath, mode, port, 1, stop, start)
 		}
+		clientColdReplacementCase(path, caPath, port)
 		fmt.Println("Single worker: official FRPS lifecycle, restart/reconnect, trust/auth failure, stop deadlines and callback drain passed")
 	})
 }

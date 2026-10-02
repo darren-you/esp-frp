@@ -124,11 +124,11 @@ static bool accept_frame(void *context, efrp_frame_kind_t kind, const uint8_t *p
     if (result != EFRP_OK) h->failure = result;
     return result == EFRP_OK;
 }
-static bool config_string(const char *s)
+static bool config_string(const char *s, size_t limit)
 {
     if (!s) return true;
-    size_t n = 0; while (n <= 128 && s[n]) ++n;
-    return n <= 128 && efrp_json_utf8((const uint8_t *)s, n);
+    size_t n = 0; while (n <= limit && s[n]) ++n;
+    return n <= limit && efrp_json_utf8((const uint8_t *)s, n);
 }
 static bool add_string(cJSON *object, const char *name, const char *value)
 {
@@ -146,8 +146,8 @@ efrp_result_t efrp_handshake_init(efrp_handshake_t *h, const efrp_handshake_conf
 {
     if (!h || !c || !storage || capacity < EFRP_HANDSHAKE_RX_BYTES || !c->token || !c->token_length ||
         c->token_length > EFRP_AEAD_MAX_TOKEN_BYTES || c->unix_seconds <= 0 ||
-        now > UINT64_MAX - EFRP_HANDSHAKE_TIMEOUT_MS || !config_string(c->hostname) ||
-        !config_string(c->user) || !config_string(c->client_id) || !config_string(c->previous_run_id)) return EFRP_INVALID_ARGUMENT;
+        now > UINT64_MAX - EFRP_HANDSHAKE_TIMEOUT_MS || !config_string(c->hostname, 128) ||
+        !config_string(c->user, 128) || !config_string(c->client_id, 128) || !config_string(c->run_id, EFRP_RUN_ID_BYTES - 1U)) return EFRP_INVALID_ARGUMENT;
     if (h->active) return EFRP_INVALID_STATE;
     *h = (efrp_handshake_t){.active = true, .storage = storage, .state = EFRP_HANDSHAKE_SEND,
         .deadline_ms = now + EFRP_HANDSHAKE_TIMEOUT_MS, .last_now_ms = now, .token_length = c->token_length};
@@ -166,10 +166,10 @@ efrp_result_t efrp_handshake_init(efrp_handshake_t *h, const efrp_handshake_conf
     if (result != EFRP_OK) return fail(h, result);
     cJSON *login = cJSON_CreateObject();
     char timestamp[21]; snprintf(timestamp, sizeof timestamp, "%" PRId64, c->unix_seconds);
-    bool built = login && add_string(login, "version", "esp-frp/0.1.0") && add_string(login, "os", "esp-idf") &&
+    bool built = login && add_string(login, "version", "esp-frp/0.2.0") && add_string(login, "os", "esp-idf") &&
         add_string(login, "arch", EFRP_LOGIN_ARCH) && add_string(login, "hostname", c->hostname) &&
         add_string(login, "user", c->user) && add_string(login, "client_id", c->client_id) &&
-        add_string(login, "run_id", c->previous_run_id) && add_string(login, "privilege_key", auth) &&
+        add_string(login, "run_id", c->run_id) && add_string(login, "privilege_key", auth) &&
         cJSON_AddRawToObject(login, "timestamp", timestamp) && cJSON_AddNumberToObject(login, "pool_count", 0);
     efrp_crypto_zero(auth, sizeof auth);
     size_t offset = 7 + 8 + h->hello_length;

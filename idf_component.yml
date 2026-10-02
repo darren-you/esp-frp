@@ -1,4 +1,4 @@
-version: "0.1.0"
+version: "0.2.0"
 description: "ESP FRP protocol implementation under development"
 url: "https://github.com/esp-space/esp-frp"
 repository: "https://github.com/esp-space/esp-frp.git"

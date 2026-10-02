@@ -107,8 +107,9 @@ int main(int argc, char **argv)
         if (!strcmp(mode, "pause-ready")) events.pause_phase = EFRP_PHASE_READY;
         if (!strcmp(mode, "pause-stopped")) events.pause_phase = EFRP_PHASE_STOPPED;
         char server[254] = "frp.fixture.invalid", token[] = "public-session-token", proxy[129];
-        snprintf(proxy, sizeof proxy, "fixture-client-%s-%u", mode, i);
-        if (!strcmp(mode, "wrong-token")) token[0] = 'x';
+        const bool stable = !strcmp(mode, "stable-live") || !strcmp(mode, "stable-wrong-token");
+        snprintf(proxy, sizeof proxy, "fixture-client-%s-%u", stable ? "stable-live" : mode, i);
+        if (!strcmp(mode, "wrong-token") || !strcmp(mode, "stable-wrong-token")) token[0] = 'x';
         if (!strcmp(mode, "wrong-host")) strcpy(server, "wrong.fixture.invalid");
         if (!strcmp(mode, "untrusted")) atomic_store(&events.trusted, false);
         events.fast_backoff = !strcmp(mode, "backoff-matrix");
@@ -122,7 +123,13 @@ int main(int argc, char **argv)
             .local_ipv4 = {127, 0, 0, 1}, .local_port = argc == 6 ? (uint16_t)strtoul(argv[5], NULL, 10) : 1,
             .time_is_trusted = trusted, .on_event = event, .context = &events,
             .flash_store = &store};
+        if (stable) config.run_id = proxy;
         assert(efrp_create(&config, &events.client) == EFRP_OK);
+        if (stable) {
+            efrp_status_t before_login;
+            assert(efrp_get_status(events.client, &before_login) == EFRP_OK);
+            assert(before_login.phase == EFRP_PHASE_STOPPED && before_login.run_id[0] == 0);
+        }
         assert(efrp_create(&config, &events.client) == EFRP_INVALID_STATE);
         memset(ca_copy, 0, n); free(ca_copy);
         /* The next attempt must use the copied inputs, not these stack buffers. */
@@ -161,10 +168,10 @@ int main(int argc, char **argv)
             assert(efrp_stop(events.client, 20) == EFRP_TIMEOUT);
             assert(efrp_start(events.client) == EFRP_INVALID_STATE);
             atomic_store(&events.release, true);
-        } else if (!strcmp(mode, "wrong-token") || !strcmp(mode, "wrong-host") ||
+        } else if (!strcmp(mode, "wrong-token") || !strcmp(mode, "stable-wrong-token") || !strcmp(mode, "wrong-host") ||
                    !strcmp(mode, "untrusted") || !strcmp(mode, "no-memory")) {
             efrp_status_t s = wait_phase(events.client, EFRP_PHASE_FAILED, 1);
-            efrp_result_t want = !strcmp(mode, "wrong-token") ? EFRP_LOGIN_REJECTED :
+            efrp_result_t want = (!strcmp(mode, "wrong-token") || !strcmp(mode, "stable-wrong-token")) ? EFRP_LOGIN_REJECTED :
                 !strcmp(mode, "wrong-host") ? EFRP_TLS_TRUST_ERROR :
                 !strcmp(mode, "untrusted") ? EFRP_TIME_UNTRUSTED : EFRP_NO_MEMORY;
             assert(s.error == want && !s.retry_at_ms);
@@ -179,7 +186,18 @@ int main(int argc, char **argv)
             efrp_status_t s = wait_phase(events.client, EFRP_PHASE_READY, attempts);
             assert(s.ready_sessions == 1 && s.pongs && s.run_id[0] && s.tls_verify_flags == 0);
             char first_run_id[EFRP_RUN_ID_BYTES]; memcpy(first_run_id, s.run_id, sizeof first_run_id);
-            if (!strcmp(mode, "duplex")) {
+            if (!strcmp(mode, "stable-live")) {
+                assert(!strcmp(s.run_id, "fixture-client-stable-live-0"));
+                printf("READY %s\n", s.remote_address); fflush(stdout);
+                char command = 0;
+                assert(read(STDIN_FILENO, &command, 1) == 1);
+                if (command == 'v') {
+                    assert(efrp_get_status(events.client, &s) == EFRP_OK);
+                    assert(s.phase == EFRP_PHASE_READY && s.ready_sessions == 1 &&
+                           !strcmp(s.run_id, "fixture-client-stable-live-0") && s.tls_verify_flags == 0);
+                    puts("STILL_READY"); fflush(stdout); command_wait('q');
+                } else assert(command == 'q');
+            } else if (!strcmp(mode, "duplex")) {
                 printf("READY %s\n", s.remote_address); fflush(stdout); command_wait('q');
                 uint64_t end = efrp_port_now_ms() + 5000;
                 do {
@@ -237,7 +255,7 @@ int main(int argc, char **argv)
                 assert(open_fds() == baseline); events.has_owner = false;
                 strcpy(server, "frp.fixture.invalid"); strcpy(token, "public-session-token");
                 snprintf(proxy, sizeof proxy, "fixture-client-%s-%u", mode, i);
-                config.ca_pem = ca; config.previous_run_id = first_run_id;
+                config.ca_pem = ca; config.run_id = first_run_id;
                 assert(efrp_create(&config, &events.client) == EFRP_OK);
                 char expected_run_id[EFRP_RUN_ID_BYTES]; memcpy(expected_run_id, first_run_id, sizeof first_run_id);
                 memset(first_run_id, 'x', strlen(first_run_id));

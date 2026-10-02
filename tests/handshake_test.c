@@ -12,7 +12,7 @@ static const char login[] = "{\"version\":\"0.71.0\",\"run_id\":\"0123456789abcd
 static efrp_handshake_config_t config(void)
 {
     return (efrp_handshake_config_t){.token = token, .token_length = sizeof token - 1,
-        .hostname = "board\"\\\n", .user = "公开测试", .client_id = "fixture", .previous_run_id = "old-id", .unix_seconds = INT64_C(1790000000)};
+        .hostname = "board\"\\\n", .user = "公开测试", .client_id = "fixture", .run_id = "old-id", .unix_seconds = INT64_C(1790000000)};
 }
 static void zero(const void *p, size_t n)
 {
@@ -148,6 +148,13 @@ static void invalid_messages(void)
         "{\"run_id\":\"a\",\"run_id\":\"b\"}", "{\"run_id\":\"a\",\"error\":false}",
         "{\"run_id\":\"a\",\"version\":7}", "{\"run_id\":\"a\",\"unknown\":{}}"};
     for (size_t i = 0; i < sizeof bad_login / sizeof bad_login[0]; ++i) rejection(hello, bad_login[i], EFRP_PROTOCOL_ERROR);
+    char oversized_run[EFRP_RUN_ID_BYTES + 1U];
+    memset(oversized_run, 'r', sizeof oversized_run - 1U);
+    oversized_run[sizeof oversized_run - 1U] = 0;
+    char oversized_login[128];
+    assert(snprintf(oversized_login, sizeof oversized_login,
+                    "{\"run_id\":\"%s\"}", oversized_run) > 0);
+    rejection(hello, oversized_login, EFRP_PROTOCOL_ERROR);
     rejection(hello, "{\"error\":\"wrong token\"}", EFRP_LOGIN_REJECTED);
     const char *target[] = {"aes-256-gcm", "json", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="};
     for (size_t i = 0; i < 3; ++i) {

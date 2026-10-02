@@ -60,7 +60,7 @@ func handshakeRound(path, expectedArch string, step int, seconds int64, scenario
 	}
 	var login msg.Login
 	must(msg.NewV2ReadWriterWithConn(frames).ReadMsgInto(&login))
-	if reader.Len() != 0 || login.PoolCount != 0 || login.Timestamp != seconds || login.Version != "esp-frp/0.1.0" ||
+	if reader.Len() != 0 || login.PoolCount != 0 || login.Timestamp != seconds || login.Version != "esp-frp/0.2.0" ||
 		login.Hostname != "board\"\\\n" || login.User != "公开测试" || login.ClientID != "fixture" || login.RunID != "old-id" ||
 		login.Os != "esp-idf" || login.Arch != expectedArch {
 		panic("login field mismatch")

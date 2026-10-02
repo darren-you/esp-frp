@@ -41,7 +41,7 @@ static atomic_uint ip_generation, wifi_notice, sync_seconds;
 static bool wifi_wanted=true;
 static efrp_client_t *client;
 static unsigned cycle;
-static char previous_run_id[EFRP_RUN_ID_BYTES];
+static char last_run_id[EFRP_RUN_ID_BYTES];
 
 static bool trusted(void *context)
 {
@@ -116,7 +116,7 @@ static esp_err_t set_dns(void)
 static efrp_result_t create_client(void)
 {
     efrp_config_t config=sample_frp_config;
-    config.time_is_trusted=trusted; config.previous_run_id=previous_run_id;
+    config.time_is_trusted=trusted; config.run_id=last_run_id;
     config.flash_store=sample_flash_store_callbacks();
     efrp_result_t result=efrp_create(&config, &client);
     if (result == EFRP_OK) result=efrp_start(client);
@@ -158,7 +158,7 @@ static void command(const char *text)
     if (!strcmp(text,"cycle") || !strcmp(text,"destroy") || !strcmp(text,"destroy_short")) {
         if (client) {
             efrp_status_t status; (void)efrp_get_status(client, &status);
-            if (status.run_id[0]) memcpy(previous_run_id,status.run_id,sizeof previous_run_id);
+            if (status.run_id[0]) memcpy(last_run_id,status.run_id,sizeof last_run_id);
         }
         result=efrp_destroy(&client,!strcmp(text,"destroy_short") ? 50 : 30000);
         if (result == EFRP_OK) {

@@ -7,7 +7,7 @@ extern "C" {
 #endif
 #define EFRP_HANDSHAKE_RX_BYTES 4096u
 #define EFRP_HANDSHAKE_TX_BYTES 4096u
-#define EFRP_RUN_ID_BYTES 129u
+#define EFRP_RUN_ID_BYTES 65u
 #define EFRP_HANDSHAKE_TIMEOUT_MS UINT64_C(10000)
 
 typedef enum {
@@ -19,7 +19,7 @@ typedef struct {
     const uint8_t *token;
     size_t token_length;
     /* Optional UTF-8 strings, each <=128 bytes; NULL means empty. */
-    const char *hostname, *user, *client_id, *previous_run_id;
+    const char *hostname, *user, *client_id, *run_id;
     int64_t unix_seconds; /* positive trusted wall clock, provided by owner */
 } efrp_handshake_config_t;
 /* Caller-owned, zero initialize; single owner, fields are not for mutation.

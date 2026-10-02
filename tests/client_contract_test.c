@@ -63,8 +63,8 @@ int main(void)
         case 11: bad.local_ipv4[0] = 224; break;
         case 12: bad.local_port = 0; break;
         case 13: bad.time_is_trusted = NULL; break;
-        case 14: bad.previous_run_id = long_name; break;
-        case 15: bad.previous_run_id = "\xc0\xaf"; break;
+        case 14: bad.run_id = long_name; break;
+        case 15: bad.run_id = "\xc0\xaf"; break;
         case 16: bad.flash_store = NULL; break;
         case 17: {
             efrp_aead_flash_store_t missing = store;
@@ -76,6 +76,18 @@ int main(void)
         }
         assert(efrp_create(&bad, &c) == EFRP_INVALID_ARGUMENT && !c && !live);
     }
+    char bounded_run_id[EFRP_RUN_ID_BYTES + 1U];
+    memset(bounded_run_id, 'r', sizeof bounded_run_id);
+    bounded_run_id[EFRP_RUN_ID_BYTES - 1U] = 0;
+    efrp_config_t bounded = good;
+    bounded.run_id = bounded_run_id;
+    assert(efrp_create(&bounded, &c) == EFRP_OK && c);
+    efrp_status_t unverified;
+    assert(efrp_get_status(c, &unverified) == EFRP_OK && unverified.run_id[0] == 0);
+    assert(efrp_destroy(&c, 1000) == EFRP_OK && !c && !live);
+    bounded_run_id[EFRP_RUN_ID_BYTES - 1U] = 'r';
+    bounded_run_id[EFRP_RUN_ID_BYTES] = 0;
+    assert(efrp_create(&bounded, &c) == EFRP_INVALID_ARGUMENT && !c && !live);
     verify_zero = true;
     for (unsigned index = 1; index <= 4; ++index) {
         calls = 0; fail_at = index;
