@@ -84,7 +84,7 @@ flowchart LR
     frps <-->|"真实用户连接与业务字节"| wp
 ```
 
-组件 0.2.0 将可选配置字段硬切为 `run_id`，最大 64 UTF-8 字节，与官方 FRPS 合同一致。调用方可以提交稳定设备 UUID，使冷启动在完成严格 TLS 和 Token 鉴权后替换旧控制连接；状态中的 run ID 只报告已鉴权结果。官方 FRPS 旧连接存活与错误 Token 回归通过 host 检查，C3/Base 代表业务的联合 OTA／再次重启 FRP 恢复通过；来源下载最低历史 heap 4124 B，容量仍失败，见[稳定 run ID 检查点](docs/operations/stable_run_id_checkpoint.md)。
+组件 0.2.0 将可选配置字段硬切为 `run_id`，最大 64 UTF-8 字节，与官方 FRPS 合同一致。调用方可以提交稳定设备 UUID，使冷启动在完成严格 TLS 和 Token 鉴权后替换旧控制连接；状态中的 run ID 只报告已鉴权结果。官方 FRPS 旧连接存活与错误 Token 回归通过 host 检查，C3/Base 代表业务的联合 OTA／再次重启 FRP 恢复通过；来源下载最低历史 heap 4124 B，容量仍失败，见[稳定 run ID 检查点](docs/operations/stable-run-id-checkpoint.md)。
 
 `esp_frp.h` 是应用入口：create 深拷贝配置并创建一个空闲 worker；start 只表示命令入队，READY 需完成代理注册和首次认证 Pong。stop 等待连接、迟到 DNS 和回调收敛；超时保留句柄和停止请求，destroy 成功后任务及配置均已释放。网络中断使用单个退避截止时刻，证书、认证和协议错误进入 failed。详见[客户端生命周期](docs/design/client-lifecycle.md)。
 
@@ -134,5 +134,5 @@ ctest --test-dir build --output-on-failure
 
 - [来源](docs/design/source-provenance.md)
 - [客户端合同](docs/design/client-contract.md)
-- [扩展 Roadmap](ROADMAP.md)
-- [FRP 工程标准](https://github.com/darren-you/darren-space/blob/master/harness/docs/workspace/standards/frp/frp_golden_path.md)
+- [扩展 Roadmap](roadmap.md)
+- [FRP 工程标准](https://github.com/darren-you/darren-space/blob/master/harness/docs/workspace/standards/frp/frp-golden-path.md)

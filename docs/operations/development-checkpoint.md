@@ -1,8 +1,8 @@
 # 开发检查点
 
-2026-10-02 稳定 run ID 的 C3 联合功能续验：固定 SDK 双目标及 Base 软件回归通过，C3 的 WRITE 联合 OTA／MQTT restart 后 FRP 恢复、十二项业务、卸载和代码恢复通过。143 份成功证据保留，来源下载最低历史 heap 4124 B，组合容量继续失败；详情见[稳定身份检查点](stable_run_id_checkpoint.md)。
+2026-10-02 稳定 run ID 的 C3 联合功能续验：固定 SDK 双目标及 Base 软件回归通过，C3 的 WRITE 联合 OTA／MQTT restart 后 FRP 恢复、十二项业务、卸载和代码恢复通过。143 份成功证据保留，来源下载最低历史 heap 4124 B，组合容量继续失败；详情见[稳定身份检查点](stable-run-id-checkpoint.md)。
 
-2026-10-02 稳定 run ID 软件切片：组件 0.2.0 硬切可选字段，允许已有稳定设备身份在完整鉴权后接管旧控制连接，状态只报告已鉴权结果。官方 FRPS 冷实例／错误 Token、ASan/UBSan 和独立 TSan 回归通过；Base 精确锁、双目标 SDK、C3 实板和容量继续开放，见[检查点](stable_run_id_checkpoint.md)。
+2026-10-02 稳定 run ID 软件切片：组件 0.2.0 硬切可选字段，允许已有稳定设备身份在完整鉴权后接管旧控制连接，状态只报告已鉴权结果。官方 FRPS 冷实例／错误 Token、ASan/UBSan 和独立 TSan 回归通过；Base 精确锁、双目标 SDK、C3 实板和容量继续开放，见[检查点](stable-run-id-checkpoint.md)。
 
 ## 2026-10-01 源仓整合
 
