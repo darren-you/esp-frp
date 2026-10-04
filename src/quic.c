@@ -508,11 +508,14 @@ static efrp_result_t read_stream(efrp_transport_t *base, efrp_stream_id_t id, ui
     if (s->reset) return EFRP_STREAM_RESET;
     if (!s->receive_used) return s->remote_fin ? EFRP_EOF : EFRP_WOULD_BLOCK;
     if (n > s->receive_used) n = s->receive_used;
+    if (!s->closed) {
+        int result = ngtcp2_conn_extend_max_stream_offset(t->connection, (int64_t)s->id, n);
+        if (result) return library_failure(t, result);
+    }
     size_t first = EFRP_QUIC_RX_BYTES - s->receive_head; if (first > n) first = n;
     memcpy(p, s->receive + s->receive_head, first); if (n > first) memcpy(p + first, s->receive, n - first);
     efrp_crypto_zero(s->receive + s->receive_head, first); if (n > first) efrp_crypto_zero(s->receive, n - first);
     s->receive_head = (s->receive_head + n) % EFRP_QUIC_RX_BYTES; s->receive_used -= n;
-    if (!s->closed) ngtcp2_conn_extend_max_stream_offset(t->connection, (int64_t)s->id, n);
     ngtcp2_conn_extend_max_offset(t->connection, n); *read = n; return EFRP_OK;
 }
 static efrp_result_t close_write(efrp_transport_t *base, efrp_stream_id_t id)
