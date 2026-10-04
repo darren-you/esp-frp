@@ -15,8 +15,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-void fixture_session_check(const efrp_session_config_t *, efrp_tls_t *, uint64_t);
+void fixture_session_check(const efrp_session_config_t *, efrp_transport_t *, uint64_t);
 void fixture_session_released(void);
+void fixture_session_fail_next_allocation(void);
 static uint64_t now_ms(void)
 {
     struct timespec t; assert(clock_gettime(CLOCK_MONOTONIC, &t) == 0);
@@ -24,6 +25,7 @@ static uint64_t now_ms(void)
 }
 static efrp_result_t expected_result(const char *mode)
 {
+    if (!strcmp(mode, "registration-memory")) return EFRP_NO_MEMORY;
     if (!strcmp(mode, "wrong-token")) return EFRP_LOGIN_REJECTED;
     if (!strcmp(mode, "proxy-error")) return EFRP_PROXY_REJECTED;
     if (!strcmp(mode, "fixture-login-fin") || !strcmp(mode, "fixture-frame-truncated") ||
@@ -55,7 +57,7 @@ static efrp_result_t session_recv(void *context, uint8_t *p, size_t n, size_t *r
 static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const char *mode,
     unsigned round, unsigned proxy_port)
 {
-    efrp_connect_t *connection = NULL; efrp_tls_t *tls = NULL; efrp_session_t *session = NULL;
+    efrp_connect_t *connection = NULL; efrp_tls_t *tls = NULL; efrp_transport_t *transport = NULL; efrp_session_t *session = NULL;
     assert(efrp_connect_create("frp.fixture.invalid", (uint16_t)port, now_ms(), &connection) == EFRP_OK);
     efrp_result_t result;
     do { result = efrp_connect_step(connection, now_ms()); if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1); } while (result == EFRP_WOULD_BLOCK);
@@ -67,6 +69,7 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
     assert(efrp_tls_create(&tls_config, now_ms(), &tls) == EFRP_OK);
     do { result = efrp_tls_step(tls, now_ms()); if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1); } while (result == EFRP_WOULD_BLOCK);
     assert(result == EFRP_OK);
+    assert(efrp_transport_yamux_create(tls, now_ms(), &transport) == EFRP_OK);
     char proxy[100], client_id[100];
     snprintf(proxy, sizeof proxy, "fixture-control-%s-%u", mode, round);
     snprintf(client_id, sizeof client_id, "fixture-client-%s-%u", mode, round);
@@ -85,18 +88,19 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
         .hostname = "fixture-control-board", .client_id = client_id, .unix_seconds = (int64_t)time(NULL)},
         .proxy_name = proxy, .remote_port = (uint16_t)proxy_port, .local_ipv4 = {127, 0, 0, 1},
         .local_port = 9, .flash_store = store};
-    assert(efrp_session_create(NULL, tls, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
+    assert(efrp_session_create(NULL, transport, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
     assert(efrp_session_create(&config, NULL, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
     efrp_session_config_t invalid = config;
     invalid.proxy_name = "";
-    assert(efrp_session_create(&invalid, tls, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
-    if (!round) fixture_session_check(&config, tls, now_ms());
-    assert(efrp_session_create(&config, tls, now_ms(), &session) == EFRP_OK);
-    assert(efrp_session_create(&config, tls, now_ms(), &session) == EFRP_INVALID_STATE);
+    assert(efrp_session_create(&invalid, transport, now_ms(), &session) == EFRP_INVALID_ARGUMENT && !session);
+    if (!round) fixture_session_check(&config, transport, now_ms());
+    assert(efrp_session_create(&config, transport, now_ms(), &session) == EFRP_OK);
+    assert(efrp_session_create(&config, transport, now_ms(), &session) == EFRP_INVALID_STATE);
     assert(efrp_session_step(session, 0, (int64_t)time(NULL)) == EFRP_INVALID_ARGUMENT);
     assert(efrp_session_step(session, now_ms(), 0) == EFRP_INVALID_ARGUMENT);
     // The session/handshake must own their configuration after create.
     memset(proxy, 'x', strlen(proxy)); memset(client_id, 'y', strlen(client_id));
+    if (!strcmp(mode, "registration-memory")) fixture_session_fail_next_allocation();
     efrp_result_t expected = expected_result(mode);
     bool announced = false; uint64_t end = now_ms() + 20000; efrp_session_status_t status = {0};
     if (!strcmp(mode, "cancel-login")) {
@@ -110,8 +114,17 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
             result = efrp_session_cancel(session); expected = EFRP_CANCELLED; break;
         }
         if (status.phase == EFRP_SESSION_REGISTERED) {
-            assert(status.run_id[0] && status.remote_address[0]);
-            if (!announced) { printf("REGISTERED %s\n", status.remote_address); fflush(stdout); announced = true; }
+            assert(status.run_id[0] && status.remote_address_length);
+            if (!announced) {
+                char address[257]; size_t length;
+                assert(efrp_session_remote_address(session, address, sizeof address, &length) == EFRP_OK);
+                assert(length == status.remote_address_length);
+                char small[2] = {1, 1}; size_t needed = 0;
+                assert(efrp_session_remote_address(session, small, sizeof small, &needed) == EFRP_CAPACITY_EXCEEDED);
+                assert(needed == length && !small[0] && small[1] == 1);
+                assert(efrp_session_remote_address(session, NULL, 0, &needed) == EFRP_CAPACITY_EXCEEDED && needed == length);
+                printf("REGISTERED %s\n", address); fflush(stdout); announced = true;
+            }
             unsigned want_pongs = !strcmp(mode, "heartbeat") ? 2 : 1;
             bool need_work = !strcmp(mode, "request") || !strcmp(mode, "fixture-tail") || !strcmp(mode, "fixture-record");
             bool need_rejection = !strcmp(mode, "fixture-work-overflow") || !strcmp(mode,"fixture-aead-max");
@@ -137,7 +150,8 @@ static void round_trip(unsigned port, const uint8_t *ca, size_t ca_length, const
         flash.fail_clear = false;
     }
 #endif
-    assert(efrp_session_destroy(&session) == EFRP_OK && !session); efrp_tls_destroy(tls);
+    assert(efrp_session_destroy(&session) == EFRP_OK && !session);
+    assert(efrp_transport_destroy(&transport) == EFRP_OK && !transport); efrp_tls_destroy(tls);
 #ifdef EFRP_SESSION_IDF_FLASH_TEST
     efrp_session_idf_flash_check(mode);
 #else

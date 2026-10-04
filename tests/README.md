@@ -5,6 +5,10 @@
 ```mermaid
 flowchart LR
     cmake["根 CMake / CTest"] --> wire["frame_reader_test.c"]
+    cmake --> udp_codec["udp_codec_test.c：完整二进制边界"]
+    cmake --> proxy["proxy_test.c：类型选项、联合容量与清零"]
+    cmake --> udp_local["udp_local_test.c：真实 UDP 与初始化／关闭故障"]
+    cmake --> udp_work["udp_work_test.c：实际 parser 与延迟关闭"]
     cmake --> mux["yamux_test.c"]
     cmake --> aead["aead_test.c：记录边界与认证"]
     cmake --> flash["aead_flash_test.c：64 KiB 密文暂存、复验与失效"]
@@ -110,6 +114,8 @@ ctest --test-dir build-psa --output-on-failure
 ```bash
 cmake -S . -B build-tls -DBUILD_TESTING=ON \
   -DEFRP_MBEDTLS_SOURCE_DIR=/absolute/path/to/mbedtls-4.1.0 \
+  -DEFRP_NGTCP2_SOURCE_DIR=/absolute/path/to/locked-ngtcp2 \
+  -DEFRP_PICOTLS_SOURCE_DIR=/absolute/path/to/locked-picotls \
   -DGEN_FILES=OFF -DEFRP_TEST_UPSTREAM_CRYPTO=ON -DEFRP_TEST_UPSTREAM_YAMUX=ON \
   -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -DMBEDTLS_PLATFORM_MEMORY -DMBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS"
 cmake --build build-tls
@@ -143,3 +149,35 @@ Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回�
 `session_peer` 将实际 `session.c` 的对象分配单独替换为测试计数器；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手结束后，Flash reader 的 4096 字节窗口复用握手所占联合区，并与控制 wire parser 的 `json_rx` 同时保持独立。正常/失败/取消会话销毁均检查持有对象已清零且无残留，clear 失败时保留 session handle 后重试。`aead_flash` 覆盖记录边界、满长坏 tag 和 lease 争用；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)与[逐块分配审计](../docs/operations/p6-frp-lazy-aead-memory-audit.md)仅记录旧 RAM reader 的历史容量，不代表当前产品。
 
 ESP32 32BIT-only IRAM 接收实验已退出当前运行路径。其固定 QEMU 输入和历史结果保留在 [esp32-iram-aead](esp32-iram-aead/README.md)，需要按该页锁定的旧提交重放；当前 `session.c` 与 `aead_upstream` 只使用 Flash reader。
+
+## 协议扩展软件测试
+
+默认 host 矩阵增加 `udp_codec`、`proxy_config` 和 POSIX `udp_local`；后者使用真实 UDP，注入 socket 创建、非阻塞设置与 IDF 关闭暂时失败，验证失败所有权和 fd 基线。完整 Mbed TLS 模式增加 `udp_work`／`udp_work_close`，分别验证拆帧/粘帧、合法超限排空、非法 metadata 拒绝、来源过期、取消和保留 fd 时业务缓冲清零。
+
+`udp_codec_upstream` 随 `EFRP_TEST_UPSTREAM_CRYPTO=ON` 开启，官方 FRP v0.71.0 编码与 C codec 双向交叉验证最大数据报、地址/zone及拒绝用例。完整 TLS 模式的 `udp_upstream`（180 秒）验证实际 FRPS 数据报、多来源隔离、容量、超限、突发和 66 秒真实空闲。`udp_client_upstream`（120 秒）单独验证实际 worker 活动来源中断、同实例重连、累计计数与当前 gauge/fd 清理。它们的结果单独记录，不能引用 TCP 回归代替 UDP 恢复证据。
+
+`proxy_upstream`（180 秒）运行 TCP、STCP provider、HTTP 与 HTTPS 的真实 FRPS 互测。STCP visitor 来自官方 frpc；Host/SNI 路由、错密钥/user、未知目标、重复注册、并发大响应、业务授权与超过 256 字节的完整注册列表分别断言。HTTPS 正常关流服务明确发送 close_notify 后 TCP 半关闭并排空对端；不因此声明任意 abrupt close 都正常完成。
+
+单独调试在 `tests/crypto-interop` 执行 `go run -mod=readonly . -udp-codec-peer /absolute/path/to/udp_codec_peer`、`-udp-peer /absolute/path/to/udp_peer`、`-udp-client-peer /absolute/path/to/udp_client_peer` 或 `-proxy-peer /absolute/path/to/proxy_peer`。当前单设备 fixture 仍只消费已声明的 TCP 场景；这些 host 扩展入口不自动取得设备访问或刷写授权。合同和实板边界见[协议扩展](../docs/design/protocol-extensions.md)。
+
+## 原生 QUIC 与扩展候选
+
+完整 Mbed TLS 模式从正式 `src/stream*`、`src/quic*` 构建。`stream_yamux` 验证真实后端的物理 EOF、待消费尾数据、半帧截断、诊断及实际期限；`work_stream` 验证零号和高位 stream ID、打开背压、延迟 release、立即关闭本地 socket/清零与有界槽保留。测试适配器只在 `tests/` 中使用。
+
+`quic_transport_upstream` 由 quic-go 驱动正式 C 后端，包含正常与错误证书链/主机名/日期/KU/EKU/ALPN/签名、双流长数据、调用方覆盖已接受缓冲、ACK 后复用、接收背压、丢包/乱序、reset 和完整超长数据报拒绝。`quic_client_upstream`、`quic_udp_client_upstream`、`quic_stcp_visitor_upstream` 使用完整正式 C client/session/work 和精确官方 FRPS 源构建的独立进程，覆盖业务、活动取消及实际进程退出/同端口重启。子进程退出才能证明所有 FRPS QUIC socket 被关闭；官方 `Service.Close` 不关闭全部已有 QUIC 连接，不能替代进程重启。软件测试与两个真实 ESP 的资源、网络和 Base 组合验收分别记录。
+
+`quic_cleanup_posix` 用真实 OS 释放并复用同编号 socket，验证 `close` 返回错误后重复 cancel/destroy 不会误关新 owner；同一 fixture 在旧代码上实际失败。`quic_cleanup_idf` 单独编译正式 lwIP 所有权分支，以保留的真实 socket 验证关闭失败时 WOULD_BLOCK、诊断、五秒以后仍保留句柄及最终重试释放。后者使用 host syscall fixture，SDK 语义另从固定 lwIP 源核对；它不代替设备上的失败注入。五秒只约束 QUIC 关闭报文，DNS／SDK socket 仍须等真实释放才允许销毁。
+
+`xtcp_binding`／`xtcp_codec` 使用正式密码后端和有界 JSON 验证 canonical manifest、双方控制身份/nonce/SPKI、可信时间窗口、TLS exporter proof、真实 Go 错误响应及严格拒绝。`xtcp_nat` 通过实际 UDP/STUN 和认证探测，验证单 socket 所有权、合法 mode 0、错误 nonce、期限及清理。它们各自只证明对应组件。
+
+完整 Mbed TLS 模式的 `quic_peer_security`／`quic_peer_transport_upstream` 验证正式身份生成、双方真实证书/CV 和绝对握手期限；`xtcp_direct_work_upstream` 消费双方 reserved0 canonical proof 和两条 300001 字节业务流，覆盖十类错绑／截断／尾随证明拒绝及真实 native stream credit 背压。`xtcp_client_upstream` 则运行完整公共 C provider/visitor、实际维护 FRPS 严格 TLS/Token 控制身份、STUN、会合、打洞、双方证明、双流业务、同实例停止／重启、可信时间撤销和 fd 基线。错误 Token、FRPS 主机名及未可信时钟验证控制建立失败与停止收敛；访问 secret/user/target 的负例另实测独立 XTCP 拒绝及 backend 连接数为零。跳过 C peer 不算通过。
+
+原官方 XTCP 认证边界的真实源码复现由 `python3 tests/xtcp/run_official_fixtures.py` 运行；本仓候选已使用 `esp-frp-xtcp/1` 与硬切信令，实际对端是 [peer/frp](../peer/frp/candidate-development.md)，不能写成原样官方 XTCP 互操作。
+
+2026-10-03 最终 QUIC 关闭修正后，正式 ASan/UBSan Mbed TLS 完整矩阵单次 52/52 通过（71.94 秒），包含完整 XTCP 公共 C 双角色及两项关闭所有权回归。此前 49 项及单独完整 XTCP 1 项通过的原始证据独立保留。OpenSSL 基线 21/21 通过（5.37 秒），该模式不消费 QUIC 源码。结果、精确复现输入及两个 ESP target 的编译／容量边界见[软件检查点](../docs/verification/xtcp-candidate-software-20261003.md)。这些 host 结果不代替两板运行资源、异网 NAT 或 Base 组合验收。
+
+[public_consumer_contract.py](public_consumer_contract.py) 使用真实父级 CMake/C++ 工程验证公共头和实验 trace 宏的传播，分别编译、链接 TRACE OFF/ON；程序不运行。该回归针对库与外部消费者状态结构大小不一致的 ABI 缺口，不在子目录中借用隐式编译定义。它只需本机 CMake、C/C++ 编译器、OpenSSL 和固定 cJSON；临时工程自动清理，依赖前缀可显式指定：
+
+```bash
+python3 tests/public_consumer_contract.py --cmake-prefix-path /path/to/local/dependencies
+```

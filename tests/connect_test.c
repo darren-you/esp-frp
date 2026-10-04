@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp_connect.h"
+#include "../src/connect_internal.h"
 #include "dns_fixture.h"
 #include <arpa/inet.h>
 #include <assert.h>
@@ -42,6 +43,47 @@ static efrp_result_t ready(efrp_connect_t *c)
         s.state, s.result, s.system_error, s.owns_socket, s.pending_dns);
     assert(!"connect never completed"); return EFRP_TIMEOUT;
 }
+static void adopted_socket(int server, unsigned port)
+{
+    efrp_connect_t *c = NULL;
+    assert(efrp_connect_adopt_fd(-1, 0, &c) == EFRP_INVALID_ARGUMENT && !c);
+    assert(efrp_connect_adopt_fd(server, 0, &c) == EFRP_INVALID_ARGUMENT && !c);
+    assert(fcntl(server, F_GETFD) >= 0);
+    int datagram = socket(AF_INET, SOCK_DGRAM, 0); assert(datagram >= 0);
+    assert(efrp_connect_adopt_fd(datagram, 0, &c) == EFRP_INVALID_ARGUMENT && !c);
+    assert(fcntl(datagram, F_GETFD) >= 0 && close(datagram) == 0);
+    int caller = socket(AF_INET, SOCK_STREAM, 0); assert(caller >= 0);
+    struct sockaddr_in target = {.sin_family = AF_INET, .sin_port = htons((uint16_t)port),
+        .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
+    assert(connect(caller, (struct sockaddr *)&target, sizeof target) == 0);
+    int accepted = accept(server, NULL, NULL); assert(accepted >= 0);
+    assert(efrp_connect_adopt_fd(accepted, UINT64_MAX, &c) == EFRP_INVALID_ARGUMENT && !c);
+    assert(fcntl(accepted, F_GETFD) >= 0);
+    assert(efrp_connect_adopt_fd(accepted, 0, &c) == EFRP_OK && c);
+    assert(efrp_connect_adopt_fd(caller, 0, &c) == EFRP_INVALID_STATE);
+    assert(fcntl(caller, F_GETFD) >= 0);
+    int owned = -1; assert(efrp_connect_fd(c, &owned) == EFRP_OK && owned == accepted);
+    assert(fcntl(accepted, F_GETFL) & O_NONBLOCK);
+    uint8_t bytes[4] = {0, 0xa7, 0xff, 5}, output[4]; size_t used = 0;
+    assert(send(caller, bytes, sizeof bytes, 0) == (ssize_t)sizeof bytes);
+    efrp_result_t result;
+    do { result = efrp_connect_recv(c, output, sizeof output, &used);
+        if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1);
+    } while (result == EFRP_WOULD_BLOCK);
+    assert(result == EFRP_OK && used == sizeof bytes && !memcmp(bytes, output, used));
+    assert(efrp_connect_send(c, output, used, &used) == EFRP_OK && used == sizeof bytes);
+    assert(recv(caller, output, sizeof output, MSG_WAITALL) == (ssize_t)sizeof bytes && !memcmp(bytes, output, sizeof bytes));
+    assert(shutdown(caller, SHUT_WR) == 0);
+    do { result = efrp_connect_recv(c, output, sizeof output, &used);
+        if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1);
+    } while (result == EFRP_WOULD_BLOCK);
+    assert(result == EFRP_EOF);
+    assert(efrp_connect_close_write(c) == EFRP_OK);
+    assert(recv(caller, output, sizeof output, 0) == 0);
+    assert(efrp_connect_finish(c) == EFRP_OK);
+    assert(fcntl(accepted, F_GETFD) == -1 && errno == EBADF);
+    closed(&c, EFRP_OK); assert(close(caller) == 0);
+}
 int main(void)
 {
     efrp_connect_t *c = NULL;
@@ -75,6 +117,7 @@ int main(void)
     }
     fixture_dns_mode(FIXTURE_DNS_READY);
     int server = listener(); unsigned port = port_of(server);
+    adopted_socket(server, port);
     const uint8_t local[4] = {127, 0, 0, 1}, invalid_ip[4] = {224, 0, 0, 1};
     assert(efrp_connect_create_ipv4(invalid_ip, (uint16_t)port, 0, &c) == EFRP_INVALID_ARGUMENT && !c);
     for (unsigned i = 0; i < 100; ++i) {

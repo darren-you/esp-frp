@@ -21,9 +21,12 @@ typedef struct {
     /* Optional UTF-8 strings, each <=128 bytes; NULL means empty. */
     const char *hostname, *user, *client_id, *run_id;
     int64_t unix_seconds; /* positive trusted wall clock, provided by owner */
+    bool udp_binary; /* advertise and require the official binary UDP codec */
+    bool quic; /* actual authenticated native QUIC stream; no TCP mux */
+    bool xtcp_binding; /* request the explicit esp-frp-xtcp/1 signaling contract */
 } efrp_handshake_config_t;
 /* Caller-owned, zero initialize; single owner, fields are not for mutation.
- * Run only over already authenticated TLS + a newly opened Yamux control stream.
+ * Run only over an authenticated transport and a newly opened control stream.
  * The exact output buffer may also be borrowed as receive storage: response
  * input is refused until all output has been consumed and wiped. Other partial
  * overlap between input, output and receive storage is unsupported.
@@ -35,11 +38,12 @@ typedef struct {
     uint8_t output[EFRP_HANDSHAKE_TX_BYTES];
     uint8_t *storage;
     char run_id[EFRP_RUN_ID_BYTES];
+    uint8_t xtcp_control_id[32]; /* returned by this authenticated server control */
     size_t token_length, hello_length, output_length, output_offset;
     uint64_t deadline_ms, last_now_ms;
     efrp_handshake_state_t state;
     efrp_result_t failure;
-    bool active;
+    bool active, udp_binary, xtcp_binding;
 } efrp_handshake_t;
 
 /* Implements official lowercase hex MD5(Token || decimal Unix seconds).
@@ -54,6 +58,11 @@ efrp_result_t efrp_handshake_consume_output(efrp_handshake_t *handshake, size_t 
 efrp_result_t efrp_handshake_feed(efrp_handshake_t *handshake, const uint8_t *bytes, size_t length, size_t *consumed);
 efrp_result_t efrp_handshake_tick(efrp_handshake_t *handshake, uint64_t now_ms);
 efrp_result_t efrp_handshake_finish(efrp_handshake_t *handshake);
+/* Only after DONE and before take_result, for the requested candidate protocol.
+ * Copies the server's fresh current-control identity into a disjoint output;
+ * never substitutes run_id or a caller-supplied identity. Errors clear output. */
+efrp_result_t efrp_handshake_xtcp_control_id(const efrp_handshake_t *handshake,
+                                           uint8_t output[32]);
 /* Exactly once after DONE. Moves result to disjoint caller outputs, wipes and
  * releases the borrowed storage. Destroy never touches that storage again.
  * Caller clears keys immediately after creating direction-specific AEAD objects. */

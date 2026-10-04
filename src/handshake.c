@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp_handshake.h"
+#include "esp_frp_xtcp_binding.h"
 #include "crypto_backend.h"
 #include "json_internal.h"
 #include <inttypes.h>
@@ -42,6 +43,23 @@ static bool random_valid(const char *s)
     }
     return true;
 }
+static bool decode_control_id(const char *encoded, uint8_t output[32])
+{
+    if (!random_valid(encoded)) return false;
+    uint8_t any = 0;
+    for (size_t i = 0, at = 0; i < 44; i += 4) {
+        uint32_t value = 0;
+        for (size_t j = 0; j < 4; ++j) {
+            value <<= 6;
+            if (encoded[i + j] != '=') value |= (uint32_t)(strchr(base64, encoded[i + j]) - base64);
+        }
+        for (size_t j = 0; j < 3 && at < 32; ++j) {
+            uint8_t byte = (uint8_t)(value >> (16u - 8u * j));
+            output[at++] = byte; any |= byte;
+        }
+    }
+    return any != 0;
+}
 efrp_result_t efrp_token_auth(const uint8_t *token, size_t length, int64_t seconds, char output[33])
 {
     if (!output) return EFRP_INVALID_ARGUMENT;
@@ -67,6 +85,7 @@ static void clear_secret(efrp_handshake_t *h)
 {
     efrp_aead_clear_keys(&h->keys); efrp_crypto_zero(h->token, sizeof h->token);
     efrp_crypto_zero(h->output, sizeof h->output); efrp_crypto_zero(h->client_hello, sizeof h->client_hello);
+    efrp_crypto_zero(h->xtcp_control_id, sizeof h->xtcp_control_id);
     if (h->storage) efrp_crypto_zero(h->storage, EFRP_HANDSHAKE_RX_BYTES);
     h->output_length = h->output_offset = h->token_length = h->hello_length = 0;
 }
@@ -77,7 +96,7 @@ static efrp_result_t fail(efrp_handshake_t *h, efrp_result_t result)
 }
 static efrp_result_t accept_hello(efrp_handshake_t *h, const uint8_t *p, size_t length)
 {
-    cJSON *root = efrp_json_parse(p, length);
+    cJSON *root = efrp_json_parse(p, length, EFRP_JSON_CONTROL_MAX_PUNCTUATION);
     const char *const root_fields[] = {"selected", "error"}, *const selections[] = {"message", "crypto"};
     const char *const messages[] = {"codec", "udpPacketCodec"}, *const cryptos[] = {"algorithm", "serverRandom"};
     efrp_result_t result = EFRP_PROTOCOL_ERROR;
@@ -87,7 +106,7 @@ static efrp_result_t accept_hello(efrp_handshake_t *h, const uint8_t *p, size_t 
     if (*error) { result = EFRP_NEGOTIATION_FAILED; goto done; }
     const cJSON *selected = efrp_json_field(root, "selected"), *message = efrp_json_field(selected, "message"), *crypto = efrp_json_field(selected, "crypto");
     if (!efrp_json_shape(selected, selections, 2) || !efrp_json_shape(message, messages, 2) || !efrp_json_shape(crypto, cryptos, 2)) goto done;
-    if (!efrp_json_equals(message, "codec", "json") || !efrp_json_equals(message, "udpPacketCodec", "") ||
+    if (!efrp_json_equals(message, "codec", "json") || !efrp_json_equals(message, "udpPacketCodec", h->udp_binary ? "binary-v1" : "") ||
         !efrp_json_equals(crypto, "algorithm", "aes-256-gcm") || !random_valid(efrp_json_string(crypto, "serverRandom"))) {
         result = EFRP_NEGOTIATION_FAILED; goto done;
     }
@@ -103,15 +122,16 @@ done:
 static efrp_result_t accept_login(efrp_handshake_t *h, const uint8_t *p, size_t length)
 {
     if (length < 2 || p[0] || p[1] != 2) return EFRP_PROTOCOL_ERROR;
-    cJSON *root = efrp_json_parse(p + 2, length - 2);
-    const char *const fields[] = {"version", "run_id", "error"};
+    cJSON *root = efrp_json_parse(p + 2, length - 2, EFRP_JSON_CONTROL_MAX_PUNCTUATION);
+    const char *const fields[] = {"version", "run_id", "error", "xtcp_control_id"};
     efrp_result_t result = EFRP_PROTOCOL_ERROR;
-    if (!efrp_json_shape(root, fields, 3)) goto done;
+    if (!efrp_json_shape(root, fields, h->xtcp_binding ? 4u : 3u)) goto done;
     const char *error = efrp_json_string(root, "error"), *run_id = efrp_json_string(root, "run_id");
     if (!error || !run_id || !efrp_json_string(root, "version")) goto done;
     if (*error) { result = EFRP_LOGIN_REJECTED; goto done; }
     size_t n = strlen(run_id);
     if (!n || n >= sizeof h->run_id) goto done;
+    if (h->xtcp_binding && !decode_control_id(efrp_json_string(root, "xtcp_control_id"), h->xtcp_control_id)) goto done;
     memcpy(h->run_id, run_id, n + 1); h->state = EFRP_HANDSHAKE_DONE; result = EFRP_OK;
 done:
     cJSON_Delete(root); return result;
@@ -150,27 +170,31 @@ efrp_result_t efrp_handshake_init(efrp_handshake_t *h, const efrp_handshake_conf
         !config_string(c->user, 128) || !config_string(c->client_id, 128) || !config_string(c->run_id, EFRP_RUN_ID_BYTES - 1U)) return EFRP_INVALID_ARGUMENT;
     if (h->active) return EFRP_INVALID_STATE;
     *h = (efrp_handshake_t){.active = true, .storage = storage, .state = EFRP_HANDSHAKE_SEND,
-        .deadline_ms = now + EFRP_HANDSHAKE_TIMEOUT_MS, .last_now_ms = now, .token_length = c->token_length};
+        .deadline_ms = now + EFRP_HANDSHAKE_TIMEOUT_MS, .last_now_ms = now, .token_length = c->token_length,
+        .udp_binary = c->udp_binary, .xtcp_binding = c->xtcp_binding};
     memset(storage, 0, EFRP_HANDSHAKE_RX_BYTES); memcpy(h->token, c->token, c->token_length);
     uint8_t random[32]; char encoded[45], auth[33];
     efrp_result_t result = efrp_crypto_random(random, sizeof random);
     if (result != EFRP_OK) return fail(h, result);
     encode_random(random, encoded); efrp_crypto_zero(random, sizeof random);
     int hello = snprintf((char *)h->client_hello, sizeof h->client_hello,
-        "{\"bootstrap\":{\"transport\":\"tcp\",\"tls\":true,\"tcpMux\":true},"
-        "\"capabilities\":{\"message\":{\"codecs\":[\"json\"]},\"crypto\":{"
-        "\"algorithms\":[\"aes-256-gcm\"],\"clientRandom\":\"%s\"}}}", encoded);
+        "{\"bootstrap\":{\"transport\":\"%s\",\"tls\":true,\"tcpMux\":%s},"
+        "\"capabilities\":{\"message\":{\"codecs\":[\"json\"]%s},\"crypto\":{"
+        "\"algorithms\":[\"aes-256-gcm\"],\"clientRandom\":\"%s\"}}}",
+        c->quic ? "quic" : "tcp", c->quic ? "false" : "true",
+        c->udp_binary ? ",\"udpPacketCodecs\":[\"binary-v1\"]" : "", encoded);
     if (hello <= 0 || (size_t)hello >= sizeof h->client_hello) return fail(h, EFRP_CAPACITY_EXCEEDED);
     h->hello_length = (size_t)hello;
     result = efrp_token_auth(c->token, c->token_length, c->unix_seconds, auth);
     if (result != EFRP_OK) return fail(h, result);
     cJSON *login = cJSON_CreateObject();
     char timestamp[21]; snprintf(timestamp, sizeof timestamp, "%" PRId64, c->unix_seconds);
-    bool built = login && add_string(login, "version", "esp-frp/0.2.0") && add_string(login, "os", "esp-idf") &&
+    bool built = login && add_string(login, "version", "esp-frp/0.3.0") && add_string(login, "os", "esp-idf") &&
         add_string(login, "arch", EFRP_LOGIN_ARCH) && add_string(login, "hostname", c->hostname) &&
         add_string(login, "user", c->user) && add_string(login, "client_id", c->client_id) &&
         add_string(login, "run_id", c->run_id) && add_string(login, "privilege_key", auth) &&
-        cJSON_AddRawToObject(login, "timestamp", timestamp) && cJSON_AddNumberToObject(login, "pool_count", 0);
+        cJSON_AddRawToObject(login, "timestamp", timestamp) && cJSON_AddNumberToObject(login, "pool_count", 0) &&
+        (!c->xtcp_binding || add_string(login, "xtcp_binding_protocol", EFRP_XTCP_BINDING_ALPN));
     efrp_crypto_zero(auth, sizeof auth);
     size_t offset = 7 + 8 + h->hello_length;
     if (!built || !cJSON_PrintPreallocated(login, (char *)h->output + offset + 10,
@@ -239,6 +263,14 @@ efrp_result_t efrp_handshake_finish(efrp_handshake_t *h)
 {
     if (ready(h) != EFRP_OK) return ready(h);
     return h->state == EFRP_HANDSHAKE_DONE || h->state == EFRP_HANDSHAKE_TAKEN ? EFRP_OK : fail(h, EFRP_TRUNCATED);
+}
+efrp_result_t efrp_handshake_xtcp_control_id(const efrp_handshake_t *h, uint8_t output[32])
+{
+    if (!output) return EFRP_INVALID_ARGUMENT;
+    efrp_crypto_zero(output, 32);
+    if (ready(h) != EFRP_OK) return ready(h);
+    if (h->state != EFRP_HANDSHAKE_DONE || !h->xtcp_binding) return EFRP_INVALID_STATE;
+    memcpy(output, h->xtcp_control_id, 32); return EFRP_OK;
 }
 efrp_result_t efrp_handshake_take_result(efrp_handshake_t *h, efrp_aead_keys_t *keys, char run_id[EFRP_RUN_ID_BYTES])
 {

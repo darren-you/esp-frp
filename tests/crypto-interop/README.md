@@ -12,6 +12,12 @@ flowchart LR
     go <-->|"Hello/Login 与紧随的 AEAD"| handshake["handshake_peer.c"]
     handshake --> session["esp_frp_handshake C API"]
     handshake --> core
+    root --> udp_codec["udp_codec.go：官方 binary-v1 交叉编码"]
+    udp_codec <-->|"完整 MESSAGE payload"| udp_codec_peer["udp_codec_peer.c"]
+    root --> udp["udp.go：实际 FRPS 数据报、多来源与66秒空闲"]
+    udp <-->|"固定本地 UDP"| udp_peer["udp_peer.c"]
+    root --> proxy["proxy.go：官方 STCP visitor／Host／SNI／业务授权"]
+    proxy <-->|"真实 TCP/TLS 业务"| proxy_peer["proxy_peer.c"]
     root --> tls["tls.go：临时 CA 与 Go 标准 TLS"]
     tls <-->|"回环 TCP"| tp["tls_peer.c：Mbed TLS 引擎"]
     tp --> tc["tls_contract_test.c：边界与分配失败"]
@@ -94,3 +100,7 @@ host 和 device 使用相同工作协议；前者的本地目标变换测试字�
 恢复输入最多 64 字节，非法行、EOF、信号或总期限终止场景；等待恢复不绕过 fixture 的连接期限。输入动作本身不访问设备，刷机和样例命令仍由外部驱动执行。
 
 入口没有设备发现、刷机、DNS 服务、代理监听或生产安装操作。`ESP_FRP_DEVICE_FIXTURE_READY` 只说明监听建立，`ESP_FRP_DEVICE_WORK_FINISHED` 说明工作场景按其断言结束，`ESP_FRP_DEVICE_FIXTURE_FINISHED` 说明服务端场景结束；三者都不能单独作为实板通过。验收还须核对设备的精确错误、状态/资源回收，以及恢复到官方 FRPS 后的业务字节。私有配置、证书、输入和日志不得提交。
+
+## 扩展入口
+
+`-udp-codec-peer` 交叉检查官方 binary-v1 codec；`-udp-peer` 运行完整 FRPS 的固定目标 UDP，包括 66 秒真实空闲；`-udp-client-peer` 单独验证同一 worker 活动中断后重连与资源回收；`-proxy-peer` 使用完整 FRPS、官方 STCP visitor、HTTP Host 和 HTTPS SNI 检查类型化 provider。均使用本仓构建的绝对 peer 路径，只监听回环；完整命令、时限与验证边界见[测试说明](../README.md#协议扩展软件测试)。这些 host 入口没有加入下面的单设备模式列表。

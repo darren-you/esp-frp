@@ -136,6 +136,15 @@ func run(path string) {
 
 func main() {
 	path := flag.String("peer", "", "C AEAD peer executable")
+	udpPeer := flag.String("udp-peer", "", "C framed UDP proxy peer executable")
+	udpClientPeer := flag.String("udp-client-peer", "", "C UDP worker recovery peer executable")
+	udpWorkRecoveryPeer := flag.String("udp-work-recovery-peer", "", "C UDP same-session work recovery peer executable")
+	proxyPeer := flag.String("proxy-peer", "", "C typed TCP provider proxy peer executable")
+	stcpVisitorPeer := flag.String("stcp-visitor-peer", "", "C independent STCP visitor worker executable")
+	quicClientPeer := flag.String("quic-client-peer", "", "C QUIC provider worker executable")
+	quicUDPPeer := flag.String("quic-udp-client-peer", "", "C QUIC UDP provider worker executable")
+	quicVisitorPeer := flag.String("quic-stcp-visitor-peer", "", "C QUIC STCP visitor worker executable")
+	udpCodecPeer := flag.String("udp-codec-peer", "", "C UDP binary codec peer executable")
 	handshake := flag.String("handshake-peer", "", "C Hello/Login peer executable")
 	handshakeArch := flag.String("handshake-arch", "riscv32", "expected FRP Login arch for the handshake peer")
 	tlsPeer := flag.String("tls-peer", "", "C Mbed TLS peer executable")
@@ -146,6 +155,42 @@ func main() {
 	workFaults := flag.Bool("work-faults", false, "Run work rejection/half-close fixtures instead of the 100 dual-flow rounds")
 	deviceConfig := flag.String("device-config", "", "仓外 0600 JSON：单次真实设备协议 fixture，不执行刷写")
 	flag.Parse()
+	if *quicClientPeer != "" {
+		runQUICClient(*quicClientPeer)
+		return
+	}
+	if *quicUDPPeer != "" {
+		runQUICUDP(*quicUDPPeer)
+		return
+	}
+	if *quicVisitorPeer != "" {
+		runQUICVisitor(*quicVisitorPeer)
+		return
+	}
+	if *stcpVisitorPeer != "" {
+		runSTCPVisitor(*stcpVisitorPeer)
+		return
+	}
+	if *udpWorkRecoveryPeer != "" {
+		runUDPWorkRecovery(*udpWorkRecoveryPeer)
+		return
+	}
+	if *udpClientPeer != "" {
+		runUDPClient(*udpClientPeer)
+		return
+	}
+	if *udpPeer != "" {
+		runUDP(*udpPeer)
+		return
+	}
+	if *proxyPeer != "" {
+		runProxy(*proxyPeer)
+		return
+	}
+	if *udpCodecPeer != "" {
+		runUDPCodec(*udpCodecPeer)
+		return
+	}
 	if *deviceConfig != "" {
 		must(runDeviceFixture(*deviceConfig))
 		return

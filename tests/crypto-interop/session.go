@@ -70,7 +70,7 @@ func sessionCase(path, caPath, mode string, port, proxyPort, rounds int) {
 		panic(fmt.Sprintf("control %s: %v\n%s", mode, err, stderr.String()))
 	}
 	want := rounds
-	if mode == "wrong-token" || mode == "proxy-error" || strings.HasPrefix(mode, "cancel-") {
+	if mode == "registration-memory" || mode == "wrong-token" || mode == "proxy-error" || strings.HasPrefix(mode, "cancel-") {
 		want = 0
 	}
 	if len(ports) != want {
@@ -96,7 +96,18 @@ func sessionCase(path, caPath, mode string, port, proxyPort, rounds int) {
 func withSessionServer(run func(port int, caPath, dir string)) {
 	withControlledSessionServer(func(port int, caPath, dir string, stop, start func()) { run(port, caPath, dir) })
 }
+
+type sessionServerPorts struct{ tcp, quic int }
+
 func withControlledSessionServer(run func(port int, caPath, dir string, stop, start func())) {
+	withControlledSessionTransports(false, func(ports sessionServerPorts, caPath, dir string, stop, start func()) {
+		run(ports.tcp, caPath, dir, stop, start)
+	})
+}
+func withControlledQUICServer(run func(ports sessionServerPorts, caPath, dir string, stop, start func())) {
+	withControlledSessionTransports(true, run)
+}
+func withControlledSessionTransports(quic bool, run func(ports sessionServerPorts, caPath, dir string, stop, start func())) {
 	dir, err := os.MkdirTemp("", "esp-frp-session-")
 	must(err)
 	defer os.RemoveAll(dir)
@@ -112,13 +123,27 @@ func withControlledSessionServer(run func(port int, caPath, dir string, stop, st
 	reserved := localListener()
 	port := reserved.Addr().(*net.TCPAddr).Port
 	must(reserved.Close())
-	config := &v1.ServerConfig{BindAddr: "127.0.0.1", BindPort: port, ProxyBindAddr: "127.0.0.1"}
+	ports := sessionServerPorts{tcp: port}
+	if quic {
+		reserved, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+		must(err)
+		ports.quic = reserved.LocalAddr().(*net.UDPAddr).Port
+		must(reserved.Close())
+	}
+	config := &v1.ServerConfig{BindAddr: "127.0.0.1", BindPort: ports.tcp,
+		QUICBindPort: ports.quic, ProxyBindAddr: "127.0.0.1"}
 	config.Auth.Token = "public-session-token"
 	config.Auth.AdditionalScopes = []v1.AuthScope{v1.AuthScopeHeartBeats, v1.AuthScopeNewWorkConns}
 	config.Transport.TLS.Force = true
 	config.Transport.TLS.CertFile = certPath
 	config.Transport.TLS.KeyFile = keyPath
 	must(config.Complete())
+	if quic {
+		withControlledQUICProcess(config, dir, func(stop, start func()) {
+			run(ports, caPath, dir, stop, start)
+		})
+		return
+	}
 	frplog.InitLogger("console", "error", 1, true)
 	var service *server.Service
 	var cancel context.CancelFunc
@@ -151,7 +176,7 @@ func withControlledSessionServer(run func(port int, caPath, dir string, stop, st
 	}
 	start()
 	defer stop()
-	run(port, caPath, dir, stop, start)
+	run(ports, caPath, dir, stop, start)
 }
 func runSession(path string) {
 	withSessionServer(func(port int, caPath, dir string) {
@@ -160,6 +185,7 @@ func runSession(path string) {
 		sessionCase(path, caPath, "heartbeat", port, 0, 1)
 		sessionCase(path, caPath, "split", port, 0, 1)
 		sessionCase(path, caPath, "wrong-token", port, 0, 1)
+		sessionCase(path, caPath, "registration-memory", port, 0, 1)
 		occupied := localListener()
 		sessionCase(path, caPath, "proxy-error", port, occupied.Addr().(*net.TCPAddr).Port, 1)
 		must(occupied.Close())

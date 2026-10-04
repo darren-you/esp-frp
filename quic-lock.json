@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "ngtcp2": {
+    "repository": "https://github.com/ngtcp2/ngtcp2.git",
+    "revision": "f9e9ff01ad2c8116bc09de4f644b0028a61486a6",
+    "version": "1.25.0"
+  },
+  "picotls": {
+    "repository": "https://github.com/h2o/picotls.git",
+    "revision": "f07f1c8c68b237f1468bc1f1fe1b68aba3ff23b4"
+  },
+  "host_mbedtls": {
+    "version": "4.1.0",
+    "archive_sha256": "377a09cf8eb81b5fb2707045e5522d5489d3309fed5006c9874e60558fc81d10"
+  }
+}

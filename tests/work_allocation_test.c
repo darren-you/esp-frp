@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "work_internal.h"
+#include "stream_yamux_fixture.h"
 #include <assert.h>
 #include <string.h>
 
@@ -15,15 +16,16 @@ int main(void)
     efrp_work_request(&work);
     efrp_yamux_t mux;
     efrp_yamux_init(&mux, 0);
+    efrp_test_yamux_transport_t transport; efrp_test_yamux_transport_init(&transport, &mux);
 
     fixture_work_fail_next_stream();
-    assert(efrp_work_step(&work, &mux, 1, "run", (const uint8_t *)"token", 5, 1) == EFRP_NO_MEMORY);
+    assert(efrp_work_step(&work, &transport.base, 1, "run", (const uint8_t *)"token", 5, 1) == EFRP_NO_MEMORY);
     assert(work.status.requests == 1 && work.status.pending == 1);
     for (unsigned i = 0; i < 3; ++i) assert(!work.streams[i]);
 
     for (unsigned i = 0; i < 3; ++i) {
         work.streams[i] = fixture_work_calloc(1, sizeof *work.streams[i]);
-        assert(work.streams[i]);
+        assert(work.streams[i]); work.streams[i]->stream_id = EFRP_STREAM_NONE;
         memset(work.streams[i]->incoming, 0xa5, sizeof work.streams[i]->incoming);
         memset(work.streams[i]->outgoing, 0x5a, sizeof work.streams[i]->outgoing);
     }

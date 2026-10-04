@@ -1,0 +1,4216 @@
+{
+  "date": "2026-10-03",
+  "scope": "软件与本机 ESP-IDF 编译、链接、原分区容量验证；无设备操作",
+  "source_snapshot": {
+    "files": [
+      {
+        "path": "CMakeLists.txt",
+        "sha256": "9ab7a9e3a8ef9490f62cad260ac4dce82ce594219d1d44923c831783411040d6"
+      },
+      {
+        "path": "examples/tcp_proxy/CMakeLists.txt",
+        "sha256": "228843ccc2c4f15f1be37bd2c09e84aa3c6a5160554c4948791d858cb74db1f2"
+      },
+      {
+        "path": "examples/tcp_proxy/README.md",
+        "sha256": "2723ff0c72a22f6a21e2577ff3b7c5a2aeea7f7491540a002cb71fba7a967264"
+      },
+      {
+        "path": "examples/tcp_proxy/inputs_example.h",
+        "sha256": "60c3abe953ef67d7329f1cfc648dcd19f8c37947d70cd892f64293bca0e20089"
+      },
+      {
+        "path": "examples/tcp_proxy/main/CMakeLists.txt",
+        "sha256": "e94d32c0cb374f6744c8d96c8acc0156915baa399cedecb9d7d22bc5edbc1bfd"
+      },
+      {
+        "path": "examples/tcp_proxy/main/sample_echo.c",
+        "sha256": "d77287e2777ffa7cec013525a00992b955c5e8e5b0d7b7b76fc58b5275a6a8ce"
+      },
+      {
+        "path": "examples/tcp_proxy/main/sample_echo.h",
+        "sha256": "20c0d2da6204dacf1b082c1f3e7b186f0a572b5ab379f35280dc4927164d6473"
+      },
+      {
+        "path": "examples/tcp_proxy/main/sample_flash_store.c",
+        "sha256": "3d01d324f0801a1e3a21c427dad1f3756694fa0e86acb7b5514dc3c027a69d2f"
+      },
+      {
+        "path": "examples/tcp_proxy/main/sample_flash_store.h",
+        "sha256": "65d296ed33bcad0ef9a5d2df07bd8fe3477e78929604f2cee21db915468239ef"
+      },
+      {
+        "path": "examples/tcp_proxy/main/sample_main.c",
+        "sha256": "92bfe72fa576bd11b34be1aeb6069d40e993d016f16203192a31dcb21fbfaacb"
+      },
+      {
+        "path": "examples/tcp_proxy/main/sample_resources.c",
+        "sha256": "31382f07a5059120ccc4167f9a7c80e23024f923e5fa07d059f523d040fa2ae2"
+      },
+      {
+        "path": "examples/tcp_proxy/main/sample_resources.h",
+        "sha256": "3e466ecc77e147bb533ec171eb8bd729a6bf904c2862ce209b33ab6f77d3712b"
+      },
+      {
+        "path": "examples/tcp_proxy/partitions.csv",
+        "sha256": "3c2266004b96abda28f9a68e799521ce4e3f747e7d3ce90b7e666414f53d1cf4"
+      },
+      {
+        "path": "examples/tcp_proxy/sdkconfig.defaults",
+        "sha256": "cf59b59ec62b044a5d610772e518806ec5a0dac2929c647d8bd87b36a05502ee"
+      },
+      {
+        "path": "examples/tcp_proxy/sdkconfig.defaults.esp32",
+        "sha256": "fb7310ce41ad800000d6f27075d2fe75a1c24351cbcc456ad8b57f2c014f6762"
+      },
+      {
+        "path": "examples/tcp_proxy/sdkconfig.defaults.esp32c3",
+        "sha256": "ebbbc285bb950ff95a34f8d51827713c5a8eefc37ab95eb0d0c937cb55af82f5"
+      },
+      {
+        "path": "idf_component.yml",
+        "sha256": "d23589dbb8ff6849b9464921c25f174cd18d9da826684b2c24fa261d21be67a4"
+      },
+      {
+        "path": "include/esp_frp.h",
+        "sha256": "8dcd48b2f04d0a88ca7f01dbe1c9e87b5da0fe15f13670a99439f62be2e0bada"
+      },
+      {
+        "path": "include/esp_frp_aead.h",
+        "sha256": "482ad4f2db00d170242eb241be7af83d93e184ae8fbeda7d389bfc93fa9cfc39"
+      },
+      {
+        "path": "include/esp_frp_connect.h",
+        "sha256": "4d1755c091318ab3dc23d75da3545a1f7e8d9111d984136adb10abbe6767cfa1"
+      },
+      {
+        "path": "include/esp_frp_flash_reader.h",
+        "sha256": "f915e4dc777d0142273fd5011e28d85e6597e432b4919810e23c59f80372bac0"
+      },
+      {
+        "path": "include/esp_frp_handshake.h",
+        "sha256": "3c4efdc83acfe2bd0a2a51ced85843390de6df94097d658bef6385922e62dcb5"
+      },
+      {
+        "path": "include/esp_frp_idf_flash_store.h",
+        "sha256": "ea3678d8b67eeb8ad9baf0d5bd288260939648507a8af7511764cd6eda1b4984"
+      },
+      {
+        "path": "include/esp_frp_proxy.h",
+        "sha256": "a9457b1778a67e5d3e5cefad34da297857c797e89855fb5178aa7edba6093d6b"
+      },
+      {
+        "path": "include/esp_frp_quic_peer.h",
+        "sha256": "7340bcf8a8b01930edb36a35add4499deb5de806f9877aadd172fe2486ca33e7"
+      },
+      {
+        "path": "include/esp_frp_session.h",
+        "sha256": "e44a83cec560be481e3002b7686ddaf44341b9def48d0567e8a6b72559a5cd10"
+      },
+      {
+        "path": "include/esp_frp_stcp_visitor.h",
+        "sha256": "5e627d0a3b9bc8da57736204dfbe3fc75405fcb42decdaee7d1cdc2fbd02b6da"
+      },
+      {
+        "path": "include/esp_frp_tls.h",
+        "sha256": "f63bcd8aaaec61848294143231079c9869f606b6090c2699235f54d672eb9b6a"
+      },
+      {
+        "path": "include/esp_frp_transport.h",
+        "sha256": "15edc48ec1c83a0549ca5ec625c80933c3b55e53a2020cf66b9067ab8f67a641"
+      },
+      {
+        "path": "include/esp_frp_types.h",
+        "sha256": "b5037422fbe2b323e2d76f48f09c301d0ba909b98a4f95edaa8e7ca9a830bdd8"
+      },
+      {
+        "path": "include/esp_frp_udp.h",
+        "sha256": "92ff79b6d355a14aac96c793062022ad28be14949d466a1c7b6c179d6cce1200"
+      },
+      {
+        "path": "include/esp_frp_wire.h",
+        "sha256": "b11c7498808aee14e47bb37b78fb54c35cb68c2b33f8a76e4263e70f42886681"
+      },
+      {
+        "path": "include/esp_frp_xtcp.h",
+        "sha256": "88aa4b8257abf27d49d9a58948ec2a30d1922fc6cb955a6baf40cef01eee9c78"
+      },
+      {
+        "path": "include/esp_frp_xtcp_binding.h",
+        "sha256": "60e14b9dfd78c6f7fc11484177a4335487e44c5cee4512c3a8fa375b94e8123c"
+      },
+      {
+        "path": "include/esp_frp_xtcp_visitor.h",
+        "sha256": "decc9d8a9ce97566dd2037434c63af16c33930210ead6138e72f791de8c3640d"
+      },
+      {
+        "path": "include/esp_frp_yamux.h",
+        "sha256": "f1c2fb9b6e2b77975bd4fcb6e5f2a9de16c9ffc25e92dd69506cf894b571f5e6"
+      },
+      {
+        "path": "quic-lock.json",
+        "sha256": "0d1b42f4b76ef1b6c0cf73b8385674e5426c7861031b7d87bc32504d3d33319d"
+      },
+      {
+        "path": "sdk-lock.json",
+        "sha256": "a0f3c1ab2c7a9d12c5f13361b8bed7f9c33171e2c971090fdf4bbbac726c18dd"
+      },
+      {
+        "path": "src/aead.c",
+        "sha256": "bfa2be11ec913e2c43818503b72e3b647bfe7dd98a64f143c9bcbd91e4b71678"
+      },
+      {
+        "path": "src/aead_flash.c",
+        "sha256": "609e41e6a65c11142c957fa04823baba740fce18a6059045daef149c452ee573"
+      },
+      {
+        "path": "src/client.c",
+        "sha256": "6302e9b3033b20d9364f1ca81c60fd890715f6410e778ac0f493e777f0a503e8"
+      },
+      {
+        "path": "src/client_port.h",
+        "sha256": "320fdedf2ed812fae445e7e9e0d35d9eafc19e985496c61f62c381c09eb3477f"
+      },
+      {
+        "path": "src/client_port_idf.c",
+        "sha256": "377746dce9c881c5a4b5b23da8be885beb25bf3f89261731c5a4e97f8e735ebd"
+      },
+      {
+        "path": "src/connect.c",
+        "sha256": "2851deb1b5c026950a3bd1fe1429699f7312407495dc8a4373fd744e1b0e90fa"
+      },
+      {
+        "path": "src/connect_internal.h",
+        "sha256": "36884ce211e0fa794bd9e4476294bc7f44fb524548351066f5829fdce25500d9"
+      },
+      {
+        "path": "src/crypto_backend.h",
+        "sha256": "52b790718b7a92e2cc4dfaee891e2c830ae895b2d9e89bbb157484648a4e614c"
+      },
+      {
+        "path": "src/crypto_openssl.c",
+        "sha256": "80c909bda9ac5d201e98347d62b5672f9774d2c34ef06f1a7b76ea89ec7123f3"
+      },
+      {
+        "path": "src/crypto_psa.c",
+        "sha256": "84f37c5c862275d64e169e622a06db66a58ecd50434c4eae3090af49491db0f5"
+      },
+      {
+        "path": "src/dns_backend.h",
+        "sha256": "d063eba729069650fcf29a1ac0a6960ef1adc9be6d9a8e286c31995bd024cca6"
+      },
+      {
+        "path": "src/dns_lwip.c",
+        "sha256": "dafd87295a3633aebbe70a7b72114ce0bba6105f3fae2267fcacc36edab1624c"
+      },
+      {
+        "path": "src/frame_reader.c",
+        "sha256": "2e043f695391fd431842677b4ba3d81ff70aadf7a5e5ec22ecf0de5c63b17398"
+      },
+      {
+        "path": "src/handshake.c",
+        "sha256": "0d52f8ee619d893a06768d8507d2308a005e72578cf2ed78cc5d82d4dbdef55f"
+      },
+      {
+        "path": "src/idf_flash_store.c",
+        "sha256": "a1f17fa87be671d64a0d8ecafbd3d0497ef012589629534a91c5d6c072e6ef4d"
+      },
+      {
+        "path": "src/json_internal.c",
+        "sha256": "52842a2e2dfb46772fb5cda57c935a6aad6d06fac94ea3449095308152bd1c0d"
+      },
+      {
+        "path": "src/json_internal.h",
+        "sha256": "de6a2c0636ed1f0cafd9c83893dc78f437a0819f9de9a091b0094ecda4fa8f5e"
+      },
+      {
+        "path": "src/memory_internal.h",
+        "sha256": "37a6fad6538ea51e50ff62b02040d716c5432b63c135fc7a16d90f8bfc570868"
+      },
+      {
+        "path": "src/proxy.c",
+        "sha256": "6c880f63efb54b3286072487e6b7f8449971c39c0fd15a613a801b2520dfdd31"
+      },
+      {
+        "path": "src/proxy_internal.h",
+        "sha256": "e1c129b7f829817b0742b6b500bc99d530bcf4899658b8d638d8fd1f310019ab"
+      },
+      {
+        "path": "src/quic.c",
+        "sha256": "1986063d169b4d0f134e3d6d57f5aa592c0d075b932554347df76ee8172acf7f"
+      },
+      {
+        "path": "src/quic_certificate.c",
+        "sha256": "88791b10460eaaa92a34517c8794f2c160fb28ccd9241ac8f8af886185b8cb0f"
+      },
+      {
+        "path": "src/quic_certificate.h",
+        "sha256": "7317f431f394ff28b1551e18dea17660fc8d3d74b2c17ea8185b31444d4be398"
+      },
+      {
+        "path": "src/quic_crypto.c",
+        "sha256": "59a20cd262843e706a79de6a1c358a5e57eb2d644b6d85ce6a27b9e75e6be9c1"
+      },
+      {
+        "path": "src/quic_peer.c",
+        "sha256": "711be8138639e4b78a978e14a45e789927036da851c87aaca54c67b732ecfeb3"
+      },
+      {
+        "path": "src/quic_peer_security.c",
+        "sha256": "c6eadb9e753e2274f5982772a2afc42f4f46dee1fb42821a42c6288e5758b878"
+      },
+      {
+        "path": "src/quic_peer_security.h",
+        "sha256": "478aa3539d4059cc3d27558aea273efc3b0931e31d09cbd9c7499d3cb4ce1260"
+      },
+      {
+        "path": "src/quic_random.c",
+        "sha256": "0172cda120f4841535ae18f39006322a74d62c6198b3c097ebc223bcc93a9d1e"
+      },
+      {
+        "path": "src/session.c",
+        "sha256": "bc35cf941eb306eaca0bef84a60d751cbf91b34da921325bf858a26ce33dd309"
+      },
+      {
+        "path": "src/session_internal.h",
+        "sha256": "665662f536c187736a704027eaa50173ee318c446a80325829ee1f8015256bbd"
+      },
+      {
+        "path": "src/stcp_visitor.c",
+        "sha256": "be482b71a73cfe73db009897ebb41681baaeaefa4473c975ad04f079a0dc1fe7"
+      },
+      {
+        "path": "src/stcp_visitor_internal.h",
+        "sha256": "80644daef984074bcbb03c194c07a4583928cdd20c8665cbe47b9a4cefabd914"
+      },
+      {
+        "path": "src/stream.c",
+        "sha256": "0ec3011a13951c55f33720d971e5cd7d267008486a91da4383e9bbec9f0a0aa9"
+      },
+      {
+        "path": "src/stream_backend.h",
+        "sha256": "b1844c181fc879856aef173fb37dd45dbbb59ecc61217a18cf1e0dcb597a49e9"
+      },
+      {
+        "path": "src/stream_internal.h",
+        "sha256": "d3fbd30f93a0ef82a8d0461ca43e9ed4d969de97a5d618c19b30ce313dbf400a"
+      },
+      {
+        "path": "src/stream_yamux.c",
+        "sha256": "f6f3113452b0b0c29f6c88c302fbb7e5daa0c984cb1a650c4208d803ffb8d05b"
+      },
+      {
+        "path": "src/tcp_listener.c",
+        "sha256": "f1600fb1cd198bc0c38dece302117204ce97a4b520a0a3d3422a605054af5960"
+      },
+      {
+        "path": "src/tcp_listener.h",
+        "sha256": "8012e5a8d57a0994cbc672026b54d942a6ebb3c60b6b172b6390d333a96ce470"
+      },
+      {
+        "path": "src/tls_mbedtls.c",
+        "sha256": "9e6f3aa821df472d8d242b46a5e2de8d3d4b29398a3cb4ecf6309709315881ff"
+      },
+      {
+        "path": "src/udp_codec.c",
+        "sha256": "b585747d0ade54ed88b0d188e92fbe7f54cd4d313460a7bca7817ec08d0c1aeb"
+      },
+      {
+        "path": "src/udp_local.c",
+        "sha256": "9c3aa548c1a03e6af85ab5f3e552ed3202e93388d173be26554954092d4fcc4b"
+      },
+      {
+        "path": "src/udp_local.h",
+        "sha256": "d84f4418bceb305b792c7ea3cb97ed1554c64de4da9cc15a816a44e34f9c81b6"
+      },
+      {
+        "path": "src/word_storage.h",
+        "sha256": "6b51d18873126d9550b8bee4952798499ae9ed0c8d0f3ffcd78ced31b26ff1bd"
+      },
+      {
+        "path": "src/work.c",
+        "sha256": "ba9019128a793ea2988fb17e303dced969f8599f847c32e4092008afe3efd833"
+      },
+      {
+        "path": "src/work_internal.h",
+        "sha256": "a9c80957d50f8478ac11de159468be573f4583a44b535e1885f5b34c1b0a4085"
+      },
+      {
+        "path": "src/xtcp.c",
+        "sha256": "fa56a8cfe167215c106d2b45616d30867c4c22942bc2e73a5e13d0f57bfc6c24"
+      },
+      {
+        "path": "src/xtcp_binding.c",
+        "sha256": "fe3c4b6d0f605fb08a3bf96f2becee2bc887928db1b67646c036e5841170bd19"
+      },
+      {
+        "path": "src/xtcp_binding_internal.h",
+        "sha256": "83151128d9969986d96c9c649bb0215050dd2807cf2502063458223e0b15bf0b"
+      },
+      {
+        "path": "src/xtcp_codec.c",
+        "sha256": "d100cf14ab6a0b15c3a252f3e64474684c9586587c4be25c1c12dc1177137f38"
+      },
+      {
+        "path": "src/xtcp_codec.h",
+        "sha256": "502f1e2216f4d5fb12814ab64335227d47c5f2ed4f28a650e3241d8953d60c74"
+      },
+      {
+        "path": "src/xtcp_internal.h",
+        "sha256": "fe93dd4e40d8c03badb7531eff4292306f6da787c68257c70b0204363e3eb3af"
+      },
+      {
+        "path": "src/xtcp_nat.c",
+        "sha256": "1b852350965629926db8a5076135ed086013bea32036a847f966233617b09b41"
+      },
+      {
+        "path": "src/xtcp_nat.h",
+        "sha256": "93f39dc5daad73b7f0636d8261be2b4556bde35075ef3f0e942a55b334c5690f"
+      },
+      {
+        "path": "src/yamux.c",
+        "sha256": "9da9f54d8659b2053b60afcd1cbb0dd0acbfcf8df872c812f551f4a9e0dac2f3"
+      },
+      {
+        "path": "tools/README.md",
+        "sha256": "dece154b99f9b1561a4cea2eda782414b8bed7c45723f149b4620244dba9220e"
+      },
+      {
+        "path": "tools/quic_dependencies.cmake",
+        "sha256": "6b14a4cca1414c46e3cab32dbcca6cfa0ce9386e86fde90dcd76b3d586619101"
+      },
+      {
+        "path": "tools/quic_picotls_sources.cmake",
+        "sha256": "586d71d14ac220aa2a91c4d95f7fb0edabb1fcd79a5132aaf3b03a27fc011005"
+      },
+      {
+        "path": "tools/quic_source_guard.cmake",
+        "sha256": "6b9adf00df9dd1713d8b7d534e0645418815583e8d0d0c54b81259b9d71cf266"
+      },
+      {
+        "path": "tools/quic_sources.py",
+        "sha256": "8ed611354522ec3a0d7a6c69cf33555d2582454758a50b774a2878e36da70945"
+      },
+      {
+        "path": "tools/sdk.py",
+        "sha256": "1af99759e0f35d6278bde5eda76615b75c024d13573f1c2da18293e3cc176727"
+      },
+      {
+        "path": "tools/tests/test_sdk.py",
+        "sha256": "06267bd6eb4d7d5513f92b1873531fd0746fc27ca358448c4ac181fa6a271c36"
+      }
+    ],
+    "file_count": 99,
+    "sha256": "1a9028df87965a40d487bce4a5cf6a46ee6f16cedf4066959cae179d6f349416",
+    "declared_file_count_including_component_locks": 101,
+    "declared_sha256": "4502617dfa51f6341fd09ab2536db354e4131f6dec5bfa5be994aa6310bb2a00",
+    "algorithm": "按相对 POSIX 路径排序后，拼接每行 SHA256 + two spaces + path + LF，再做 SHA256；99 项含 sample/tools README，排除两份目标解析 dependencies.lock",
+    "manifest_paths": [
+      "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/source-manifest.json",
+      "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/source-manifest.json"
+    ],
+    "canonical_matches": true
+  },
+  "public_compile_input": {
+    "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/public_compile_inputs.h",
+    "size_bytes": 1318,
+    "sha256": "38c8d7ac3ed9e8efd316af5fbeaf0004fcae239e0aa270cc4b7b8399a9fe5a96",
+    "content": "// SPDX-License-Identifier: Apache-2.0\n#pragma once\n#include \"esp_frp.h\"\n/* Copy outside the repository; protect both input and build artifacts.\n * These placeholders compile but stop before any network initialization. */\nstatic const char sample_wifi_ssid[] = \"public-build-fixture\";\nstatic const char sample_wifi_password[] = \"public-build-password\";\nstatic const char sample_ntp_server[] = \"ntp.fixture.invalid\";\n/* Empty keeps the DHCP DNS server. A nonempty IPv4 explicitly selects one\n * lab resolver; backup/fallback slots are cleared, never guessed. */\nstatic const char sample_dns_ipv4[] = \"\";\n/* The sample itself binds its dedicated frp_scratch partition and recovers\n * it before Wi-Fi/FRP startup; private inputs provide no fake store. */\nstatic const uint8_t sample_ca_pem[] = \"public-build-placeholder-ca\";\nstatic const uint8_t sample_token[] = \"public-build-fixture-token\";\nstatic const efrp_config_t sample_frp_config = {\n    .server_hostname = \"frp.example.invalid\", .server_port = 7000,\n    .ca_pem = sample_ca_pem, .ca_length = sizeof sample_ca_pem - 1,\n    .token = sample_token, .token_length = sizeof sample_token - 1,\n    .hostname = \"esp-frp-sample\", .client_id = \"esp-frp-sample\",\n    .proxy_name = \"esp-frp-sample\", .remote_port = 0,\n    .local_ipv4 = {127, 0, 0, 1}, .local_port = 8765,\n};\n",
+    "inputs_valid": true,
+    "runtime_ca_validated": false
+  },
+  "sdk": {
+    "schema_version": 1,
+    "idf": {
+      "repository": "https://github.com/esp-space/esp-idf.git",
+      "revision": "578cf89c343e388db43ba1f4ddcd602fedcb763c"
+    },
+    "lwip": {
+      "repository": "https://github.com/esp-space/esp-lwip.git",
+      "revision": "2758df4cd3666b3b2a5b53830148379326425c0d",
+      "path": "components/lwip/lwip"
+    }
+  },
+  "quic_dependencies": {
+    "schema_version": 1,
+    "ngtcp2": {
+      "repository": "https://github.com/ngtcp2/ngtcp2.git",
+      "revision": "f9e9ff01ad2c8116bc09de4f644b0028a61486a6",
+      "version": "1.25.0"
+    },
+    "picotls": {
+      "repository": "https://github.com/h2o/picotls.git",
+      "revision": "f07f1c8c68b237f1468bc1f1fe1b68aba3ff23b4"
+    },
+    "host_mbedtls": {
+      "version": "4.1.0",
+      "archive_sha256": "377a09cf8eb81b5fb2707045e5522d5489d3309fed5006c9874e60558fc81d10"
+    }
+  },
+  "factory_partition_bytes": 1048576,
+  "required_symbol_names": [
+    "efrp_connect_create",
+    "efrp_connect_step",
+    "efrp_create",
+    "efrp_quic_certificate_init",
+    "efrp_quic_peer_certificate_check",
+    "efrp_quic_peer_certificate_parsed_check",
+    "efrp_quic_peer_client_hello",
+    "efrp_quic_peer_exporter",
+    "efrp_quic_peer_identity_certificate",
+    "efrp_quic_peer_identity_create",
+    "efrp_quic_peer_identity_destroy",
+    "efrp_quic_peer_identity_dispose",
+    "efrp_quic_peer_identity_generate",
+    "efrp_tls_create",
+    "efrp_tls_step",
+    "efrp_transport_quic_create",
+    "efrp_transport_quic_peer_create",
+    "efrp_transport_yamux_create",
+    "efrp_work_step",
+    "efrp_xtcp_binding_check_local",
+    "efrp_xtcp_binding_decode",
+    "efrp_xtcp_binding_hash",
+    "efrp_xtcp_binding_hmac",
+    "efrp_xtcp_binding_make_proof",
+    "efrp_xtcp_binding_signal_proof",
+    "efrp_xtcp_binding_validate",
+    "efrp_xtcp_binding_verify_proof",
+    "efrp_xtcp_cancel",
+    "efrp_xtcp_codec_report",
+    "efrp_xtcp_codec_request",
+    "efrp_xtcp_codec_response",
+    "efrp_xtcp_codec_sid_decode",
+    "efrp_xtcp_codec_sid_encode",
+    "efrp_xtcp_codec_work_sid",
+    "efrp_xtcp_consume_output",
+    "efrp_xtcp_create",
+    "efrp_xtcp_destroy",
+    "efrp_xtcp_nat_cancel",
+    "efrp_xtcp_nat_create",
+    "efrp_xtcp_nat_destroy",
+    "efrp_xtcp_nat_handoff",
+    "efrp_xtcp_nat_start_detect",
+    "efrp_xtcp_nat_status",
+    "efrp_xtcp_nat_step",
+    "efrp_xtcp_output",
+    "efrp_xtcp_request",
+    "efrp_xtcp_response",
+    "efrp_xtcp_set_control_id",
+    "efrp_xtcp_start",
+    "efrp_xtcp_status",
+    "efrp_xtcp_step",
+    "efrp_yamux_feed",
+    "efrp_yamux_init",
+    "efrp_yamux_read",
+    "efrp_yamux_tick",
+    "efrp_yamux_write",
+    "sign_certificate",
+    "verify_chain",
+    "verify_signature"
+  ],
+  "results": {
+    "esp32c3": {
+      "compile_pass": true,
+      "link_pass": true,
+      "capacity_pass": true,
+      "build_exit": 0,
+      "bin_bytes": 1033056,
+      "bin_hex": "0xfc360",
+      "factory_remaining_bytes": 15520,
+      "effective_config_diff_from_generation_2": {
+        "CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS": {
+          "before": false,
+          "after": "y"
+        }
+      },
+      "lto": false,
+      "production_c_sources_compiled": 32,
+      "production_sources_use_msave_restore": true,
+      "required_symbols_count": 59,
+      "all_required_symbols_positive_size": true,
+      "linked_required_symbols": {
+        "efrp_connect_create": {
+          "address": "420489e8",
+          "size_bytes": 314,
+          "type": "T"
+        },
+        "efrp_connect_step": {
+          "address": "42048cb4",
+          "size_bytes": 358,
+          "type": "T"
+        },
+        "efrp_create": {
+          "address": "4200db5c",
+          "size_bytes": 10,
+          "type": "T"
+        },
+        "efrp_quic_certificate_init": {
+          "address": "42011160",
+          "size_bytes": 190,
+          "type": "T"
+        },
+        "efrp_quic_peer_certificate_check": {
+          "address": "420492de",
+          "size_bytes": 154,
+          "type": "T"
+        },
+        "efrp_quic_peer_certificate_parsed_check": {
+          "address": "42010d5e",
+          "size_bytes": 488,
+          "type": "T"
+        },
+        "efrp_quic_peer_client_hello": {
+          "address": "3fc8ef80",
+          "size_bytes": 4,
+          "type": "D"
+        },
+        "efrp_quic_peer_exporter": {
+          "address": "4201048e",
+          "size_bytes": 134,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_certificate": {
+          "address": "420493d2",
+          "size_bytes": 88,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_create": {
+          "address": "42049378",
+          "size_bytes": 90,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_destroy": {
+          "address": "4204942a",
+          "size_bytes": 46,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_dispose": {
+          "address": "42011340",
+          "size_bytes": 74,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_generate": {
+          "address": "4201138a",
+          "size_bytes": 800,
+          "type": "T"
+        },
+        "efrp_tls_create": {
+          "address": "420485b6",
+          "size_bytes": 624,
+          "type": "T"
+        },
+        "efrp_tls_step": {
+          "address": "42048318",
+          "size_bytes": 268,
+          "type": "T"
+        },
+        "efrp_transport_quic_create": {
+          "address": "4200ffa6",
+          "size_bytes": 436,
+          "type": "T"
+        },
+        "efrp_transport_quic_peer_create": {
+          "address": "4201015a",
+          "size_bytes": 820,
+          "type": "T"
+        },
+        "efrp_transport_yamux_create": {
+          "address": "4200e80e",
+          "size_bytes": 206,
+          "type": "T"
+        },
+        "efrp_work_step": {
+          "address": "42047960",
+          "size_bytes": 532,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_check_local": {
+          "address": "4204c20e",
+          "size_bytes": 160,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_decode": {
+          "address": "4204c068",
+          "size_bytes": 334,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_hash": {
+          "address": "4204c1b6",
+          "size_bytes": 88,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_hmac": {
+          "address": "4204c2ae",
+          "size_bytes": 336,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_make_proof": {
+          "address": "4204c510",
+          "size_bytes": 166,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_signal_proof": {
+          "address": "4204c3fe",
+          "size_bytes": 274,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_validate": {
+          "address": "4204c016",
+          "size_bytes": 82,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_verify_proof": {
+          "address": "4204c5b6",
+          "size_bytes": 140,
+          "type": "T"
+        },
+        "efrp_xtcp_cancel": {
+          "address": "42042d88",
+          "size_bytes": 226,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_report": {
+          "address": "4204d56a",
+          "size_bytes": 134,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_request": {
+          "address": "4204cd98",
+          "size_bytes": 706,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_response": {
+          "address": "4204d05a",
+          "size_bytes": 1124,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_sid_decode": {
+          "address": "4204d75e",
+          "size_bytes": 476,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_sid_encode": {
+          "address": "4204d5f0",
+          "size_bytes": 366,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_work_sid": {
+          "address": "4204d4be",
+          "size_bytes": 172,
+          "type": "T"
+        },
+        "efrp_xtcp_consume_output": {
+          "address": "4204214c",
+          "size_bytes": 114,
+          "type": "T"
+        },
+        "efrp_xtcp_create": {
+          "address": "42041e40",
+          "size_bytes": 404,
+          "type": "T"
+        },
+        "efrp_xtcp_destroy": {
+          "address": "42042e6a",
+          "size_bytes": 90,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_cancel": {
+          "address": "4204ec54",
+          "size_bytes": 54,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_create": {
+          "address": "4204dd8a",
+          "size_bytes": 310,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_destroy": {
+          "address": "4204ec8a",
+          "size_bytes": 62,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_handoff": {
+          "address": "4204ebae",
+          "size_bytes": 166,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_start_detect": {
+          "address": "4204df00",
+          "size_bytes": 660,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_status": {
+          "address": "4204dec0",
+          "size_bytes": 64,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_step": {
+          "address": "4204e194",
+          "size_bytes": 2586,
+          "type": "T"
+        },
+        "efrp_xtcp_output": {
+          "address": "420420b4",
+          "size_bytes": 152,
+          "type": "T"
+        },
+        "efrp_xtcp_request": {
+          "address": "42042080",
+          "size_bytes": 52,
+          "type": "T"
+        },
+        "efrp_xtcp_response": {
+          "address": "420421be",
+          "size_bytes": 412,
+          "type": "T"
+        },
+        "efrp_xtcp_set_control_id": {
+          "address": "42041fd4",
+          "size_bytes": 92,
+          "type": "T"
+        },
+        "efrp_xtcp_start": {
+          "address": "42042030",
+          "size_bytes": 80,
+          "type": "T"
+        },
+        "efrp_xtcp_status": {
+          "address": "42042d38",
+          "size_bytes": 80,
+          "type": "T"
+        },
+        "efrp_xtcp_step": {
+          "address": "4204235a",
+          "size_bytes": 2526,
+          "type": "T"
+        },
+        "efrp_yamux_feed": {
+          "address": "420438c8",
+          "size_bytes": 990,
+          "type": "T"
+        },
+        "efrp_yamux_init": {
+          "address": "420432cc",
+          "size_bytes": 60,
+          "type": "T"
+        },
+        "efrp_yamux_read": {
+          "address": "420436f6",
+          "size_bytes": 174,
+          "type": "T"
+        },
+        "efrp_yamux_tick": {
+          "address": "42043cc2",
+          "size_bytes": 382,
+          "type": "T"
+        },
+        "efrp_yamux_write": {
+          "address": "4204361e",
+          "size_bytes": 216,
+          "type": "T"
+        },
+        "sign_certificate": {
+          "address": "4201121e",
+          "size_bytes": 192,
+          "type": "t"
+        },
+        "verify_chain": {
+          "address": "42010f46",
+          "size_bytes": 334,
+          "type": "t"
+        },
+        "verify_signature": {
+          "address": "42010c4e",
+          "size_bytes": 272,
+          "type": "t"
+        }
+      },
+      "riscv_helpers_count": 26,
+      "riscv_helpers_in_iram": {
+        "__riscv_restore_0": {
+          "address": "40386bc4",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_restore_1": {
+          "address": "40386bc4",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_restore_2": {
+          "address": "40386bc4",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_restore_3": {
+          "address": "40386bc4",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_save_0": {
+          "address": "40386b9c",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_save_1": {
+          "address": "40386b9c",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_save_2": {
+          "address": "40386b9c",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_save_3": {
+          "address": "40386b9c",
+          "size_bytes": 12,
+          "type": "T"
+        },
+        "__riscv_restore_4": {
+          "address": "40386bb8",
+          "size_bytes": 24,
+          "type": "T"
+        },
+        "__riscv_restore_5": {
+          "address": "40386bb8",
+          "size_bytes": 24,
+          "type": "T"
+        },
+        "__riscv_restore_6": {
+          "address": "40386bb8",
+          "size_bytes": 24,
+          "type": "T"
+        },
+        "__riscv_restore_7": {
+          "address": "40386bb8",
+          "size_bytes": 24,
+          "type": "T"
+        },
+        "__riscv_save_4": {
+          "address": "40386b80",
+          "size_bytes": 26,
+          "type": "T"
+        },
+        "__riscv_save_5": {
+          "address": "40386b80",
+          "size_bytes": 26,
+          "type": "T"
+        },
+        "__riscv_save_6": {
+          "address": "40386b80",
+          "size_bytes": 26,
+          "type": "T"
+        },
+        "__riscv_save_7": {
+          "address": "40386b80",
+          "size_bytes": 26,
+          "type": "T"
+        },
+        "__riscv_restore_10": {
+          "address": "40386bac",
+          "size_bytes": 36,
+          "type": "T"
+        },
+        "__riscv_restore_11": {
+          "address": "40386bac",
+          "size_bytes": 36,
+          "type": "T"
+        },
+        "__riscv_restore_8": {
+          "address": "40386bac",
+          "size_bytes": 36,
+          "type": "T"
+        },
+        "__riscv_restore_9": {
+          "address": "40386bac",
+          "size_bytes": 36,
+          "type": "T"
+        },
+        "__riscv_restore_12": {
+          "address": "40386ba8",
+          "size_bytes": 40,
+          "type": "T"
+        },
+        "__riscv_save_10": {
+          "address": "40386b70",
+          "size_bytes": 42,
+          "type": "T"
+        },
+        "__riscv_save_11": {
+          "address": "40386b70",
+          "size_bytes": 42,
+          "type": "T"
+        },
+        "__riscv_save_8": {
+          "address": "40386b70",
+          "size_bytes": 42,
+          "type": "T"
+        },
+        "__riscv_save_9": {
+          "address": "40386b70",
+          "size_bytes": 42,
+          "type": "T"
+        },
+        "__riscv_save_12": {
+          "address": "40386b68",
+          "size_bytes": 50,
+          "type": "T"
+        }
+      },
+      "iram_text": {
+        "start": "0x40380000",
+        "end": "0x4038edbe"
+      },
+      "artifacts": {
+        "sdkconfig": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/sdkconfig",
+          "size_bytes": 83575,
+          "sha256": "643e1dfb87699adf498ca64ad6f5b76c2af2d7e13e74512e4c74ab4b7bae5a0d"
+        },
+        "source-manifest.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/source-manifest.json",
+          "size_bytes": 14000,
+          "sha256": "0121445ac0c1b54a18cb278c55421806a34677fbf94d96df8f42b130054c81bb"
+        },
+        "build/esp_frp_sample.bin": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build/esp_frp_sample.bin",
+          "size_bytes": 1033056,
+          "sha256": "b958ff897e2b8b002cb015e1e1552cb392d83aa58fe01b6428bf6fc2b941a5dc"
+        },
+        "build/esp_frp_sample.elf": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build/esp_frp_sample.elf",
+          "size_bytes": 13192732,
+          "sha256": "1c25025fb57ec43efd47cbbd1d47fd61771a88cd3a6d7eebf410f68cea053df7"
+        },
+        "build/esp_frp_sample.map": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build/esp_frp_sample.map",
+          "size_bytes": 7602328,
+          "sha256": "14b0817a982fddbb3e8a0b810fc28d478761fd42ac7e04bf6f0989d0fdb5ae4c"
+        },
+        "build/partition_table/partition-table.bin": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build/partition_table/partition-table.bin",
+          "size_bytes": 3072,
+          "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+        },
+        "build/bootloader/bootloader.bin": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build/bootloader/bootloader.bin",
+          "size_bytes": 19552,
+          "sha256": "bf613d15c9287a8539b43e3e469678aaea0f8a894d17265b57f10dd395d7bf2e"
+        },
+        "build/bootloader/bootloader.elf": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build/bootloader/bootloader.elf",
+          "size_bytes": 547200,
+          "sha256": "bf803f83aaf96b9765a73058bee2b84db904163da40a05c565082ceb09b9748a"
+        },
+        "build-final.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build-final.log",
+          "size_bytes": 3857,
+          "sha256": "f7718ff638f3d6e2a466f2b2437c0888a3e87365edde8320c35d388a4b0e18f6"
+        },
+        "build-final-cmake.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build-final-cmake.log",
+          "size_bytes": 26614,
+          "sha256": "3882417076a7b873d9ab45db85ff9abdfd242b540464574eda0e91b6b64dd151"
+        },
+        "build-final-snapshot.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build-final-snapshot.log",
+          "size_bytes": 2157,
+          "sha256": "2bc531c82291504e07b80befbfc210ccffdb5b8092b083366ee364c6ac8a5c31"
+        },
+        "build-final-close.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build-final-close.log",
+          "size_bytes": 27173,
+          "sha256": "83ea896d994a3cf66d52cc761a8ffb841c35e81891480834e27d4db5e5e05fb1"
+        },
+        "linked-symbols.txt": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/linked-symbols.txt",
+          "size_bytes": 299661,
+          "sha256": "3079e36cc2b899cabcaf22be1ca5a4c3e959630abb2722272619a99d92aff010"
+        },
+        "elf-sections.txt": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/elf-sections.txt",
+          "size_bytes": 4106,
+          "sha256": "ae3190ec7058a8260352d16108a7946824920a5080a11342cd2c1ca38529efad"
+        },
+        "size-memory.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/size-memory.json",
+          "size_bytes": 1630,
+          "sha256": "b33d5eb9e969450e0ee23d331fc3fdb1245a4620f2ed6adb654e15fcefe4df96"
+        },
+        "size-components.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/size-components.json",
+          "size_bytes": 167045,
+          "sha256": "4386b713ad307e483d35ff17a08ab2be0a51387963d912d38c4814cf74b7794a"
+        },
+        "build/compile_commands.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/build/compile_commands.json",
+          "size_bytes": 9392895,
+          "sha256": "d7c62e2ff3ad2337f549acb43ee206a2977d41937b38f89a8ccf06a659a81a91"
+        },
+        "esp-frp/examples/tcp_proxy/dependencies.lock": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/esp-frp/examples/tcp_proxy/dependencies.lock",
+          "size_bytes": 516,
+          "sha256": "a389882fe7e9ca011161e07b56d0d04c71932ee84ca42f3f1953a1dd07ba9022"
+        },
+        "esp-frp/examples/tcp_proxy/dependencies.lock.esp32": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32c3/esp-frp/examples/tcp_proxy/dependencies.lock.esp32",
+          "size_bytes": 514,
+          "sha256": "59fdbc48687a0f17e1306426b5a23397246e3dccd985514ea4621069fbba943d"
+        }
+      },
+      "selected_sdkconfig_values": {
+        "CONFIG_IDF_TARGET": "\"esp32c3\"",
+        "CONFIG_COMPILER_OPTIMIZATION_SIZE": "y",
+        "CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT": "y",
+        "CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE": false,
+        "CONFIG_ESP_WIFI_SOFTAP_SUPPORT": false,
+        "CONFIG_LWIP_IPV6": "y",
+        "CONFIG_MBEDTLS_X509_CREATE_C": "y",
+        "CONFIG_MBEDTLS_X509_CRT_WRITE_C": "y",
+        "CONFIG_MBEDTLS_PK_WRITE_C": "y",
+        "CONFIG_MBEDTLS_ASN1_WRITE_C": "y",
+        "CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS": "y",
+        "CONFIG_LWIP_MAX_SOCKETS": "12",
+        "CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM": "6",
+        "CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM": "12",
+        "CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM": "12",
+        "CONFIG_LWIP_TCP_SND_BUF_DEFAULT": "2880",
+        "CONFIG_LWIP_TCP_WND_DEFAULT": "2880",
+        "CONFIG_ESP_MAIN_TASK_STACK_SIZE": "4096",
+        "CONFIG_PARTITION_TABLE_CUSTOM": "y",
+        "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME": "\"partitions.csv\"",
+        "CONFIG_ESPTOOLPY_FLASHSIZE_4MB": "y"
+      }
+    },
+    "esp32": {
+      "compile_pass": true,
+      "link_pass": true,
+      "capacity_pass": true,
+      "build_exit": 0,
+      "bin_bytes": 988256,
+      "bin_hex": "0xf1460",
+      "factory_remaining_bytes": 60320,
+      "effective_config_diff_from_generation_2": {},
+      "lto": false,
+      "production_c_sources_compiled": 32,
+      "production_sources_use_msave_restore": false,
+      "required_symbols_count": 59,
+      "all_required_symbols_positive_size": true,
+      "linked_required_symbols": {
+        "efrp_connect_create": {
+          "address": "40110d38",
+          "size_bytes": 252,
+          "type": "T"
+        },
+        "efrp_connect_step": {
+          "address": "40110f98",
+          "size_bytes": 388,
+          "type": "T"
+        },
+        "efrp_create": {
+          "address": "400dc3b4",
+          "size_bytes": 21,
+          "type": "T"
+        },
+        "efrp_quic_certificate_init": {
+          "address": "400df374",
+          "size_bytes": 133,
+          "type": "T"
+        },
+        "efrp_quic_peer_certificate_check": {
+          "address": "40111554",
+          "size_bytes": 127,
+          "type": "T"
+        },
+        "efrp_quic_peer_certificate_parsed_check": {
+          "address": "400df000",
+          "size_bytes": 434,
+          "type": "T"
+        },
+        "efrp_quic_peer_client_hello": {
+          "address": "3ffb0da8",
+          "size_bytes": 4,
+          "type": "D"
+        },
+        "efrp_quic_peer_exporter": {
+          "address": "400de884",
+          "size_bytes": 118,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_certificate": {
+          "address": "40111618",
+          "size_bytes": 88,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_create": {
+          "address": "401115d4",
+          "size_bytes": 65,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_destroy": {
+          "address": "40111670",
+          "size_bytes": 29,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_dispose": {
+          "address": "400df4f8",
+          "size_bytes": 56,
+          "type": "T"
+        },
+        "efrp_quic_peer_identity_generate": {
+          "address": "400df530",
+          "size_bytes": 787,
+          "type": "T"
+        },
+        "efrp_tls_create": {
+          "address": "4011093c",
+          "size_bytes": 561,
+          "type": "T"
+        },
+        "efrp_tls_step": {
+          "address": "401106bc",
+          "size_bytes": 250,
+          "type": "T"
+        },
+        "efrp_transport_quic_create": {
+          "address": "400de400",
+          "size_bytes": 370,
+          "type": "T"
+        },
+        "efrp_transport_quic_peer_create": {
+          "address": "400de574",
+          "size_bytes": 781,
+          "type": "T"
+        },
+        "efrp_transport_yamux_create": {
+          "address": "400dce70",
+          "size_bytes": 162,
+          "type": "T"
+        },
+        "efrp_work_step": {
+          "address": "4010fee0",
+          "size_bytes": 476,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_check_local": {
+          "address": "4011391c",
+          "size_bytes": 128,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_decode": {
+          "address": "401137d0",
+          "size_bytes": 264,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_hash": {
+          "address": "401138d8",
+          "size_bytes": 68,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_hmac": {
+          "address": "4011399c",
+          "size_bytes": 305,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_make_proof": {
+          "address": "40113bdc",
+          "size_bytes": 133,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_signal_proof": {
+          "address": "40113ad0",
+          "size_bytes": 267,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_validate": {
+          "address": "40113798",
+          "size_bytes": 56,
+          "type": "T"
+        },
+        "efrp_xtcp_binding_verify_proof": {
+          "address": "40113c64",
+          "size_bytes": 112,
+          "type": "T"
+        },
+        "efrp_xtcp_cancel": {
+          "address": "4010a834",
+          "size_bytes": 203,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_report": {
+          "address": "401149ac",
+          "size_bytes": 112,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_request": {
+          "address": "4011427c",
+          "size_bytes": 660,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_response": {
+          "address": "40114510",
+          "size_bytes": 1033,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_sid_decode": {
+          "address": "40114b60",
+          "size_bytes": 421,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_sid_encode": {
+          "address": "40114a1c",
+          "size_bytes": 321,
+          "type": "T"
+        },
+        "efrp_xtcp_codec_work_sid": {
+          "address": "4011491c",
+          "size_bytes": 143,
+          "type": "T"
+        },
+        "efrp_xtcp_consume_output": {
+          "address": "40109bf4",
+          "size_bytes": 104,
+          "type": "T"
+        },
+        "efrp_xtcp_create": {
+          "address": "4010996c",
+          "size_bytes": 354,
+          "type": "T"
+        },
+        "efrp_xtcp_destroy": {
+          "address": "4010a900",
+          "size_bytes": 83,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_cancel": {
+          "address": "40116190",
+          "size_bytes": 38,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_create": {
+          "address": "401150a8",
+          "size_bytes": 277,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_destroy": {
+          "address": "401161b8",
+          "size_bytes": 44,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_handoff": {
+          "address": "401160f0",
+          "size_bytes": 160,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_start_detect": {
+          "address": "401151ec",
+          "size_bytes": 599,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_status": {
+          "address": "401151c0",
+          "size_bytes": 41,
+          "type": "T"
+        },
+        "efrp_xtcp_nat_step": {
+          "address": "40115444",
+          "size_bytes": 3242,
+          "type": "T"
+        },
+        "efrp_xtcp_output": {
+          "address": "40109b68",
+          "size_bytes": 140,
+          "type": "T"
+        },
+        "efrp_xtcp_request": {
+          "address": "4018a17c",
+          "size_bytes": 46,
+          "type": "T"
+        },
+        "efrp_xtcp_response": {
+          "address": "40109c5c",
+          "size_bytes": 400,
+          "type": "T"
+        },
+        "efrp_xtcp_set_control_id": {
+          "address": "40109ad0",
+          "size_bytes": 85,
+          "type": "T"
+        },
+        "efrp_xtcp_start": {
+          "address": "40109b28",
+          "size_bytes": 63,
+          "type": "T"
+        },
+        "efrp_xtcp_status": {
+          "address": "4010a7f0",
+          "size_bytes": 66,
+          "type": "T"
+        },
+        "efrp_xtcp_step": {
+          "address": "40109dec",
+          "size_bytes": 2561,
+          "type": "T"
+        },
+        "efrp_yamux_feed": {
+          "address": "4010b1b8",
+          "size_bytes": 963,
+          "type": "T"
+        },
+        "efrp_yamux_init": {
+          "address": "4010ac94",
+          "size_bytes": 34,
+          "type": "T"
+        },
+        "efrp_yamux_read": {
+          "address": "4010b008",
+          "size_bytes": 153,
+          "type": "T"
+        },
+        "efrp_yamux_tick": {
+          "address": "4010b57c",
+          "size_bytes": 320,
+          "type": "T"
+        },
+        "efrp_yamux_write": {
+          "address": "4010af40",
+          "size_bytes": 198,
+          "type": "T"
+        },
+        "sign_certificate": {
+          "address": "400df3fc",
+          "size_bytes": 184,
+          "type": "t"
+        },
+        "verify_chain": {
+          "address": "400df1b4",
+          "size_bytes": 286,
+          "type": "t"
+        },
+        "verify_signature": {
+          "address": "400deef0",
+          "size_bytes": 269,
+          "type": "t"
+        }
+      },
+      "riscv_helpers_count": 0,
+      "riscv_helpers_in_iram": {},
+      "iram_text": null,
+      "artifacts": {
+        "sdkconfig": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/sdkconfig",
+          "size_bytes": 83980,
+          "sha256": "3ab778b0aa3a090057c822f133f7a32489672308b01d424bf1df8bed3a3083ef"
+        },
+        "source-manifest.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/source-manifest.json",
+          "size_bytes": 14000,
+          "sha256": "0121445ac0c1b54a18cb278c55421806a34677fbf94d96df8f42b130054c81bb"
+        },
+        "build/esp_frp_sample.bin": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build/esp_frp_sample.bin",
+          "size_bytes": 988256,
+          "sha256": "3ba49c152d91fba112b4365e42fe9c29d27c449b9d45d2db602a3babbaaa694b"
+        },
+        "build/esp_frp_sample.elf": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build/esp_frp_sample.elf",
+          "size_bytes": 11083800,
+          "sha256": "45ecfb28f4ab006c855c6ed176c3cf58eec0348b4e0f6b21c6ace09db3ed55d7"
+        },
+        "build/esp_frp_sample.map": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build/esp_frp_sample.map",
+          "size_bytes": 8939556,
+          "sha256": "df163888be2b43c0dfb0dd632d556a937f341e37242f1765bb006ed0fa57f510"
+        },
+        "build/partition_table/partition-table.bin": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build/partition_table/partition-table.bin",
+          "size_bytes": 3072,
+          "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+        },
+        "build/bootloader/bootloader.bin": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build/bootloader/bootloader.bin",
+          "size_bytes": 24464,
+          "sha256": "fea4746222a8597026494b3e7cfb9f3e8ef1ade51415cf469b2bdbfa19d7520e"
+        },
+        "build/bootloader/bootloader.elf": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build/bootloader/bootloader.elf",
+          "size_bytes": 494360,
+          "sha256": "8897eebd420e642f68817b4a38f68cdc8757af1a8e2883fc08d4e6f6a3c38cb6"
+        },
+        "build-final.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build-final.log",
+          "size_bytes": 3758,
+          "sha256": "c8e029236af456f44827dce2457646076cf6a2a8999fe0bc4dbd271cc0323ad8"
+        },
+        "build-final-cmake.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build-final-cmake.log",
+          "size_bytes": 24909,
+          "sha256": "ecbd1991addb982dc49aa5765d7e92a74bca9fc241f606583df2c5b3d669c50b"
+        },
+        "build-final-snapshot.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build-final-snapshot.log",
+          "size_bytes": 2066,
+          "sha256": "fb54b1948cc942017d9f90254f325f3daba93e290c72d618417bf0f8e6dd2413"
+        },
+        "build-final-close.log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build-final-close.log",
+          "size_bytes": 25460,
+          "sha256": "14c34ba86483f809d57dfe8a2fe4b433d2612354f1753c82320eb4842db63176"
+        },
+        "linked-symbols.txt": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/linked-symbols.txt",
+          "size_bytes": 287283,
+          "sha256": "682bbdbf53d47838298a6ccbaf477952bd227ab59cdb8c86e845b773bd9b3e2c"
+        },
+        "elf-sections.txt": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/elf-sections.txt",
+          "size_bytes": 4299,
+          "sha256": "929d24479be353de1f4a3d03764b37ab974559d9c5600b2672aca8bc5ddc08dd"
+        },
+        "size-memory.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/size-memory.json",
+          "size_bytes": 1723,
+          "sha256": "00194f593436482a51214af791add4cfd79214f9a96b07ad397590dd6fcb96a5"
+        },
+        "size-components.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/size-components.json",
+          "size_bytes": 159290,
+          "sha256": "a16dfd9e2bf290a5aaed4251ce5d3711ada6dc8d919482c2245a5645019870ea"
+        },
+        "build/compile_commands.json": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/build/compile_commands.json",
+          "size_bytes": 9353257,
+          "sha256": "a2bc4422f552a70171cfbaece6d1f93fd11e413e2e21554a4e7088d9671ba437"
+        },
+        "esp-frp/examples/tcp_proxy/dependencies.lock": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/esp-frp/examples/tcp_proxy/dependencies.lock",
+          "size_bytes": 516,
+          "sha256": "0fe4da669276a376c99bef4186a610edab82d2b860889b9117972b5224974309"
+        },
+        "esp-frp/examples/tcp_proxy/dependencies.lock.esp32": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/esp32/esp-frp/examples/tcp_proxy/dependencies.lock.esp32",
+          "size_bytes": 514,
+          "sha256": "074b78e74325e7dd12369b8b019403b08d8e256bf1c79c698178fca84b46df7c"
+        }
+      },
+      "selected_sdkconfig_values": {
+        "CONFIG_IDF_TARGET": "\"esp32\"",
+        "CONFIG_COMPILER_OPTIMIZATION_SIZE": "y",
+        "CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT": "y",
+        "CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE": false,
+        "CONFIG_ESP_WIFI_SOFTAP_SUPPORT": false,
+        "CONFIG_LWIP_IPV6": "y",
+        "CONFIG_MBEDTLS_X509_CREATE_C": "y",
+        "CONFIG_MBEDTLS_X509_CRT_WRITE_C": "y",
+        "CONFIG_MBEDTLS_PK_WRITE_C": "y",
+        "CONFIG_MBEDTLS_ASN1_WRITE_C": "y",
+        "CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS": null,
+        "CONFIG_LWIP_MAX_SOCKETS": "12",
+        "CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM": "6",
+        "CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM": "12",
+        "CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM": "12",
+        "CONFIG_LWIP_TCP_SND_BUF_DEFAULT": "2880",
+        "CONFIG_LWIP_TCP_WND_DEFAULT": "2880",
+        "CONFIG_ESP_MAIN_TASK_STACK_SIZE": "4096",
+        "CONFIG_PARTITION_TABLE_CUSTOM": "y",
+        "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME": "\"partitions.csv\"",
+        "CONFIG_ESPTOOLPY_FLASHSIZE_4MB": "y"
+      }
+    }
+  },
+  "generation_1": {
+    "source": {
+      "source_sha256": "96a8c9a74a2f619cc651ab0b255cedf0b5aa26437f68b06bd17e0622c25e7e1f",
+      "source_files": 101,
+      "inputs_sha256": "38c8d7ac3ed9e8efd316af5fbeaf0004fcae239e0aa270cc4b7b8399a9fe5a96",
+      "targets": [
+        "esp32c3",
+        "esp32"
+      ]
+    },
+    "results": {
+      "esp32c3": {
+        "build_exit": 2,
+        "keep_going_exit": 1,
+        "compile_pass": false,
+        "link_pass": false,
+        "capacity_gate": "not_reached",
+        "errors": [
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3/esp-frp/src/xtcp_codec.c:151:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3/esp-frp/src/xtcp_codec.c:204:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3/esp-frp/src/xtcp_codec.c:205:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3/esp-frp/src/xtcp_codec.c:208:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3/esp-frp/src/xtcp_codec.c:209:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3/esp-frp/src/quic_peer.c:33:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]"
+        ],
+        "artifacts": {
+          "sdkconfig": {
+            "exists": true,
+            "size_bytes": 83597,
+            "sha256": "d0522e4dca9cda43404897f6ef7564d27f4971706c73072fcf01117f605306a3"
+          },
+          "build/bootloader/bootloader.bin": {
+            "exists": true,
+            "size_bytes": 20128,
+            "sha256": "128733377b35dcc19e202d1179f1456da04496aaf26722306568f216f98b2ee8"
+          },
+          "build/partition_table/partition-table.bin": {
+            "exists": true,
+            "size_bytes": 3072,
+            "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+          },
+          "build/esp_frp_sample.elf": {
+            "exists": false,
+            "size_bytes": null,
+            "sha256": null
+          },
+          "build/esp_frp_sample.bin": {
+            "exists": false,
+            "size_bytes": null,
+            "sha256": null
+          }
+        }
+      },
+      "esp32": {
+        "build_exit": 2,
+        "keep_going_exit": 1,
+        "compile_pass": false,
+        "link_pass": false,
+        "capacity_gate": "not_reached",
+        "errors": [
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32/esp-frp/src/xtcp_codec.c:151:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32/esp-frp/src/xtcp_codec.c:204:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32/esp-frp/src/xtcp_codec.c:205:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32/esp-frp/src/xtcp_codec.c:208:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32/esp-frp/src/xtcp_codec.c:209:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]",
+          "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32/esp-frp/src/quic_peer.c:33:5: error: this 'if' clause does not guard... [-Werror=misleading-indentation]"
+        ],
+        "artifacts": {
+          "sdkconfig": {
+            "exists": true,
+            "size_bytes": 83980,
+            "sha256": "3ab778b0aa3a090057c822f133f7a32489672308b01d424bf1df8bed3a3083ef"
+          },
+          "build/bootloader/bootloader.bin": {
+            "exists": true,
+            "size_bytes": 24464,
+            "sha256": "eba0ed7aa513ba65dc1bceaf47c6d98756ed20cc8db185d74f51c2f1dd6d5137"
+          },
+          "build/partition_table/partition-table.bin": {
+            "exists": true,
+            "size_bytes": 3072,
+            "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+          },
+          "build/esp_frp_sample.elf": {
+            "exists": false,
+            "size_bytes": null,
+            "sha256": null
+          },
+          "build/esp_frp_sample.bin": {
+            "exists": false,
+            "size_bytes": null,
+            "sha256": null
+          }
+        }
+      }
+    }
+  },
+  "generation_2": {
+    "source": {
+      "generation": 2,
+      "source_sha256": "3def1a9ef1af06910cd26360271d3877d53b430228361e7612335d25dc4ac45b",
+      "source_files": 101,
+      "inputs_sha256": "38c8d7ac3ed9e8efd316af5fbeaf0004fcae239e0aa270cc4b7b8399a9fe5a96",
+      "targets": [
+        "esp32c3",
+        "esp32"
+      ],
+      "changed_files": {
+        "esp32c3": [
+          "examples/tcp_proxy/dependencies.lock",
+          "src/quic_peer.c",
+          "src/xtcp_codec.c",
+          "src/xtcp_nat.c"
+        ],
+        "esp32": [
+          "examples/tcp_proxy/dependencies.lock.esp32",
+          "src/quic_peer.c",
+          "src/xtcp_codec.c",
+          "src/xtcp_nat.c"
+        ]
+      }
+    },
+    "factory_partition_bytes": 1048576,
+    "input_kind": "nonempty public compile fixture; inputs_valid true",
+    "results": {
+      "esp32c3": {
+        "compile_pass": true,
+        "link_pass": true,
+        "capacity_pass": false,
+        "build_exit": 2,
+        "bin_bytes": 1057568,
+        "bin_hex": "0x102320",
+        "factory_remaining_bytes": -8992,
+        "compile_source_sha256_excluding_resolved_component_locks": "84d61f0db20876876d67f9a7e9d94dc10f2412c0aacc0da8efcbdd78d7a2f2f7",
+        "current_repo_drift": [],
+        "xtcp_controller_nat_peer_certificate_generation_linked": true,
+        "artifacts": {
+          "sdkconfig": {
+            "size_bytes": 83597,
+            "sha256": "d0522e4dca9cda43404897f6ef7564d27f4971706c73072fcf01117f605306a3"
+          },
+          "build/esp_frp_sample.elf": {
+            "size_bytes": 13518044,
+            "sha256": "7817520ad02d3eed325d61dc5b3552a6f36623d4b3dbe489195ca5723722102a"
+          },
+          "build/esp_frp_sample.bin": {
+            "size_bytes": 1057568,
+            "sha256": "e0e7820c2b4c3fd66729ab96c207b4763f2f580d3d0f33cc60a2cd92480bc5b0"
+          },
+          "build/esp_frp_sample.map": {
+            "size_bytes": 7151413,
+            "sha256": "73b81b0e33248344a3b47f9883896027b11afa3c060ac90049cd185f29e86ae3"
+          },
+          "build/bootloader/bootloader.elf": {
+            "size_bytes": 549132,
+            "sha256": "1b61667c16a3609a8b048c6183f16582432167b71c4d0090fd1ee7c710b857b1"
+          },
+          "build/bootloader/bootloader.bin": {
+            "size_bytes": 20128,
+            "sha256": "128733377b35dcc19e202d1179f1456da04496aaf26722306568f216f98b2ee8"
+          },
+          "build/partition_table/partition-table.bin": {
+            "size_bytes": 3072,
+            "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock": {
+            "size_bytes": 516,
+            "sha256": "0fe4da669276a376c99bef4186a610edab82d2b860889b9117972b5224974309"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock.esp32": {
+            "size_bytes": 514,
+            "sha256": "59fdbc48687a0f17e1306426b5a23397246e3dccd985514ea4621069fbba943d"
+          },
+          "xtcp-linked-symbols.txt": {
+            "size_bytes": 1888,
+            "sha256": "bb50fe11ed55cfb001966e3851ce71d38bc14524ed4ed841958ebd579c8f86c2"
+          }
+        }
+      },
+      "esp32": {
+        "compile_pass": true,
+        "link_pass": true,
+        "capacity_pass": true,
+        "build_exit": 0,
+        "bin_bytes": 988256,
+        "bin_hex": "0xf1460",
+        "factory_remaining_bytes": 60320,
+        "compile_source_sha256_excluding_resolved_component_locks": "84d61f0db20876876d67f9a7e9d94dc10f2412c0aacc0da8efcbdd78d7a2f2f7",
+        "current_repo_drift": [],
+        "xtcp_controller_nat_peer_certificate_generation_linked": true,
+        "artifacts": {
+          "sdkconfig": {
+            "size_bytes": 83980,
+            "sha256": "3ab778b0aa3a090057c822f133f7a32489672308b01d424bf1df8bed3a3083ef"
+          },
+          "build/esp_frp_sample.elf": {
+            "size_bytes": 11083016,
+            "sha256": "97fda4f38544560b872c4bef3ad400954045aa7e7144ee94c7ed17329ed3fc60"
+          },
+          "build/esp_frp_sample.bin": {
+            "size_bytes": 988256,
+            "sha256": "547b5f0353d0485e25dfc370fe9d35cef58504ca13bc9cc193f4035e2281345c"
+          },
+          "build/esp_frp_sample.map": {
+            "size_bytes": 8939556,
+            "sha256": "fb0b3023e138c678fb760c2e6e2736834501e65b67388fc67086f0da68ad9420"
+          },
+          "build/bootloader/bootloader.elf": {
+            "size_bytes": 494356,
+            "sha256": "1a6f19444568a4940472ccd1848a97bd9d72a14b2af28db277e5f021b18ef693"
+          },
+          "build/bootloader/bootloader.bin": {
+            "size_bytes": 24464,
+            "sha256": "eba0ed7aa513ba65dc1bceaf47c6d98756ed20cc8db185d74f51c2f1dd6d5137"
+          },
+          "build/partition_table/partition-table.bin": {
+            "size_bytes": 3072,
+            "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock": {
+            "size_bytes": 516,
+            "sha256": "0fe4da669276a376c99bef4186a610edab82d2b860889b9117972b5224974309"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock.esp32": {
+            "size_bytes": 514,
+            "sha256": "59fdbc48687a0f17e1306426b5a23397246e3dccd985514ea4621069fbba943d"
+          },
+          "xtcp-linked-symbols.txt": {
+            "size_bytes": 1888,
+            "sha256": "d644c062f1b93cb85c83bbad60a7c93fa2984616480f05ccca9f6a247ba6afee"
+          }
+        }
+      }
+    }
+  },
+  "isolated_save_restore_experiment": {
+    "build_exit": 0,
+    "compile_pass": true,
+    "link_pass": true,
+    "capacity_pass": true,
+    "bin_bytes": 1033056,
+    "bin_hex": "0xfc360",
+    "factory_partition_bytes": 1048576,
+    "factory_remaining_bytes": 15520,
+    "bytes_saved_from_generation_2": 24512,
+    "source_sha256": "84d61f0db20876876d67f9a7e9d94dc10f2412c0aacc0da8efcbdd78d7a2f2f7",
+    "effective_config_diff": {
+      "CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS": {
+        "before": false,
+        "after": "y"
+      }
+    },
+    "lto": false,
+    "all_production_source_compilation_uses_msave_restore": true,
+    "linked_required_symbols": {
+      "efrp_connect_create": {
+        "address": "420489e8",
+        "size_bytes": 314,
+        "type": "T"
+      },
+      "efrp_connect_step": {
+        "address": "42048cb4",
+        "size_bytes": 358,
+        "type": "T"
+      },
+      "efrp_create": {
+        "address": "4200db5c",
+        "size_bytes": 10,
+        "type": "T"
+      },
+      "efrp_quic_certificate_init": {
+        "address": "42011160",
+        "size_bytes": 190,
+        "type": "T"
+      },
+      "efrp_quic_peer_certificate_check": {
+        "address": "420492de",
+        "size_bytes": 154,
+        "type": "T"
+      },
+      "efrp_quic_peer_certificate_parsed_check": {
+        "address": "42010d5e",
+        "size_bytes": 488,
+        "type": "T"
+      },
+      "efrp_quic_peer_client_hello": {
+        "address": "3fc8ef80",
+        "size_bytes": 4,
+        "type": "D"
+      },
+      "efrp_quic_peer_exporter": {
+        "address": "4201048e",
+        "size_bytes": 134,
+        "type": "T"
+      },
+      "efrp_quic_peer_identity_certificate": {
+        "address": "420493d2",
+        "size_bytes": 88,
+        "type": "T"
+      },
+      "efrp_quic_peer_identity_create": {
+        "address": "42049378",
+        "size_bytes": 90,
+        "type": "T"
+      },
+      "efrp_quic_peer_identity_destroy": {
+        "address": "4204942a",
+        "size_bytes": 46,
+        "type": "T"
+      },
+      "efrp_quic_peer_identity_dispose": {
+        "address": "42011340",
+        "size_bytes": 74,
+        "type": "T"
+      },
+      "efrp_quic_peer_identity_generate": {
+        "address": "4201138a",
+        "size_bytes": 800,
+        "type": "T"
+      },
+      "efrp_tls_create": {
+        "address": "420485b6",
+        "size_bytes": 624,
+        "type": "T"
+      },
+      "efrp_tls_step": {
+        "address": "42048318",
+        "size_bytes": 268,
+        "type": "T"
+      },
+      "efrp_transport_quic_create": {
+        "address": "4200ffa6",
+        "size_bytes": 436,
+        "type": "T"
+      },
+      "efrp_transport_quic_peer_create": {
+        "address": "4201015a",
+        "size_bytes": 820,
+        "type": "T"
+      },
+      "efrp_transport_yamux_create": {
+        "address": "4200e80e",
+        "size_bytes": 206,
+        "type": "T"
+      },
+      "efrp_work_step": {
+        "address": "42047960",
+        "size_bytes": 532,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_check_local": {
+        "address": "4204c20e",
+        "size_bytes": 160,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_decode": {
+        "address": "4204c068",
+        "size_bytes": 334,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_hash": {
+        "address": "4204c1b6",
+        "size_bytes": 88,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_hmac": {
+        "address": "4204c2ae",
+        "size_bytes": 336,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_make_proof": {
+        "address": "4204c510",
+        "size_bytes": 166,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_signal_proof": {
+        "address": "4204c3fe",
+        "size_bytes": 274,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_validate": {
+        "address": "4204c016",
+        "size_bytes": 82,
+        "type": "T"
+      },
+      "efrp_xtcp_binding_verify_proof": {
+        "address": "4204c5b6",
+        "size_bytes": 140,
+        "type": "T"
+      },
+      "efrp_xtcp_cancel": {
+        "address": "42042d88",
+        "size_bytes": 226,
+        "type": "T"
+      },
+      "efrp_xtcp_codec_report": {
+        "address": "4204d56a",
+        "size_bytes": 134,
+        "type": "T"
+      },
+      "efrp_xtcp_codec_request": {
+        "address": "4204cd98",
+        "size_bytes": 706,
+        "type": "T"
+      },
+      "efrp_xtcp_codec_response": {
+        "address": "4204d05a",
+        "size_bytes": 1124,
+        "type": "T"
+      },
+      "efrp_xtcp_codec_sid_decode": {
+        "address": "4204d75e",
+        "size_bytes": 476,
+        "type": "T"
+      },
+      "efrp_xtcp_codec_sid_encode": {
+        "address": "4204d5f0",
+        "size_bytes": 366,
+        "type": "T"
+      },
+      "efrp_xtcp_codec_work_sid": {
+        "address": "4204d4be",
+        "size_bytes": 172,
+        "type": "T"
+      },
+      "efrp_xtcp_consume_output": {
+        "address": "4204214c",
+        "size_bytes": 114,
+        "type": "T"
+      },
+      "efrp_xtcp_create": {
+        "address": "42041e40",
+        "size_bytes": 404,
+        "type": "T"
+      },
+      "efrp_xtcp_destroy": {
+        "address": "42042e6a",
+        "size_bytes": 90,
+        "type": "T"
+      },
+      "efrp_xtcp_nat_cancel": {
+        "address": "4204ec54",
+        "size_bytes": 54,
+        "type": "T"
+      },
+      "efrp_xtcp_nat_create": {
+        "address": "4204dd8a",
+        "size_bytes": 310,
+        "type": "T"
+      },
+      "efrp_xtcp_nat_destroy": {
+        "address": "4204ec8a",
+        "size_bytes": 62,
+        "type": "T"
+      },
+      "efrp_xtcp_nat_handoff": {
+        "address": "4204ebae",
+        "size_bytes": 166,
+        "type": "T"
+      },
+      "efrp_xtcp_nat_start_detect": {
+        "address": "4204df00",
+        "size_bytes": 660,
+        "type": "T"
+      },
+      "efrp_xtcp_nat_status": {
+        "address": "4204dec0",
+        "size_bytes": 64,
+        "type": "T"
+      },
+      "efrp_xtcp_nat_step": {
+        "address": "4204e194",
+        "size_bytes": 2586,
+        "type": "T"
+      },
+      "efrp_xtcp_output": {
+        "address": "420420b4",
+        "size_bytes": 152,
+        "type": "T"
+      },
+      "efrp_xtcp_request": {
+        "address": "42042080",
+        "size_bytes": 52,
+        "type": "T"
+      },
+      "efrp_xtcp_response": {
+        "address": "420421be",
+        "size_bytes": 412,
+        "type": "T"
+      },
+      "efrp_xtcp_set_control_id": {
+        "address": "42041fd4",
+        "size_bytes": 92,
+        "type": "T"
+      },
+      "efrp_xtcp_start": {
+        "address": "42042030",
+        "size_bytes": 80,
+        "type": "T"
+      },
+      "efrp_xtcp_status": {
+        "address": "42042d38",
+        "size_bytes": 80,
+        "type": "T"
+      },
+      "efrp_xtcp_step": {
+        "address": "4204235a",
+        "size_bytes": 2526,
+        "type": "T"
+      },
+      "efrp_yamux_feed": {
+        "address": "420438c8",
+        "size_bytes": 990,
+        "type": "T"
+      },
+      "efrp_yamux_init": {
+        "address": "420432cc",
+        "size_bytes": 60,
+        "type": "T"
+      },
+      "efrp_yamux_read": {
+        "address": "420436f6",
+        "size_bytes": 174,
+        "type": "T"
+      },
+      "efrp_yamux_tick": {
+        "address": "42043cc2",
+        "size_bytes": 382,
+        "type": "T"
+      },
+      "efrp_yamux_write": {
+        "address": "4204361e",
+        "size_bytes": 216,
+        "type": "T"
+      },
+      "sign_certificate": {
+        "address": "4201121e",
+        "size_bytes": 192,
+        "type": "t"
+      },
+      "verify_chain": {
+        "address": "42010f46",
+        "size_bytes": 334,
+        "type": "t"
+      },
+      "verify_signature": {
+        "address": "42010c4e",
+        "size_bytes": 272,
+        "type": "t"
+      }
+    },
+    "riscv_helpers_in_iram": {
+      "__riscv_restore_0": {
+        "address": "40386bc4",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_restore_1": {
+        "address": "40386bc4",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_restore_2": {
+        "address": "40386bc4",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_restore_3": {
+        "address": "40386bc4",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_save_0": {
+        "address": "40386b9c",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_save_1": {
+        "address": "40386b9c",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_save_2": {
+        "address": "40386b9c",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_save_3": {
+        "address": "40386b9c",
+        "size_bytes": 12,
+        "type": "T"
+      },
+      "__riscv_restore_4": {
+        "address": "40386bb8",
+        "size_bytes": 24,
+        "type": "T"
+      },
+      "__riscv_restore_5": {
+        "address": "40386bb8",
+        "size_bytes": 24,
+        "type": "T"
+      },
+      "__riscv_restore_6": {
+        "address": "40386bb8",
+        "size_bytes": 24,
+        "type": "T"
+      },
+      "__riscv_restore_7": {
+        "address": "40386bb8",
+        "size_bytes": 24,
+        "type": "T"
+      },
+      "__riscv_save_4": {
+        "address": "40386b80",
+        "size_bytes": 26,
+        "type": "T"
+      },
+      "__riscv_save_5": {
+        "address": "40386b80",
+        "size_bytes": 26,
+        "type": "T"
+      },
+      "__riscv_save_6": {
+        "address": "40386b80",
+        "size_bytes": 26,
+        "type": "T"
+      },
+      "__riscv_save_7": {
+        "address": "40386b80",
+        "size_bytes": 26,
+        "type": "T"
+      },
+      "__riscv_restore_10": {
+        "address": "40386bac",
+        "size_bytes": 36,
+        "type": "T"
+      },
+      "__riscv_restore_11": {
+        "address": "40386bac",
+        "size_bytes": 36,
+        "type": "T"
+      },
+      "__riscv_restore_8": {
+        "address": "40386bac",
+        "size_bytes": 36,
+        "type": "T"
+      },
+      "__riscv_restore_9": {
+        "address": "40386bac",
+        "size_bytes": 36,
+        "type": "T"
+      },
+      "__riscv_restore_12": {
+        "address": "40386ba8",
+        "size_bytes": 40,
+        "type": "T"
+      },
+      "__riscv_save_10": {
+        "address": "40386b70",
+        "size_bytes": 42,
+        "type": "T"
+      },
+      "__riscv_save_11": {
+        "address": "40386b70",
+        "size_bytes": 42,
+        "type": "T"
+      },
+      "__riscv_save_8": {
+        "address": "40386b70",
+        "size_bytes": 42,
+        "type": "T"
+      },
+      "__riscv_save_9": {
+        "address": "40386b70",
+        "size_bytes": 42,
+        "type": "T"
+      },
+      "__riscv_save_12": {
+        "address": "40386b68",
+        "size_bytes": 50,
+        "type": "T"
+      }
+    },
+    "iram_text": {
+      "start": "0x40380000",
+      "end": "0x4038edbe"
+    },
+    "artifacts": {
+      "sdkconfig": {
+        "size_bytes": 83586,
+        "sha256": "3a9a19074b8d677d0292f8fde69ef98fbd4707970ebb1ade44a10cea864df43b"
+      },
+      "build/esp_frp_sample.bin": {
+        "size_bytes": 1033056,
+        "sha256": "8e506a2ced5b05bbc7f11bcc3e6119b37ad29e8e4c8cbce8cc1c3b3f6517cce3"
+      },
+      "build/esp_frp_sample.elf": {
+        "size_bytes": 13193416,
+        "sha256": "2eefb1d9047ea87607ea4fc79c8516675508d8922664e8eaa2f24a192a0ad3fa"
+      },
+      "build/esp_frp_sample.map": {
+        "size_bytes": 7602328,
+        "sha256": "eb9f1a99a840a59dc3eed944200bef84a9306c27f0f02fddaabb11dd7d51f709"
+      },
+      "build/partition_table/partition-table.bin": {
+        "size_bytes": 3072,
+        "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+      },
+      "build/bootloader/bootloader.bin": {
+        "size_bytes": 19552,
+        "sha256": "96ad8865fbba48c3ce2e28578900062d67a68489995cb3198c4abbfe72bed009"
+      },
+      "linked-symbols.txt": {
+        "size_bytes": 299661,
+        "sha256": "3079e36cc2b899cabcaf22be1ca5a4c3e959630abb2722272619a99d92aff010"
+      },
+      "elf-sections.txt": {
+        "size_bytes": 4113,
+        "sha256": "e9cd2491a9d6c1b9e84afa79de6853a170ad99860f7dd5b316254723cbba7689"
+      },
+      "build.log": {
+        "size_bytes": 180156,
+        "sha256": "306816761d7e71af9a20facd77806014665c59b241891a8a91862fc5a80ecb21"
+      },
+      "build/compile_commands.json": {
+        "size_bytes": 9427076,
+        "sha256": "f7e88e747802f492a5cdf0f8edca9fb373dc81d4bf05a4926cb81dae25a8b179"
+      }
+    }
+  },
+  "host": {
+    "mbed_tls_49": {
+      "tests_passed": 49,
+      "tests_total": 49,
+      "seconds": 71.65,
+      "excluded_test": "xtcp_client_upstream",
+      "log": {
+        "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-r1-20261003-final-ctest.log",
+        "size_bytes": 5310,
+        "sha256": "d75383f50337887677936f860bbc61e92a010e05699089aa7bf659b3cec27969"
+      }
+    },
+    "xtcp_client_separate_ctest": {
+      "tests_passed": 1,
+      "tests_total": 1,
+      "seconds": 22.64,
+      "raw_log_file_preserved": false,
+      "stdout_tool_session": 99837,
+      "verbose_race_test": {
+        "test": "TestCClientFullCandidate",
+        "subcases_passed": 8,
+        "seconds": 22.609,
+        "log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-cxtcp-full.log",
+          "size_bytes": 32882,
+          "sha256": "5279eda20ff807fa7c1136982f7647196a86f49d6e627501dc28f0d01c117bc9"
+        }
+      },
+      "c_peer": {
+        "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/xtcp_client_peer",
+        "size_bytes": 9954304,
+        "sha256": "b84010867bf95b8a7f7b3cab6f9e98a4ea7a7b6079b3bde9e8515d132e003816"
+      }
+    },
+    "openssl_21": {
+      "tests_passed": 21,
+      "tests_total": 21,
+      "seconds": 5.37,
+      "log": {
+        "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-extensions-openssl-final-ctest.log",
+        "size_bytes": 2340,
+        "sha256": "3427b1d44c553828d045b3bebbecec21832e83141dbca10ce26ad42a6cf02bf4"
+      }
+    },
+    "public_c_cpp_headers": {
+      "syntax_checks": 36,
+      "extern_c_declarations": 37,
+      "log": {
+        "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-public-headers-20261003.log",
+        "size_bytes": 10717,
+        "sha256": "f64c18fe8a959e92852a531303dc853526d84bf1547a8e3f998c7d3466d02792"
+      }
+    },
+    "public_consumer_trace": {
+      "off_compile_link_pass": true,
+      "on_compile_link_pass": true,
+      "runtime_executed": false,
+      "script": {
+        "path": "/Users/darrenyou/darren-space/tooling/esp-frp/tests/public_consumer_contract.py",
+        "size_bytes": 5488,
+        "sha256": "f83a6ce0b9cbb4d806e722f623a348d21bf312a38af47824d51c37ee46ba2308"
+      },
+      "log": {
+        "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-public-consumer-script-20261003.log",
+        "size_bytes": 262,
+        "sha256": "a900cc93038588d227dd27d183851d72dd054fdbaa41b0d26cba742dd8b77c80"
+      }
+    },
+    "nat_mode_zero_repeat": {
+      "runs_passed": 30,
+      "runs_total": 30,
+      "seconds": 0.734,
+      "log": {
+        "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-xtcp-nat-mode-zero-repeat.log",
+        "size_bytes": 3648,
+        "sha256": "5417375e08faac0305bea633e1d89d101a22f4821a92709cde0216cbdd85c404"
+      }
+    },
+    "mbed_tls_final": {
+      "tests_passed": 52,
+      "tests_total": 52,
+      "seconds": 71.94,
+      "single_complete_ctest_run": true,
+      "full_xtcp_client_test_included": true,
+      "full_xtcp_client_test_seconds": 23.94,
+      "skip_count": 0,
+      "build_exit": 0,
+      "build_log": {
+        "path": "/tmp/esp-frp-r1-20261003-posix-close-build.log",
+        "size_bytes": 7828,
+        "sha256": "13b85b27f5dcfa0203cecc36fa0be080403751f239b5236d05785d20c98b96e4"
+      },
+      "log": {
+        "path": "/tmp/esp-frp-r1-20261003-posix-close-ctest.log",
+        "size_bytes": 5631,
+        "sha256": "0a4ce8e45cd42c580dde555be6075c597a238d3c1690a558d73adff15cd21bce"
+      },
+      "final_c_peer": {
+        "path": "/tmp/esp-frp-r1-20261002-mbedtls/xtcp_client_peer",
+        "size_bytes": 9954304,
+        "sha256": "84bec342044db7fb9560d1aa38ea217a23401f0317cdd0124ffe1ea4e929d0b8"
+      }
+    }
+  },
+  "partition_csv": {
+    "path": "/Users/darrenyou/darren-space/tooling/esp-frp/examples/tcp_proxy/partitions.csv",
+    "size_bytes": 246,
+    "sha256": "3c2266004b96abda28f9a68e799521ce4e3f747e7d3ce90b7e666414f53d1cf4"
+  },
+  "schema_version": 1,
+  "evidence_summaries": {
+    "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/build-results.json": {
+      "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/build-results.json",
+      "size_bytes": 303513,
+      "sha256": "09bc5ccb51c3b02e4aab813fe33cfad6d383f43e84d3c8e0638f3d54d0258440"
+    },
+    "/tmp/esp-frp-extensions-xtcp-targets-20261003/build-results-generation-1.json": {
+      "path": "/tmp/esp-frp-extensions-xtcp-targets-20261003/build-results-generation-1.json",
+      "size_bytes": 4486,
+      "sha256": "6dddc455c04545823b0f6c74e361a95c1e1987a61b80386f5e37c2501f9d25c9"
+    },
+    "/tmp/esp-frp-extensions-xtcp-targets-20261003/build-results-generation-2.json": {
+      "path": "/tmp/esp-frp-extensions-xtcp-targets-20261003/build-results-generation-2.json",
+      "size_bytes": 5214,
+      "sha256": "738b19a79d538c6336377f65496f14f4b392b3f41c53d3b225a3fc61a6c81def"
+    },
+    "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3-save-restore/experiment-results.json": {
+      "path": "/tmp/esp-frp-extensions-xtcp-targets-20261003/esp32c3-save-restore/experiment-results.json",
+      "size_bytes": 11443,
+      "sha256": "f6ed69f7d598a7bc67c8214ce859c918b0de5050ce314909dde8d69d679bb11b"
+    }
+  },
+  "fixture_sources": {
+    "tests/xtcp_client_peer.c": {
+      "path": "/Users/darrenyou/darren-space/tooling/esp-frp/tests/xtcp_client_peer.c",
+      "size_bytes": 7753,
+      "sha256": "14ee2615c84a12012947f4a5f37c2de2dfe02ba82425cf5c2ee6f728e6704f54"
+    },
+    "tests/xtcp_nat_test.c": {
+      "path": "/Users/darrenyou/darren-space/tooling/esp-frp/tests/xtcp_nat_test.c",
+      "size_bytes": 29829,
+      "sha256": "f88358a72988d5608461f87965daddb00b997bcc05a065221ad123dcf274ed10"
+    },
+    "peer/frp/test/xtcpbinding/c_client_test.go": {
+      "path": "/Users/darrenyou/darren-space/tooling/esp-frp/peer/frp/test/xtcpbinding/c_client_test.go",
+      "size_bytes": 10839,
+      "sha256": "9318f2875015be18eda23f590d567ed6406745b9cd737da42c8c42469443332e"
+    }
+  },
+  "frp_peer": {
+    "upstream_version": "v0.71.0",
+    "upstream_revision": "4a23aa181c1d7e28eecaa8216024ed753b9d27c8",
+    "candidate_version": "0.71.0-esp-frp-xtcp.1",
+    "binding_protocol": "esp-frp-xtcp/1",
+    "unmodified_upstream_supports_xtcp_binding": false
+  },
+  "not_verified": [
+    "异网与真实路由器 NAT 行为",
+    "两目标实板 QUIC/XTCP 运行、heap/stack、CPU/时序和长期恢复",
+    "ESP Base/MQTT 组合",
+    "五仓首版硬件验收前置"
+  ],
+  "maintained_peer_source_snapshot": {
+    "algorithm": "sha256 of UTF-8 JSON array; sorted path; sorted object keys; compact separators",
+    "file_count": 359,
+    "source_sha256": "7f6bace157e8d70876ee1954a09d65a219eff69faa1b84c4fafeebc1e5992984",
+    "files": [
+      {
+        "path": "peer/frp/assets/assets.go",
+        "sha256": "37bb4bf396f0e2750c9f52af9730d153568aaec917aed306183d5708127887b5"
+      },
+      {
+        "path": "peer/frp/client/api_router.go",
+        "sha256": "d9ad09704eb2b4886dafe5e15847e06b40a39b4d9ea8633610c04d2f37e9990c"
+      },
+      {
+        "path": "peer/frp/client/config_manager.go",
+        "sha256": "e35e27af1682ff2e6e8fb2f0f00b27bc14656f04d7a2ae67d79bf5e7eea44107"
+      },
+      {
+        "path": "peer/frp/client/config_manager_test.go",
+        "sha256": "ef0864301f91cd1bf325d921c07673a260cf962add10573b235bb6ca4ffa8064"
+      },
+      {
+        "path": "peer/frp/client/configmgmt/types.go",
+        "sha256": "de15a4dee326682c6f7bf62ff4ccbc7f8fddce212e69c55ceb5732aa5b8d2f9c"
+      },
+      {
+        "path": "peer/frp/client/connector.go",
+        "sha256": "6bfd9b654c51c2ac69ddd9fdff99647457e8888d9fbdc4814ce9513be2fe1fda"
+      },
+      {
+        "path": "peer/frp/client/control.go",
+        "sha256": "8e89972189047591ac84586fa025c7c3a0346352a959efc0622841c34d42d7bb"
+      },
+      {
+        "path": "peer/frp/client/control_session.go",
+        "sha256": "ed2f627258f058c82991f606bd910db52b1e01573ee701154def9ec3299bbb45"
+      },
+      {
+        "path": "peer/frp/client/control_session_test.go",
+        "sha256": "3724a650bf92038732178b6c8134130ff3a5f46ac41bd55753a3a9e660d780fb"
+      },
+      {
+        "path": "peer/frp/client/control_udp_test.go",
+        "sha256": "7fceecd1fb3c16b3072143b6e28461781127e2c4e9a055bc8b5578351c2f71d5"
+      },
+      {
+        "path": "peer/frp/client/event/event.go",
+        "sha256": "8f4d84837d9316dbd9b0103fde9f91d28afd33dfad41f2a1820be6faabc0e9f9"
+      },
+      {
+        "path": "peer/frp/client/health/health.go",
+        "sha256": "888e38e0334bcfc83cdcf0bbf475d9d5241ce6ab653209f19f8eb0920d8747b7"
+      },
+      {
+        "path": "peer/frp/client/http/controller.go",
+        "sha256": "87bdfb116894b6af28ddb020c0ca4961b8c0ab6294a39693c9b6147b94fe556e"
+      },
+      {
+        "path": "peer/frp/client/http/controller_test.go",
+        "sha256": "6aaefbad6a601db1a256af0841e7e25d98f0a327a2426187c1948c202b62a8bc"
+      },
+      {
+        "path": "peer/frp/client/http/model/proxy_definition.go",
+        "sha256": "84d2e5766439201634d8297eea52ac7e68b86eda4877bf34b6fb677ce4181a10"
+      },
+      {
+        "path": "peer/frp/client/http/model/types.go",
+        "sha256": "1d53cc745bb52c83b1917bed99008637d597f4ff3086069a57a0ff195d5ad789"
+      },
+      {
+        "path": "peer/frp/client/http/model/visitor_definition.go",
+        "sha256": "b65c3a51759c6b80ff7863907d5c03727840dd6046f5cda8efbf32fdf78c788a"
+      },
+      {
+        "path": "peer/frp/client/proxy/general_tcp.go",
+        "sha256": "8bc851496a0d88ba14228dcb2378b1d0f7a5107af2a09e3d378afebdf3348413"
+      },
+      {
+        "path": "peer/frp/client/proxy/proxy.go",
+        "sha256": "ccad639b1c4e6c2c2bafacd291f03a8290d46fbaa549945581c3408da6451ae7"
+      },
+      {
+        "path": "peer/frp/client/proxy/proxy_manager.go",
+        "sha256": "098dd84cbb2ce77e1130910ce2da97b35b3728fddbf25adae80e5a2f9dba4fec"
+      },
+      {
+        "path": "peer/frp/client/proxy/proxy_test.go",
+        "sha256": "08db779afdc6d133b2d5512c42a817fe43e40aab8a1cdc10c1390a937fc29d86"
+      },
+      {
+        "path": "peer/frp/client/proxy/proxy_wrapper.go",
+        "sha256": "0f0c5bfe50c037b6df0f2d7b498d2bde71e6ad352d3e7b7186b92ecf13e49e6c"
+      },
+      {
+        "path": "peer/frp/client/proxy/sudp.go",
+        "sha256": "0047d678a618c4e8bf3a0c464d43db3463daafc4dfbb52b57339a31f8fa0ddb1"
+      },
+      {
+        "path": "peer/frp/client/proxy/udp.go",
+        "sha256": "b94a56db5a27742c85cfbb09e1a0039e3e9a0976371b7c59137b7745102f550d"
+      },
+      {
+        "path": "peer/frp/client/proxy/xtcp.go",
+        "sha256": "e1142e801560bb6a84ab6ab4f78927339c0f0278309ae2b4c1728a77f79a6021"
+      },
+      {
+        "path": "peer/frp/client/proxy/xtcp_test.go",
+        "sha256": "b733fc36430bb5ee7e511d0ecd71dd22c261b158d37a48b7d991675990fcb8af"
+      },
+      {
+        "path": "peer/frp/client/service.go",
+        "sha256": "233e314bb2f105089f8ede53857e5aeff28a7eb5100dfc38382ae8b8ffd6aa50"
+      },
+      {
+        "path": "peer/frp/client/service_shutdown_test.go",
+        "sha256": "8f9258ec075c0e2c073463f98f3d06eb71a772a72f0db5fda82f58ed570c8526"
+      },
+      {
+        "path": "peer/frp/client/service_test.go",
+        "sha256": "c30efaee1b8169628b7aa76a4496cbc816e301628bdeed6c2f119a53e2b35a78"
+      },
+      {
+        "path": "peer/frp/client/visitor/stcp.go",
+        "sha256": "212ed03c20798a34e266bea471bb6dcfc81d0fa53f3723522b0c1f77cdf0caa1"
+      },
+      {
+        "path": "peer/frp/client/visitor/sudp.go",
+        "sha256": "c07b8d206ee874a4285951ed16aa791f06f8ceda95b5e5bb01bbeb7e7184e317"
+      },
+      {
+        "path": "peer/frp/client/visitor/visitor.go",
+        "sha256": "a7fca9008103ceb7f8be5673ea5cb56fe2e15c20f3da2fb9c54ef7c8d0a5c956"
+      },
+      {
+        "path": "peer/frp/client/visitor/visitor_manager.go",
+        "sha256": "6bde9dd40b6bfb39279f1030aae95b7ac350aa76b92ca4b0e2e66ece8020d1e4"
+      },
+      {
+        "path": "peer/frp/client/visitor/xtcp.go",
+        "sha256": "5297969c8d5cd6fb8e21d4c311e55f6bb1057e1edd21d344502a3d4241dceccf"
+      },
+      {
+        "path": "peer/frp/client/xtcp_control_session_test.go",
+        "sha256": "24d796e5bebd4f010374fc4dc7a7b80c3792444a5b519d85edeb79385bc02ac5"
+      },
+      {
+        "path": "peer/frp/cmd/frpc/main.go",
+        "sha256": "5007448a90519d0d58b8b75ecb7c875009a67371e8b9dc309a948c412e0df907"
+      },
+      {
+        "path": "peer/frp/cmd/frpc/sub/admin.go",
+        "sha256": "d6a346e774ad8254afe4d8c0207196b2b366b65121cd382d8c3f2c7694ce180a"
+      },
+      {
+        "path": "peer/frp/cmd/frpc/sub/nathole.go",
+        "sha256": "c31cc7b25b7db5a7ef4069d267c46c895d0c6685efad7e3e5b8cbee826decb15"
+      },
+      {
+        "path": "peer/frp/cmd/frpc/sub/proxy.go",
+        "sha256": "81524af5168c2046f57dbcaf9aeb921db0537fe1d780bf7a9806865a1b4f6b81"
+      },
+      {
+        "path": "peer/frp/cmd/frpc/sub/root.go",
+        "sha256": "7497c3022a16da6c25fe8793d58f916ab8b7b16e7a5f88a623574cae6f2dd3cc"
+      },
+      {
+        "path": "peer/frp/cmd/frpc/sub/verify.go",
+        "sha256": "173bae22c25ede7c52651bb37df6c02d510a16579a9028a9a4b3ef8e201b1ea1"
+      },
+      {
+        "path": "peer/frp/cmd/frpc/sub/verify_test.go",
+        "sha256": "4b7da4d0277370e7569d9be9a4f5ce01b9c33d22064d35de6d1e37d9b3d31c0e"
+      },
+      {
+        "path": "peer/frp/cmd/frps/main.go",
+        "sha256": "67050a4c10aaf3a6a5a72cf33147624cbe4e15108ea26d4483b8df68ec34277c"
+      },
+      {
+        "path": "peer/frp/cmd/frps/root.go",
+        "sha256": "356026fa5d9e515b266ab19628e2c5fe6a432cdbdeb61f43683fa2b331f73fd4"
+      },
+      {
+        "path": "peer/frp/cmd/frps/verify.go",
+        "sha256": "e39c90083d25ed4c10b93fe27be5d0d38f204d7eb92470464ae92ac3caf4c4e5"
+      },
+      {
+        "path": "peer/frp/go.mod",
+        "sha256": "3251167595ce36bec25d6e6c58cc522547faa6136ed80653bb0ce967c6774fbf"
+      },
+      {
+        "path": "peer/frp/go.sum",
+        "sha256": "75c4573a97c9df7800714ad3bc0927108e9738fcd422fdbfae83db15e3e43230"
+      },
+      {
+        "path": "peer/frp/pkg/auth/auth.go",
+        "sha256": "c63f464ef2a4d9e40521d01f8b7d4df667ad9215ba2e7c142e79837ae158d328"
+      },
+      {
+        "path": "peer/frp/pkg/auth/legacy/legacy.go",
+        "sha256": "bc171f60e619f50a8a261c217b9fcf0442c32226c294a7c0811baef6dd9c2c3e"
+      },
+      {
+        "path": "peer/frp/pkg/auth/oidc.go",
+        "sha256": "31e97b95de2118f6cef7813717ab2bf71b54471c89fa6956ebbfc728b4f34150"
+      },
+      {
+        "path": "peer/frp/pkg/auth/oidc_test.go",
+        "sha256": "82a23e67bffa7e2566ce6a89efab7782cc957d71b4a23e22c8a5c164803bbffa"
+      },
+      {
+        "path": "peer/frp/pkg/auth/pass.go",
+        "sha256": "2321477660c10dc650ff727fa6189472830d7dde64a4f9c98ad895974a0a9ce9"
+      },
+      {
+        "path": "peer/frp/pkg/auth/token.go",
+        "sha256": "f7fba8f0d091850cb2c25bf3aa28edfcce8875fa109cb373801612e7dfafb191"
+      },
+      {
+        "path": "peer/frp/pkg/config/flags.go",
+        "sha256": "96c7c6964f50f06d8eddb28445f96597fbabe3c9a75e745893758136c6af26cd"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/client.go",
+        "sha256": "2a3e6a6928e9987228e471be58e784d128f2098e06e62dba562a36c4b2c9859a"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/conversion.go",
+        "sha256": "d67b1207ca437e1440b878cca8fbd1a2fdd9be3af3b3fbb58c96eb056daf6bb9"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/parse.go",
+        "sha256": "68a63e7f0e7b067e623fa4e31d661fb861c8fe30104094438562097bfc67567c"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/proxy.go",
+        "sha256": "af085077798bc511b53b86a53ded138c051cf16c21bbcec639e532da80ae853b"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/server.go",
+        "sha256": "1fae31f8b389ff46171ff1fb30df4d1a1650e3d7cfba4a0c8e3740778b354c7d"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/utils.go",
+        "sha256": "09119600b2b8000f796c22ba84255cfb71b5398714c6b9dd49b5b546dd5481ab"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/value.go",
+        "sha256": "4be532b7694195ea5caaa2eca049a552e233450b1fb2d6a6440f25bb1ff8aaa8"
+      },
+      {
+        "path": "peer/frp/pkg/config/legacy/visitor.go",
+        "sha256": "418e58ced48764fb16da828ab7185f4b8b2d28ed511657202737369fa9fa3e9c"
+      },
+      {
+        "path": "peer/frp/pkg/config/load.go",
+        "sha256": "8102ca4394a08d1b121537116d1dbc8492c372f2c40d6f29784027b529b031da"
+      },
+      {
+        "path": "peer/frp/pkg/config/load_test.go",
+        "sha256": "c055e6e5223eb9abcd43efeaf15dbd8f843059f66a95cace02049ed793072bc8"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/aggregator.go",
+        "sha256": "7def548741c77ff40277c1d6dc2aba952216669499b594596bb3e2f3c7b54da2"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/aggregator_test.go",
+        "sha256": "822e1029e268438bf29c01a1fe7cffcf4e2725fadf3685ab4b0f8a962f1e245d"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/base_source.go",
+        "sha256": "fa091d0ba1bf1ebd1462d7eb03299837856e61797c1810052012bddbd8f96504"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/base_source_test.go",
+        "sha256": "161df13885c4b0a33d335ab6b769067f878b422b7370e34125940b5999a07b36"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/clone.go",
+        "sha256": "b6e81f6a043b1b858c615a783b16b8440788d0be436c81be415501240fc56c01"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/config_source.go",
+        "sha256": "18bf30a1efe53b1842beccbefcfd4e10a3e017acb10c94b9f270f46a486c34a0"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/config_source_test.go",
+        "sha256": "27c65e3d064a90f150eb8cbeb1d2a02de6963eea8d871ec0074e4eee38c7bb03"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/source.go",
+        "sha256": "f951c93ba7315244a27d0228a8703820b978277443bb2d8c5d26f5ba6c5f4ce4"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/store.go",
+        "sha256": "cb7464e43a2c0ee9175e4f0e7b14f9071542966203e4bac7cce6cdeb8509a8ce"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/store_test.go",
+        "sha256": "33fab111e74abb6df7c3688ab990d9523e7df983c57df2459af84e7746c16674"
+      },
+      {
+        "path": "peer/frp/pkg/config/source/validation.go",
+        "sha256": "91054091a9a86417699f0780420ce4a6c9877776a782068c5eeb1550a1400ee3"
+      },
+      {
+        "path": "peer/frp/pkg/config/template.go",
+        "sha256": "e8e30b2dbdee96505d0806246ebbd6a35244897d9da41340f31c890750692843"
+      },
+      {
+        "path": "peer/frp/pkg/config/types/types.go",
+        "sha256": "dfdd967aa27e98d1990bfcdbf2c25d0bd86daa41673b79168209f137ade34ecc"
+      },
+      {
+        "path": "peer/frp/pkg/config/types/types_test.go",
+        "sha256": "f4d1e2bc5a05b66cd99c7b706c019baa43c027e10c51ff5da1ef8da629c31618"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/api.go",
+        "sha256": "396496360a37423231f401955062ae2db5ea08958412dc6499ccb5a75b97ed9c"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/client.go",
+        "sha256": "83d56cce13002518892f3b459abcbc6122ba4847286a426e51702fa34bec913d"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/client_test.go",
+        "sha256": "3aaaaf0ab1fcbf3362e19e6a5afbe51df880e9f27f4f9d64b3f941218d73e118"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/clone_test.go",
+        "sha256": "661af1c5e2105e57476ad7a402f872f26052232451a97781663151188abe036e"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/common.go",
+        "sha256": "92ddaf913a0f24e36a52457dbe2d5abea061b26d5d4a8f3e774c76454e4d5b25"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/decode.go",
+        "sha256": "963c692651a4eb61768860a3739c61de6177f06119bf4bc2a2141777567e50d2"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/decode_test.go",
+        "sha256": "9a21121808e53130aa2c5c8bc7db0da3db597144fea973b4c42ef6e9ecef613c"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/proxy.go",
+        "sha256": "99d482699048e077a4db88420d79d58b82019076dcddd1628727a2286075511a"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/proxy_plugin.go",
+        "sha256": "2df45f6dafc24d9d15d39bff41a1604a65a1c736cde2beb47667225c0ec7978c"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/proxy_test.go",
+        "sha256": "9382798459afd9c0cf4f12b7ee826df57aa44c7ead01bbc01908fab82a843665"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/server.go",
+        "sha256": "2b0e325b527857559f54c9b224981e421a8e0d52dac6740725467f6cd70f81ff"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/server_test.go",
+        "sha256": "73213144c33c8b9e08cb162c79b5f017efc446410874baebebf1e2ee57ff862f"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/store.go",
+        "sha256": "cee6d5f084fea26cf7d33ec202c14da71ef148fc7d5347c2f33d5af0fd43190a"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/auth.go",
+        "sha256": "0588bb37e6decb5ec9fce0abea7d842612b0818fd395a42b7eb0a8f95e23588b"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/auth_test.go",
+        "sha256": "f9abfda013d4f81b4c504fa56932121026a91b2795939270e2b7231b32de7607"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/client.go",
+        "sha256": "ce68a6d5f0e8343d64d9b4bf394d0d35742d4a386a74dad70d97669727ec796a"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/client_test.go",
+        "sha256": "8f6f1d7738a72dcb1be42baaef4c95f840c713943fff81ea5ac8e2eae5f141d2"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/common.go",
+        "sha256": "7ed7303963eb651ff3d0d8e33fa25267fb6b00ad07a177799930515880be0a9f"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/name.go",
+        "sha256": "7839b558c7402cddda3ec490c0c4ffe4eff31516554136cfc32e9ea56ca71f56"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/name_test.go",
+        "sha256": "507929575bc92c987a7f90f0795b2e5adf603cd8fc218bec8d9287ac099919ef"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/oidc.go",
+        "sha256": "9d9a2f0c657c9d9833b21b88585e157dd4783466fbf0588aa2a0a87ec7d8ca39"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/oidc_test.go",
+        "sha256": "cd1c486d136512867eaf656d49ee5696b13cffa1730d54509182909cb95c5009"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/plugin.go",
+        "sha256": "acd84fb41925c743708730d12d24ebe37f6ef2534bdc1f3b512728a0b92b7a8d"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/proxy.go",
+        "sha256": "71f85b748ee619bb3d64e2e38f3498077b60303ece4078422d4c3fe7066201f6"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/proxy_test.go",
+        "sha256": "929b650292fd9c82f4f8737a55551e49ba8baa0169d4dd61674403fc2ec2a232"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/server.go",
+        "sha256": "7e80ca0d47d7d65bae89ff5d61f3c114048ce9bd076ad547f19b33927c5b7ce5"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/server_test.go",
+        "sha256": "b6102f6dbcb646035f70b9955275166a6a99678ac86c8924140f155bc55fc663"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/validation.go",
+        "sha256": "5067c122e71c491c07e00943f0af6a3981c78d2b67f215e441b72b92a581edfa"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/validator.go",
+        "sha256": "7523e9040cd7ff88de5bbe7fdbdb9f8a4dca612220aa310d53dd18d5263141d6"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/validation/visitor.go",
+        "sha256": "03489cd7fbae9a8d631ad2cb4393a1adde3054de16217b34364e8c3244a6cd81"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/value_source.go",
+        "sha256": "cf6072c8aa2bd5e03314fa169beb25176da776ee5b21e8b39d7616fa0a753f94"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/value_source_test.go",
+        "sha256": "f39435a24fe28d741bb980dc04853d4810c3d6e00d18959859fad2bfa6601de9"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/visitor.go",
+        "sha256": "76921b1a6e033e63000c712a486dc560d12a68781da2d92dd2f5f1c68ccf6606"
+      },
+      {
+        "path": "peer/frp/pkg/config/v1/visitor_plugin.go",
+        "sha256": "79eb3b2140bd5ff45b4706a041bb7665a1fb8a93759dd2c4a84438c2b273e387"
+      },
+      {
+        "path": "peer/frp/pkg/errors/errors.go",
+        "sha256": "65c76243757cd0601799ccb90befd8170bc81813609c1c5cdcdac27bffac312e"
+      },
+      {
+        "path": "peer/frp/pkg/metrics/aggregate/server.go",
+        "sha256": "5cc1bf537582d5e860156bfaa51e11e83340074369d738bfce6bc65feef0d529"
+      },
+      {
+        "path": "peer/frp/pkg/metrics/mem/server.go",
+        "sha256": "93213a0b5e13129f8090115911de5856b0a00674a6fb95931b4fef4ec225d99b"
+      },
+      {
+        "path": "peer/frp/pkg/metrics/mem/server_test.go",
+        "sha256": "bbc16300e11d566d5969f8053eef9868b47184a1da82f0e5f30174750e8e7b74"
+      },
+      {
+        "path": "peer/frp/pkg/metrics/mem/types.go",
+        "sha256": "9ac19c58956bf1a75805d22af3f7bcaf9d725805b2a515ee8f495759370e38b4"
+      },
+      {
+        "path": "peer/frp/pkg/metrics/metrics.go",
+        "sha256": "1c64679e63eb195f74dcf669582d53c8e4e1b6f5aaa47ff965e9616d9d408ab9"
+      },
+      {
+        "path": "peer/frp/pkg/metrics/prometheus/server.go",
+        "sha256": "eaf7e08ce4df50d6b859a0ad89d71cd526bab2eead724ac0234ea4bde866ec75"
+      },
+      {
+        "path": "peer/frp/pkg/msg/conn_test.go",
+        "sha256": "67af07879757e66726935b3338e10092c9208500ac0f672821c66bea1d748e24"
+      },
+      {
+        "path": "peer/frp/pkg/msg/ctl.go",
+        "sha256": "70687aae1522f1c80b993c25e5fd1ec3243ceaedf57321697376678b2f2c3304"
+      },
+      {
+        "path": "peer/frp/pkg/msg/handler.go",
+        "sha256": "f30fcb1e6bd365eb3c737c20a64629ed4bff8d19ede2f9ad866836fb3aae7291"
+      },
+      {
+        "path": "peer/frp/pkg/msg/msg.go",
+        "sha256": "24dfdf59c456424fb1cc276e4501ba62450c66c589b467470b687375611f0c83"
+      },
+      {
+        "path": "peer/frp/pkg/msg/msg_test.go",
+        "sha256": "4c20c4a652425a44ebde2aa52eed86283a5231170e8fb041f5f76b222959ca52"
+      },
+      {
+        "path": "peer/frp/pkg/msg/udp_benchmark_test.go",
+        "sha256": "0831bac81c8c541a635c5b9a750bae21bc798b5b758c84c0a776f6be6fa986dc"
+      },
+      {
+        "path": "peer/frp/pkg/msg/udp_binary.go",
+        "sha256": "be637f3b9392d6ee7182121478196753fb41a89f24cabe04e3ba2686bece2d41"
+      },
+      {
+        "path": "peer/frp/pkg/msg/udp_binary_test.go",
+        "sha256": "a0bb36fe1a7aa3c47a5eedb05516c3bae55f1c26d6614bf3e495a0d77109a307"
+      },
+      {
+        "path": "peer/frp/pkg/msg/wire_v2.go",
+        "sha256": "cc1988ebd9291eff91eab417963577933f532ab69f424a754341e874e3ec14e2"
+      },
+      {
+        "path": "peer/frp/pkg/msg/wire_v2_test.go",
+        "sha256": "66010ad6139be1a9b0cb76d9ce1fa5c3b7cd1cf88a51d04fc79726d20b71ad26"
+      },
+      {
+        "path": "peer/frp/pkg/naming/names.go",
+        "sha256": "8772de604f01563bd23ea6983bfb262d659bb0103530f931bd320836871f9299"
+      },
+      {
+        "path": "peer/frp/pkg/naming/names_test.go",
+        "sha256": "1dd537df6e4e2fe44ecadf69cb15b120642490d407f2e5974e80afa375e862f1"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/analysis.go",
+        "sha256": "78e4e36f1927d33c6b634afe3cd51d83af019a877f351c122d132d9a809e6a5f"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/analysis_test.go",
+        "sha256": "8e795e47b16b541270173b1299afdbe8f475cb2312f89051dce8b7aa3db7e4f5"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/binding_test.go",
+        "sha256": "3514d432a8bf65264398cec9734c36f6f67dfd0e2f98fcb9d42e3e8ba5a4f096"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/classify.go",
+        "sha256": "91cb1e23b7964f9da10cbbc12e93d9ca6c157d1d26860b7bfdf2926926f16180"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/controller.go",
+        "sha256": "9651f758dce6a4036c7c4d4a3d5ad36fe2f4ea38c38fc15af9843da746ae3b30"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/discovery.go",
+        "sha256": "a73cb076923b772f3ce69c4c9fb0884614640c891e34f66841379cd6dcd4ecc6"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/discovery_test.go",
+        "sha256": "4a03d0500721309881b68d0af5773a9c671897362eb1d925c3a8580863231ecb"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/nathole.go",
+        "sha256": "6755c04e5bcac5e94b12a9ecaee0d1e9a5b654de72459fbee10da665489bdeab"
+      },
+      {
+        "path": "peer/frp/pkg/nathole/utils.go",
+        "sha256": "8077e83eeabc64da09472a431e8ed079ceb3b90ca98399c944d3b77d76714c6c"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/http2http.go",
+        "sha256": "18c0903a3cde2bc30e542216b046506184886822367d52fa95f6e546c093c029"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/http2https.go",
+        "sha256": "aaa905c9002961499383357bddd310b64028489a5383ae64aa2dd5a9d643fcd8"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/http_common.go",
+        "sha256": "22cea345705920b90991b0df50f6a234d4d90fd3ed4304c831272f885b2d389e"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/http_proxy.go",
+        "sha256": "6a3edc1659d811ddf3b8cb48acdf12dd06a56af2e40df11187a2a5371f59464a"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/http_proxy_test.go",
+        "sha256": "a4a0377b5adafeeb0c90c5e2a4fb24868bb926695b11e70dbd5fdb413bf83425"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/https2http.go",
+        "sha256": "a09a8713e5ace5df4636713c34f42d9bb779b1ffb41fc336628e2cc9d966a476"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/https2https.go",
+        "sha256": "49ed6b4d261fdb562f20f9ac418ed84aa541decbab612bbac528bd9be6b7b8fd"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/internal/httpsserver/server.go",
+        "sha256": "80555379e35469f958d55ca3fc702a39d65054e107f6a04fe3871987d99aec5b"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/plugin.go",
+        "sha256": "2ee35f9685c915fe2524cfe6d2da36ecd4b695f07d5822c78670874694c0fdd0"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/socks5.go",
+        "sha256": "d33dd0f315de0b57be0c07f7800bcb2d49c85d7cf9d8a9cef8d21185ad6c039b"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/static_file.go",
+        "sha256": "fb9d528883cfa7a3ce42f6ced35f86e55d6dc480836696b12d4306d193f8062b"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/tls2raw.go",
+        "sha256": "bbabd7e407ec0b3c9efa62a07ff3a571995f701fa38e6c6f7338fd13d547e39a"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/unix_domain_socket.go",
+        "sha256": "e3d186cc0dadb513e11a80add52f914e57c44f7a83aaf90c74fdd3fe49283970"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/client/virtual_net.go",
+        "sha256": "c65a29cb9685879c25b2c7dac4774ecda9565751bc33d64f18596ec0675ca2bd"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/server/http.go",
+        "sha256": "f1c7875b3a017fea117e81aa5399fc77a6e1e793130eee874278220e98c32800"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/server/manager.go",
+        "sha256": "7db84724a4f05917bca23db8a083e50a9a07bbd8981e99d47e0c2ee8d6982d4e"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/server/manager_test.go",
+        "sha256": "d11e28a061cbee08ffbb809a7a8e4f727a83a12bf26932be67bd7d7846ee31dc"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/server/plugin.go",
+        "sha256": "9df6a922dabbd3c3c4a04b276660033f19557f2fcbcd8c20d194b1887661aee2"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/server/tracer.go",
+        "sha256": "f46d5673e3f273e2c50a2447a90f297bf32c0c5d782ee6f37dc334ca18d65c89"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/server/types.go",
+        "sha256": "a146fbaea35acaf02b08850f06ff908f3447bf15a609f3dbef9c06ed491d64c8"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/visitor/plugin.go",
+        "sha256": "42cbb4e35a4cd9a2acc547d336910a06042d6fd2ead5ed91a22b2ccb7bd233dd"
+      },
+      {
+        "path": "peer/frp/pkg/plugin/visitor/virtual_net.go",
+        "sha256": "7dfc46c7737e3fa1746bfc28f34789f3ac43869dfca070adee851048a3c7e901"
+      },
+      {
+        "path": "peer/frp/pkg/policy/featuregate/feature_gate.go",
+        "sha256": "e931bebabe7d0889b7f713390cbb7a6a55c06a6a8b2d778781c3cd22df843bc6"
+      },
+      {
+        "path": "peer/frp/pkg/policy/security/unsafe.go",
+        "sha256": "e3f4a6c3e66a9fdf9a202af07b7e064bcde9eaeb648a57ba7676bb5f440e1f17"
+      },
+      {
+        "path": "peer/frp/pkg/proto/udp/udp.go",
+        "sha256": "e53cc3d896960253a85809028ea92580824605400960b8dc8b212f72e315bc3c"
+      },
+      {
+        "path": "peer/frp/pkg/proto/udp/udp_test.go",
+        "sha256": "e4bd3d1b47756fded9a0ceb226ef1c2a456324ed60709e284236150de23d799f"
+      },
+      {
+        "path": "peer/frp/pkg/proto/wire/crypto.go",
+        "sha256": "6c2625a89ba072e75d18ac01f79b08b7986a2c4a3cda2687e60ae9ca428578c4"
+      },
+      {
+        "path": "peer/frp/pkg/proto/wire/wire.go",
+        "sha256": "c6fa0cc7a15fa2e60231155203f32bd5a54e3e6e6e941965fc308da10a87d3db"
+      },
+      {
+        "path": "peer/frp/pkg/proto/wire/wire_test.go",
+        "sha256": "a06dfee050e9c1ff03fca4e05c61ab768884afed17d6923751536d2d72a4b3ca"
+      },
+      {
+        "path": "peer/frp/pkg/sdk/client/client.go",
+        "sha256": "37cf254747b5aed7c4c28bf2fba410a8b631e90f92fa69c40ea413a6f3e91c32"
+      },
+      {
+        "path": "peer/frp/pkg/ssh/gateway.go",
+        "sha256": "f14ae557e5719bb7774e01aad4fabf5e685930bb4191b96a471e63926c4436c5"
+      },
+      {
+        "path": "peer/frp/pkg/ssh/server.go",
+        "sha256": "e74860fde149a94eb2f35f75950cf7e444e8cd175068752ce05e8607a433f980"
+      },
+      {
+        "path": "peer/frp/pkg/ssh/server_test.go",
+        "sha256": "c99aca0b580a25848764dbd6ecd6deb0ca42efff80abf744b42e45318694587b"
+      },
+      {
+        "path": "peer/frp/pkg/ssh/terminal.go",
+        "sha256": "c50c8617a3620a89432fcc1e2939ebf1ce3c2f9eec4a58fc71ed6049616f38c8"
+      },
+      {
+        "path": "peer/frp/pkg/transport/message.go",
+        "sha256": "80670ff0a9d78d4d9262a377c1176ea0013783e5f7936079a091dd00752adb34"
+      },
+      {
+        "path": "peer/frp/pkg/transport/tls.go",
+        "sha256": "930bda1cd39214f8779ec528e4f8b4254491e2d666393a63cbf392d11c5902d5"
+      },
+      {
+        "path": "peer/frp/pkg/util/http/context.go",
+        "sha256": "a97ee68126d96d45c9d8530c1ecc842b92752fcb18964fa93b01090628337a6c"
+      },
+      {
+        "path": "peer/frp/pkg/util/http/error.go",
+        "sha256": "cc1d4afbbb022badf6fa714fd7d2916803484e019ae567956a03ea72c0f2af27"
+      },
+      {
+        "path": "peer/frp/pkg/util/http/handler.go",
+        "sha256": "308e004fc0c40adcab2f9a3179528081500439f5b3d95afd54e91375cb23c118"
+      },
+      {
+        "path": "peer/frp/pkg/util/http/http.go",
+        "sha256": "1d65624af45f5d91e4c27c3a7c6c25cfed2f1a51e50cb8e53f0e765583762f1e"
+      },
+      {
+        "path": "peer/frp/pkg/util/http/middleware.go",
+        "sha256": "a59fa30dc1a7159c851e6772d0f8efa9bb9cd57aad8c474e817ed15cc7d260fc"
+      },
+      {
+        "path": "peer/frp/pkg/util/http/server.go",
+        "sha256": "a8a7570f584b36798d813755345cd26bd3f6380328596964fcb08bf9ba86c0b8"
+      },
+      {
+        "path": "peer/frp/pkg/util/jsonx/json_v1.go",
+        "sha256": "806f977cfa5e8bfdaf72b93abf9eed0a265c99116000f8c81cd2acf1937cc894"
+      },
+      {
+        "path": "peer/frp/pkg/util/jsonx/raw_message.go",
+        "sha256": "bc0785740438556d61331609e595d26716ff1791745788bace3ec0006db7774a"
+      },
+      {
+        "path": "peer/frp/pkg/util/limit/limiter.go",
+        "sha256": "37543e737b96f70458e588773256da5a7f32e969070019664cd677a997f02d26"
+      },
+      {
+        "path": "peer/frp/pkg/util/limit/limiter_test.go",
+        "sha256": "eba0089503a0328e45408c76aa19fb2b6957d3dff761c5f1701bada93a15d17f"
+      },
+      {
+        "path": "peer/frp/pkg/util/limit/reader.go",
+        "sha256": "87c4926cf4420f1fad292570dc73716c0abaf4605445ad87f88e7c1f4565a0cc"
+      },
+      {
+        "path": "peer/frp/pkg/util/limit/writer.go",
+        "sha256": "107306bdfb8f714765edc5051420e35f1bc984f0d41e62785409e1a8ec643d97"
+      },
+      {
+        "path": "peer/frp/pkg/util/log/log.go",
+        "sha256": "37055b274e2ff0f54488b42c8663485984a4e8ff36ade35d5f4a975f652ce070"
+      },
+      {
+        "path": "peer/frp/pkg/util/metric/counter.go",
+        "sha256": "25cd1bfb4c116bc4be035cd51a32d56ffc91ea8e7b083aac49ff8b0520cbcaa8"
+      },
+      {
+        "path": "peer/frp/pkg/util/metric/counter_test.go",
+        "sha256": "8d937cb354c21edb61d0c2d503a35760723e27f1d5adfac613efeb3f87460d15"
+      },
+      {
+        "path": "peer/frp/pkg/util/metric/date_counter.go",
+        "sha256": "8f0625acb10569ad7aba2825d125f10b89cc88306241ec9889dca12f26294534"
+      },
+      {
+        "path": "peer/frp/pkg/util/metric/date_counter_test.go",
+        "sha256": "55670172301ab4b0bd35bcd9ad0c58c20e3709aea80243a4cbea1b21e556b304"
+      },
+      {
+        "path": "peer/frp/pkg/util/metric/metrics.go",
+        "sha256": "87723ed24ed5e2e49b0e0f9b51c0c8b87f4094c6fc85a401e943b4efea33da2e"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/conn.go",
+        "sha256": "fd684774b0b72d70d87a84b5e02c79797756b7bc645b4283e994a375845c0d17"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/conn_test.go",
+        "sha256": "827afe21f5538e400293542559be5e175a4bb5b00969f95b3225f2e95b813264"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/dial.go",
+        "sha256": "a664fd247edb16644601fb6e16ed67107660ff08992d3f871ff8853184e26c97"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/dns.go",
+        "sha256": "241e177fef3620635e25a352b2487836d53ff66c8afb40ffa728c606385e1d5c"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/http.go",
+        "sha256": "f6a20a4d063584079cbc687e16c849ed79f597234eb502667d795f1ba3d22d81"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/kcp.go",
+        "sha256": "309c916dc00f55dad3cbbb09546963ae08cae78477ce63ad96ebf35e2a604cef"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/listener.go",
+        "sha256": "d6be8f8f77f2006e302a555d4e247f4c385deb9ecd15fc9dc525ccd8ca8c0a0f"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/proxyprotocol.go",
+        "sha256": "9115b26170e540d98332f0cfd2287c09dd3b69b7f6af03999b8634ccd9238ef7"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/proxyprotocol_test.go",
+        "sha256": "84b8f1a1a73ea3189069f04f363d7db14d7b058c31c6806543dd9ca03bbf7ad0"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/tls.go",
+        "sha256": "1054c3f88f4f24b83f0e35ca0b470b18e610a33e71d4f33af7251deefa97a6b3"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/udp.go",
+        "sha256": "a2f344da623354e544f17b0c8b577b8e0e6faa0f1fc3fcd4218c08147f39e4a6"
+      },
+      {
+        "path": "peer/frp/pkg/util/net/websocket.go",
+        "sha256": "47c5f5c3cd506a2f8c5eb925fd656757bb4bb29c0c4e5eae274efce9a0cebb3e"
+      },
+      {
+        "path": "peer/frp/pkg/util/system/system.go",
+        "sha256": "42c4a8a5bc1484a0ac895be8f9c9162296bb71b29472cee9d367cb6d1bb95cc3"
+      },
+      {
+        "path": "peer/frp/pkg/util/system/system_android.go",
+        "sha256": "845a367288c02b97ea372a994f2e6181a3ad079fd86386e39a27d77838384756"
+      },
+      {
+        "path": "peer/frp/pkg/util/tcpmux/httpconnect.go",
+        "sha256": "3e68c48c9ad8a1cd33a0192d6582d4c62e63a67266115dd412bf9a3d9ee3f462"
+      },
+      {
+        "path": "peer/frp/pkg/util/util/types.go",
+        "sha256": "8ef9dba255ed95eef74b78542eeaeeeded0c9c6cdcdd527c916d162511c5d008"
+      },
+      {
+        "path": "peer/frp/pkg/util/util/util.go",
+        "sha256": "ce3482fa27adc1131a54d006d9549808ae8c5113c76fe24ba10e15803420e16c"
+      },
+      {
+        "path": "peer/frp/pkg/util/util/util_test.go",
+        "sha256": "c81b158e3208d7a34ac52878efa0210278ba82dcb6a217d75d2a428cf044f11c"
+      },
+      {
+        "path": "peer/frp/pkg/util/version/version.go",
+        "sha256": "a8af0c5713345e651f376fb9f155bc40ab7c6ced6d9c4152f315c5f4763dbce8"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/http.go",
+        "sha256": "762fbf432d9c7b3c619356acc720ae61526a1ba32c5cbe4b52faf1d686fbc9df"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/http_test.go",
+        "sha256": "668b99d342bcd217f6401bcf43fde207b5f5e915d909ccc7d33a3f532303ffcb"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/https.go",
+        "sha256": "5d5e3c05fba1751af2ac079944d29c1dd7e17b1ad8659bc2c1c31f1a3e4e98d2"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/https_test.go",
+        "sha256": "8e51cf83547fce3ba02c4bd60b1a39b5dc888f2e22a5be2b30f907333448399c"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/resource.go",
+        "sha256": "8cef3d390fc5ea46160a6f93899db4fe18b73a00810c867a8753071a44833dec"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/router.go",
+        "sha256": "e3d8f74642733720f287eb1ddad8741edd9b9265ab704e32e4d903c45fe0d980"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/router_test.go",
+        "sha256": "c4c9e67e13f3cae5fb20b82cef91630b18122a6355721a4e4a38404c8417f7a6"
+      },
+      {
+        "path": "peer/frp/pkg/util/vhost/vhost.go",
+        "sha256": "c38e364f6bb9398574e550588c393da2007e9c38aac8f5d5a9b1667cef6f2e3f"
+      },
+      {
+        "path": "peer/frp/pkg/util/wait/backoff.go",
+        "sha256": "4c8150c15d03759f7463c1e46f86f62b482ae4ac1f2ba985d0e7325569983d40"
+      },
+      {
+        "path": "peer/frp/pkg/util/wait/backoff_test.go",
+        "sha256": "154ec804683cd16b9332902841adb1fda00d3ad00e678a3a14dc08634f8ace06"
+      },
+      {
+        "path": "peer/frp/pkg/util/xlog/ctx.go",
+        "sha256": "3102fde7d9f088110cc8b327acdf159e8882ba223a3075e439f32c3c4aff3230"
+      },
+      {
+        "path": "peer/frp/pkg/util/xlog/log_writer.go",
+        "sha256": "d1a49dfbd3d1952d0bbff867201fb2fce2039d5f3d2f7e7f2f167030f8029802"
+      },
+      {
+        "path": "peer/frp/pkg/util/xlog/xlog.go",
+        "sha256": "a6ee26503164e24021955caf84acbdafe09bcfd6814463449a8de5f2c01126d7"
+      },
+      {
+        "path": "peer/frp/pkg/util/xlog/xlog_test.go",
+        "sha256": "f3a4e2a9489c3518dd7cfe3995b37d8790fe3772cf1fd9c0538cfc94664a8ecd"
+      },
+      {
+        "path": "peer/frp/pkg/virtual/client.go",
+        "sha256": "3748835ea26ccbde274f1d58dddfa2d4cd6620d1aa52d084f1594ed823bc4d43"
+      },
+      {
+        "path": "peer/frp/pkg/vnet/controller.go",
+        "sha256": "996581b66df0a39f09456b2f5097f408421ea4bee499a92b1eb6370fdcdb23d2"
+      },
+      {
+        "path": "peer/frp/pkg/vnet/message.go",
+        "sha256": "e4da909b4b0ff865ae2e2e5afc3c82d4b15cf61727917216440d9aff5dfa7609"
+      },
+      {
+        "path": "peer/frp/pkg/vnet/tun.go",
+        "sha256": "4b4776fef5c0a245cedbbe14b47914ff097a5bec22d5357e7eb7fdf9a68e3ff8"
+      },
+      {
+        "path": "peer/frp/pkg/vnet/tun_darwin.go",
+        "sha256": "41426879423cb24319a18d431e69f59565a38ee522b67c73d9d1da1697ce4bad"
+      },
+      {
+        "path": "peer/frp/pkg/vnet/tun_linux.go",
+        "sha256": "aa2a6101a7067ed10bf06b685595c23273c4d0bd2fdcc252b929ef482ec857a9"
+      },
+      {
+        "path": "peer/frp/pkg/vnet/tun_unsupported.go",
+        "sha256": "faaa8beb4f7cd41ff06678e00dc9e02292f4f0ebe078a46c4b563ec418a0ff3f"
+      },
+      {
+        "path": "peer/frp/pkg/xtcpbinding/binding.go",
+        "sha256": "30055754253e9a3d6f1431ec01610b4b25f119c1298740f0770a90543cbdaf00"
+      },
+      {
+        "path": "peer/frp/pkg/xtcpbinding/binding_test.go",
+        "sha256": "1e992edd1aae207ae8e3419f9db137b0c56908bff6e1b465b37918677f53019b"
+      },
+      {
+        "path": "peer/frp/pkg/xtcpbinding/peer.go",
+        "sha256": "325f974d99c037478ffc46944c31fb22cb98d31fdacced20f12f8f72cf85b28e"
+      },
+      {
+        "path": "peer/frp/pkg/xtcpbinding/peer_test.go",
+        "sha256": "1fa7e8cf47367019e56c64fc79e29ad77e8ee1ea1af5f6eed9fab61357ab061b"
+      },
+      {
+        "path": "peer/frp/server/api_router.go",
+        "sha256": "cee5d320b6ffcc58d7a1c512b34d4c8c99960326a5499a8473ee102d31a90410"
+      },
+      {
+        "path": "peer/frp/server/control.go",
+        "sha256": "99a72eb379af609ec50c89e6d12ca08550a9f27606e530f4a6b6296847b4aeaa"
+      },
+      {
+        "path": "peer/frp/server/control_test.go",
+        "sha256": "1b309e12c707be3804dc22e9c3416035e5908f8c5152c6ac93a5314c0e712081"
+      },
+      {
+        "path": "peer/frp/server/controller/resource.go",
+        "sha256": "0aac13c54e48a78203447a25f33ed31679fc2943a7c19bc03384394986b26dab"
+      },
+      {
+        "path": "peer/frp/server/group/base.go",
+        "sha256": "fcfd289b4a174724562e67b49ccccadd9e25c042cf78d7d13e94d9072d44e697"
+      },
+      {
+        "path": "peer/frp/server/group/base_test.go",
+        "sha256": "dee5d66fe57fd226d596dab1e3a80a9d08a50a872059e94911229d0c96fa2b5f"
+      },
+      {
+        "path": "peer/frp/server/group/group.go",
+        "sha256": "5f1ba0e2d454c688eb8f844b0d884ed1a4d8cf26ff1dac4266075181d6276c7d"
+      },
+      {
+        "path": "peer/frp/server/group/http.go",
+        "sha256": "9ff8204c0eb947e52f7e11693417d1bc704bbeae7ef97343db62f16d4428b2d4"
+      },
+      {
+        "path": "peer/frp/server/group/https.go",
+        "sha256": "c669e4ad8501aa4841637eca1dcda8ce9cba8feb8a26bdd5af073b0c898e7f64"
+      },
+      {
+        "path": "peer/frp/server/group/listener.go",
+        "sha256": "8ce257cb332f4fd0f8478a9720831e9821dec34478b003ebde6fc72414381cf8"
+      },
+      {
+        "path": "peer/frp/server/group/listener_test.go",
+        "sha256": "202a7404fc06da70b2b1f2dc1a80cb0cb2e0ef32aaf649cd6800c49031fc7fcd"
+      },
+      {
+        "path": "peer/frp/server/group/registry.go",
+        "sha256": "eceb3cb45ea7971074fe1df8f6925fd733d5d8e528cb6c599da9e692fd6c412c"
+      },
+      {
+        "path": "peer/frp/server/group/registry_test.go",
+        "sha256": "19a62e910bfcdb6a7a81bcdeda74009bc49bc82039d8e39a58ba3e7d02c32853"
+      },
+      {
+        "path": "peer/frp/server/group/tcp.go",
+        "sha256": "16a1b3cfd4b8a35d7f54a2a0a5627457a37daa71461be31c0a3cb3143141b9ac"
+      },
+      {
+        "path": "peer/frp/server/group/tcpmux.go",
+        "sha256": "9c55ecfba591f53feaabf1604b80cd77abfddd61eb39a1a15834c65153d24e54"
+      },
+      {
+        "path": "peer/frp/server/http/controller.go",
+        "sha256": "1dd6876d9af3e3cbf6e1b4a4656277e525e0d3adcf2c1dbf51146967e24dbcc0"
+      },
+      {
+        "path": "peer/frp/server/http/controller_test.go",
+        "sha256": "b0e64ce7e1e5c5297adf18f5f4b97bc1ac32dbcd1de591c8ed8da7d2e3c202c8"
+      },
+      {
+        "path": "peer/frp/server/http/controller_v2.go",
+        "sha256": "9c7443cfd58e55d208f7549cc1c5fd4c07581d0bc6e50685e87a2fb3555d20b8"
+      },
+      {
+        "path": "peer/frp/server/http/controller_v2_proxy_spec_test.go",
+        "sha256": "3f3243383e088ad3e1fb83fe85fa28a2ff78ea53c0be8b70a95e449977ae58ce"
+      },
+      {
+        "path": "peer/frp/server/http/controller_v2_test.go",
+        "sha256": "2429e259706509c222e1c38afc64c73be4f65bb9a73a596b9aed8e666d0bd0a8"
+      },
+      {
+        "path": "peer/frp/server/http/model/types.go",
+        "sha256": "0fb7be626bfc280a4dd9e4be4338cfb78b77e80b9eb1807c77d1452ca2fada6f"
+      },
+      {
+        "path": "peer/frp/server/http/model/v2.go",
+        "sha256": "b4cf9b70cbbe13f72fc248fd1b4de87169809c512a9d740c90ccffd872cd2e02"
+      },
+      {
+        "path": "peer/frp/server/metrics/metrics.go",
+        "sha256": "ee9d34d1ed66eab08310376e0c53c0d2fea55bccd2b95ec43fd00830d7bb39de"
+      },
+      {
+        "path": "peer/frp/server/ports/ports.go",
+        "sha256": "0a0ec95fc69a19e77c43ab3aaeda0d0592e9cf7c1cc28665c5dd68cbc02b882e"
+      },
+      {
+        "path": "peer/frp/server/ports/ports_test.go",
+        "sha256": "71cce6c35767c0e6765884f23632ea28c33b4067b078099a0822ac08831cb1aa"
+      },
+      {
+        "path": "peer/frp/server/proxy/http.go",
+        "sha256": "9c6dc53c9a5391cc8ef082c79841c7ed8aff3bab366857becd0212768ee12c03"
+      },
+      {
+        "path": "peer/frp/server/proxy/https.go",
+        "sha256": "845841cb015612f5e0e00c98340fdf23819a529aabe5d7541d841a5b62eebb75"
+      },
+      {
+        "path": "peer/frp/server/proxy/proxy.go",
+        "sha256": "8c93d302984c5cc61769bb5bfc5fa99e5615da5d9eb54be9bee24ddcfac1620a"
+      },
+      {
+        "path": "peer/frp/server/proxy/proxy_test.go",
+        "sha256": "7ff0e720233e5652c389f03984ddf83a8cf51413261b5f91c0e0fec90e8ad938"
+      },
+      {
+        "path": "peer/frp/server/proxy/stcp.go",
+        "sha256": "acf31f47677173889b038d1c50feb7a7a2cab75898bd467e0c585c816d46bbfa"
+      },
+      {
+        "path": "peer/frp/server/proxy/sudp.go",
+        "sha256": "43f74725fbf5b46719e0d66025012b8569cb142d57069e1eb382f7732eceed41"
+      },
+      {
+        "path": "peer/frp/server/proxy/sudp_benchmark_test.go",
+        "sha256": "d6b7c4a5229e61a4228ed196564163ebda25a287a05e70dcbb875808f59aee61"
+      },
+      {
+        "path": "peer/frp/server/proxy/sudp_test.go",
+        "sha256": "f23c59d2718973a73340f5f037cd02b8df91d7d88ebffdbcda46ec1c06d2dd3b"
+      },
+      {
+        "path": "peer/frp/server/proxy/tcp.go",
+        "sha256": "fc57d0de73ab3e945f0528cee19ba8d7dd7e7b981f390cb974999a6bb4cb6b0f"
+      },
+      {
+        "path": "peer/frp/server/proxy/tcpmux.go",
+        "sha256": "dfb88a8369bbf734ec84bbfd85e3544ad2f6e08513b371a2f3be5b757c681c6d"
+      },
+      {
+        "path": "peer/frp/server/proxy/udp.go",
+        "sha256": "744a9d151d6270dd965997c8c6739743d8ef1f598de32a56f16a365657eb3e6d"
+      },
+      {
+        "path": "peer/frp/server/proxy/xtcp.go",
+        "sha256": "bf0c80f3a4f618f54bd721e00895c1f8f73590b82634885e1a338118302b1668"
+      },
+      {
+        "path": "peer/frp/server/proxy/xtcp_test.go",
+        "sha256": "d1fc5b88b75b464bf212ed012daf9b3e8540abf3e9aac6dcf3293c7f1e7570cd"
+      },
+      {
+        "path": "peer/frp/server/registry/registry.go",
+        "sha256": "9e04d6e2ff4ef3ba785dac46d2f855a9d59afa498a44a2cfc07ea03e1a7b0452"
+      },
+      {
+        "path": "peer/frp/server/registry/registry_test.go",
+        "sha256": "7a89f8ea5803a58766bd0cb24e238610bf40b69683c61c422937ee888942abb7"
+      },
+      {
+        "path": "peer/frp/server/service.go",
+        "sha256": "3dcded7203c8a5131af6ab05c0fc600f1e828cbd7909221ae45466353bc47a15"
+      },
+      {
+        "path": "peer/frp/server/service_test.go",
+        "sha256": "db8c28b9a488919d54f177496a84cd38825767494b24b2a4f95db27f51eabb7d"
+      },
+      {
+        "path": "peer/frp/server/visitor/visitor.go",
+        "sha256": "760fb36ded841b08acaf2022e757b9b37ae65ca0c893f8627d09542bee87991d"
+      },
+      {
+        "path": "peer/frp/server/visitor/visitor_test.go",
+        "sha256": "40799d9837f94f3308c5a33bfb87af2ddd19c78aa0bcc1cbb56f66f96b1d1175"
+      },
+      {
+        "path": "peer/frp/server/xtcp_control_test.go",
+        "sha256": "ce4874d8cb51633666f6edbf266b4d0921b99f8f1a17e4677ca41eda6aa57e24"
+      },
+      {
+        "path": "peer/frp/test/e2e/compatibility/compatibility_test.go",
+        "sha256": "c5160b6bdfc532fb77573c1a11a3b7faee0309cb8599807b6e8ba7e2347f8486"
+      },
+      {
+        "path": "peer/frp/test/e2e/e2e.go",
+        "sha256": "cf0f610eda1c6f3dc38ecae321ec254f0e1de21a62ee5d5b525e359da0909c5b"
+      },
+      {
+        "path": "peer/frp/test/e2e/e2e_test.go",
+        "sha256": "553382030c30495123377603b06e5f8823b951f6a66a3e64b57925921499d942"
+      },
+      {
+        "path": "peer/frp/test/e2e/examples.go",
+        "sha256": "7e3f31314350facd326105a5cb72749629a009a01b7b9661c08c96f76c5de716"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/client.go",
+        "sha256": "6a151d1ef97f36120b85e860a81820496f8c4f9946589c66385041ad941cf822"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/consts/consts.go",
+        "sha256": "7a977e9e8d1e3bddc38d83baa2eea3e37955056a1568f1076faca68e44b46808"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/expect.go",
+        "sha256": "8be1aa72ac2bb881eec856ca80ab3ea717bdbbbca57a03677bbeb72ec25b6b29"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/framework.go",
+        "sha256": "7eea6bda7629e5c15005860ed952c1ab61db73205800d25e2b724ee21d522a2a"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/log.go",
+        "sha256": "0d5cea76b108de2e08011a389ce11f94360bf94bcfe2af4046da0bf526a286d1"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/mockservers.go",
+        "sha256": "21662df455d904f061d07611502ce8bd9077a1c5a590b4b2beae6f5960a9ff9c"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/process.go",
+        "sha256": "25d42c332dd6c8b878a2bded67fafc95b98f2563d16cf88bb46b858754082037"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/request.go",
+        "sha256": "1de72b21446af08526298dcff226cb157b04910caba063ebd0577391e6115339"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/test_context.go",
+        "sha256": "b28553b92457185392f29beb52eadbb2aa4f48888ee51af87cd4d7ff019e5aae"
+      },
+      {
+        "path": "peer/frp/test/e2e/framework/util.go",
+        "sha256": "273540420e434bcea2f1624fa81d2a2bc238506bd2ff5b06a4748439ed1150ad"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/basic.go",
+        "sha256": "21703c64a2330491129b54aa8c9bf9bc10b90d4a5d10e4311879cd147af3d684"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/client.go",
+        "sha256": "9ab86e1ca43f9e9d867ace580bcee8da62153e6759fe568c0a962c818901518d"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/client_server.go",
+        "sha256": "72520897220d9553c43d30eaa842d3ffd5c0efedb10ebe344539fd5039b660e9"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/cmd.go",
+        "sha256": "20f7ad83f79356eb7198cef37270acf8cc93e021e8c79107066e233c5c91a7b8"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/config.go",
+        "sha256": "6962b600951de717fb388c1974e1a91fbe9989cfc637a2d590a3ff8cad9990b5"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/http.go",
+        "sha256": "1863fe79ef64d47d2e163c6995203498b976cacdef666945831ea716434ef76f"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/server.go",
+        "sha256": "e6e69bb43f612b1b1b020aee441ff2796f17d462ea524fd129d382a9802d67d5"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/tcpmux.go",
+        "sha256": "507f34be62ba4d91c77b31acbd9fd2adf1b4cd6b028bc36f2fd1c6f7d89bdef0"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/basic/xtcp.go",
+        "sha256": "d04f34238dd534c8e1b665237dc14f7640bdac8e6fc7802bf27ed967d50d21d8"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/features/bandwidth_limit.go",
+        "sha256": "82224a9e2dffb9a81fa2b10d582b6d65bdd923c245bd6a20c9cf3ad10a9be136"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/features/chaos.go",
+        "sha256": "68f245fb47b7a729edc9c625fae9a76b9803654f042b43c6a01324b19db1e1cc"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/features/group.go",
+        "sha256": "b0985ca7ad1960b0b0382596ef6591b4b59bd9a84f4342aa8e36fb0d4d202179"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/features/heartbeat.go",
+        "sha256": "086e2ac9a0ebebad9e6e2666d6097ac79b9b2769f649b9fe2c05adde1977c4b9"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/features/monitor.go",
+        "sha256": "234313dfce03c2b3451a176375847926fd612edd0a0cbffc37e8a8d13fc052eb"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/features/real_ip.go",
+        "sha256": "04b0d4741bfb9ee3fac9fba1d40bd2296797f5ad6055b858c864f535712c7308"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/plugin/client.go",
+        "sha256": "3b651db0b30ac8f72d838d743d60afe50059b9ca042534a24e956c675e3558b1"
+      },
+      {
+        "path": "peer/frp/test/e2e/legacy/plugin/server.go",
+        "sha256": "08b92b6e140f6a79cd45979d0a67b592ce2c7562c928e4f369425680734e860f"
+      },
+      {
+        "path": "peer/frp/test/e2e/mock/server/httpserver/server.go",
+        "sha256": "15a99238f60c6b91cfbc1969779acf378c936f65909031a40aa80993bfb477a9"
+      },
+      {
+        "path": "peer/frp/test/e2e/mock/server/interface.go",
+        "sha256": "fc11ead661f6f334818712e605a192167768f864b09e13ce56e86a67b6c5b331"
+      },
+      {
+        "path": "peer/frp/test/e2e/mock/server/oidcserver/oidcserver.go",
+        "sha256": "bcf0f456c2bda9eec18ac1ef8fc58db6e6c6fdc01a6a408e7c149d2bf0f6e337"
+      },
+      {
+        "path": "peer/frp/test/e2e/mock/server/streamserver/server.go",
+        "sha256": "d0b14e66ed39de8a241c760e6cfeaf74c4248850fb535dd64a29aacb168ae2b5"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/cert/generator.go",
+        "sha256": "afb21dd0a2ac08addd028f3fc9c880685a617ca5c9cd81512d7f834d0fad9aae"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/cert/selfsigned.go",
+        "sha256": "e27935d872304a630e6e00973fa269a04ee8f95dcab01d09f14043d91e42cd56"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/plugin/plugin.go",
+        "sha256": "399ead0635e5e87b274d2249d6296148fd4f4805e5bc7c59d9fecb30323bdf50"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/port/port.go",
+        "sha256": "b0d6dd967c795afffee6b0d040227986ec031fbcdeea6f235de0f3b3f7afe710"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/port/util.go",
+        "sha256": "1857c5dd141392434773de49666728d389e90a90c9f98cffcf7522f1b7fca3eb"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/process/process.go",
+        "sha256": "d6d7e390ec2cccdb0e827c6ed5b708d18f8ac7bdbb9f36069473fae66744a5f9"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/relay/halfopen.go",
+        "sha256": "86f280106b219f2be4390a4c36c554cf2a380e6f993a495aba8aff6e84d72519"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/request/request.go",
+        "sha256": "35faff6cd308a61bb4f1fe17f91be4a8d547af22a002ad9e983f14331de31ae0"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/rpc/rpc.go",
+        "sha256": "3af93552851fcacb7e55ccc919d8e94bb0b9ee550d7daf2e22eabcd67762818c"
+      },
+      {
+        "path": "peer/frp/test/e2e/pkg/ssh/client.go",
+        "sha256": "ae5eeb32c29a702b679a8c37b252c11d7cd02d3f8c99238ddbe482625be99b96"
+      },
+      {
+        "path": "peer/frp/test/e2e/suites.go",
+        "sha256": "3aa8141adc1389b66f7acfdb287f355359eb0ed1822554237ba99c7a421090ad"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/annotations.go",
+        "sha256": "eba1ca9395655c3df1f31c5e22c550e4e62da313b6b82ceeb5138cf1311847df"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/basic.go",
+        "sha256": "dbff3c86debc99cfc8f09db0aeec67c1dd4e227d561a89ded0f82e2cdf2c08b1"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/client.go",
+        "sha256": "e1efc1abbfb0b4bbe2dbc76ec2d3befba4e1bc5edaab7e73ec8bf5e3ba3134e1"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/client_server.go",
+        "sha256": "9e19c31863ab78c8214bfa981ff044ce86b78713329f17f393263a70c49c7f16"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/cmd.go",
+        "sha256": "42f374a43e646f669ab96fb8a15b6eadad14790a12a615664656d056a5d8d7ea"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/config.go",
+        "sha256": "9e70289891e596c522e21263e927cfe96632b5491e209fa8de06ada0599cdf46"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/http.go",
+        "sha256": "91dd8b69d6d4dee17158c4a29d2a7900a93a34fcb26123ac44c690d32f88b4a7"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/oidc.go",
+        "sha256": "b784deb363df602693cb136338952d7b062960b1a67fb27044f90161a09e3074"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/server.go",
+        "sha256": "54230318ad4e22b7667b54cda0ceec54623c950ec8b96e1817c7a510e6ce7814"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/tcpmux.go",
+        "sha256": "07cb32ed1c90bf0c2ed73269fa2c275b47b10d5cf2ff0431b834e9e8c49f9580"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/token_source.go",
+        "sha256": "015bb313a4913487fbbddeb33a3b4657394bd00afce6a4133a7528c5068759eb"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/wire.go",
+        "sha256": "aa8492e575eedc8c6633a8460f97dfe76ca48213504902da1110cdea46cfa088"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/basic/xtcp.go",
+        "sha256": "701f50856d207019953d58b33f3517b7ba7982192149b85134ece5dc538232e0"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/bandwidth_limit.go",
+        "sha256": "86041a5a8a5346512d1f1a15ddfb10f14e96aea8bca65f573fb00b0e6004e087"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/chaos.go",
+        "sha256": "444a13b6c2fdbb8f8812456d7790ca00f45a17bec61827e799d89ba4f918c8b0"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/control_replacement.go",
+        "sha256": "394dfb02a10b92f31a51ec750f7202bd895aa24836b1541c9312a4942e31949a"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/group.go",
+        "sha256": "141e6321cf8ca55a2dcc3adb9056bbc64924fe09c8b5270b1976d1fb5fbdac3d"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/heartbeat.go",
+        "sha256": "bd81d8aa88603de8e7dab45883a711090cddd068d632045cbca99bbc05500951"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/monitor.go",
+        "sha256": "4bd6c5e3223aa2f127061b58e82aa2a97ef126bd72a692ccc55f2d3ad739c487"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/real_ip.go",
+        "sha256": "ebfa792b8d5cb6f327577f7cd8178788c239d54b03b6c887822d4d766748b90c"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/ssh_tunnel.go",
+        "sha256": "3277ef06f0a210cd69062b9f39f957d7f24053f0419381ea1be3fc4917a90230"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/features/store.go",
+        "sha256": "3bd992a805c6a92e5540ea48df1f63f9a9ebfc1fb9f43f3005c1ed7137d1779a"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/plugin/client.go",
+        "sha256": "fec39dac6245017d41deb4e2c1377bc2fe6a19c9ceae237dca688c560bf6d5ad"
+      },
+      {
+        "path": "peer/frp/test/e2e/v1/plugin/server.go",
+        "sha256": "4a429d7909e4d580a0b9edd82916a25ac3e1008d5d1d5227f83d1ffa8887c311"
+      },
+      {
+        "path": "peer/frp/test/xtcpbinding/c_client_test.go",
+        "sha256": "9318f2875015be18eda23f590d567ed6406745b9cd737da42c8c42469443332e"
+      },
+      {
+        "path": "peer/frp/test/xtcpbinding/flow_test.go",
+        "sha256": "a6e9db541b4b4e40e2d642986644a9fe0c7bc32a91309d5b835da732b4e8488f"
+      },
+      {
+        "path": "peer/frp/web/frpc/embed.go",
+        "sha256": "33bdae80f93dc1a4c348dd9aa8e117b4c6789a8360cbfc8629d7ef78ee3a021f"
+      },
+      {
+        "path": "peer/frp/web/frpc/embed_stub.go",
+        "sha256": "bd08b470f60f0ec17521ab83209c37e01dcba9d415a9fdc8d6673042cfcd64f4"
+      },
+      {
+        "path": "peer/frp/web/frps/embed.go",
+        "sha256": "878dcc038dae836c5263b24876afaef183f5f6a6bf898ca8af17e0d01ea55f33"
+      },
+      {
+        "path": "peer/frp/web/frps/embed_stub.go",
+        "sha256": "31fd0dfbe64c30520228c1d9f88490a1eab56e73639ecb21bac6478c26abaab3"
+      }
+    ]
+  },
+  "previous_stage_6": {
+    "source_snapshot_sha256": "3705ed71023fca5d3b689f02029116f8047fea3e35f8395f48ccf0edd0fb4669",
+    "archive_summary": {
+      "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/build-results-portable-paths.json",
+      "size_bytes": 227846,
+      "sha256": "ae56378c9d61ea803974c5f8c2a9e2445da9f6c8edbe5343fc9bbce585e6bf68"
+    },
+    "results": {
+      "esp32c3": {
+        "bin_bytes": 1033056,
+        "bin_hex": "0xfc360",
+        "factory_remaining_bytes": 15520,
+        "required_symbols_count": 59,
+        "artifacts": {
+          "sdkconfig": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/sdkconfig",
+            "size_bytes": 83575,
+            "sha256": "643e1dfb87699adf498ca64ad6f5b76c2af2d7e13e74512e4c74ab4b7bae5a0d"
+          },
+          "source-manifest.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/source-manifest.json",
+            "size_bytes": 14000,
+            "sha256": "a9334b8cfa32e2be5fa4d58de6db281a7d6dbe6505c45de47aae1aaecf47bb22"
+          },
+          "build/esp_frp_sample.bin": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build/esp_frp_sample.bin",
+            "size_bytes": 1033056,
+            "sha256": "bbd9fb4025e292d811f12bc3070b4b596f5256adec5ea359141e2e4cf37bf093"
+          },
+          "build/esp_frp_sample.elf": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build/esp_frp_sample.elf",
+            "size_bytes": 13192620,
+            "sha256": "9107175ed91380f7107c245e5e6b30eaa8742bb0d9919c6400790fbee278db5b"
+          },
+          "build/esp_frp_sample.map": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build/esp_frp_sample.map",
+            "size_bytes": 7602328,
+            "sha256": "1ff49d332cfeefd991b25ab21cb05e26b754d0738f06ec76eed31a5fdd69aa1d"
+          },
+          "build/partition_table/partition-table.bin": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build/partition_table/partition-table.bin",
+            "size_bytes": 3072,
+            "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+          },
+          "build/bootloader/bootloader.bin": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build/bootloader/bootloader.bin",
+            "size_bytes": 19552,
+            "sha256": "bf613d15c9287a8539b43e3e469678aaea0f8a894d17265b57f10dd395d7bf2e"
+          },
+          "build/bootloader/bootloader.elf": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build/bootloader/bootloader.elf",
+            "size_bytes": 547200,
+            "sha256": "bf803f83aaf96b9765a73058bee2b84db904163da40a05c565082ceb09b9748a"
+          },
+          "build-final.log": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build-final.log",
+            "size_bytes": 3857,
+            "sha256": "f7718ff638f3d6e2a466f2b2437c0888a3e87365edde8320c35d388a4b0e18f6"
+          },
+          "build-final-cmake.log": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build-final-cmake.log",
+            "size_bytes": 26614,
+            "sha256": "3882417076a7b873d9ab45db85ff9abdfd242b540464574eda0e91b6b64dd151"
+          },
+          "build-final-snapshot.log": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build-final-snapshot.log",
+            "size_bytes": 2157,
+            "sha256": "2bc531c82291504e07b80befbfc210ccffdb5b8092b083366ee364c6ac8a5c31"
+          },
+          "linked-symbols.txt": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/linked-symbols.txt",
+            "size_bytes": 299661,
+            "sha256": "3079e36cc2b899cabcaf22be1ca5a4c3e959630abb2722272619a99d92aff010"
+          },
+          "elf-sections.txt": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/elf-sections.txt",
+            "size_bytes": 4106,
+            "sha256": "c6021c64da377cb9f7ae250e6dd1f44c44dc26d2c3f960aa7e5ac699fe549f69"
+          },
+          "size-memory.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/size-memory.json",
+            "size_bytes": 1630,
+            "sha256": "b33d5eb9e969450e0ee23d331fc3fdb1245a4620f2ed6adb654e15fcefe4df96"
+          },
+          "size-components.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/size-components.json",
+            "size_bytes": 167045,
+            "sha256": "4386b713ad307e483d35ff17a08ab2be0a51387963d912d38c4814cf74b7794a"
+          },
+          "build/compile_commands.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/build/compile_commands.json",
+            "size_bytes": 9392895,
+            "sha256": "d7c62e2ff3ad2337f549acb43ee206a2977d41937b38f89a8ccf06a659a81a91"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/esp-frp/examples/tcp_proxy/dependencies.lock",
+            "size_bytes": 516,
+            "sha256": "a389882fe7e9ca011161e07b56d0d04c71932ee84ca42f3f1953a1dd07ba9022"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock.esp32": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32c3/esp-frp/examples/tcp_proxy/dependencies.lock.esp32",
+            "size_bytes": 514,
+            "sha256": "59fdbc48687a0f17e1306426b5a23397246e3dccd985514ea4621069fbba943d"
+          }
+        }
+      },
+      "esp32": {
+        "bin_bytes": 988256,
+        "bin_hex": "0xf1460",
+        "factory_remaining_bytes": 60320,
+        "required_symbols_count": 59,
+        "artifacts": {
+          "sdkconfig": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/sdkconfig",
+            "size_bytes": 83980,
+            "sha256": "3ab778b0aa3a090057c822f133f7a32489672308b01d424bf1df8bed3a3083ef"
+          },
+          "source-manifest.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/source-manifest.json",
+            "size_bytes": 14000,
+            "sha256": "a9334b8cfa32e2be5fa4d58de6db281a7d6dbe6505c45de47aae1aaecf47bb22"
+          },
+          "build/esp_frp_sample.bin": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build/esp_frp_sample.bin",
+            "size_bytes": 988256,
+            "sha256": "d35d160111a20c9959bb69e77155016a2de491b502198d8035cce81ee50a525b"
+          },
+          "build/esp_frp_sample.elf": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build/esp_frp_sample.elf",
+            "size_bytes": 11083704,
+            "sha256": "5da051dbaed4e3a3e0d4f386986e47bfd85485bb9f63c85903b798911765b20a"
+          },
+          "build/esp_frp_sample.map": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build/esp_frp_sample.map",
+            "size_bytes": 8939556,
+            "sha256": "23046039db92abdd053541e70f4acd5189dd76afd19900a4103915c58c52d9d7"
+          },
+          "build/partition_table/partition-table.bin": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build/partition_table/partition-table.bin",
+            "size_bytes": 3072,
+            "sha256": "5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6"
+          },
+          "build/bootloader/bootloader.bin": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build/bootloader/bootloader.bin",
+            "size_bytes": 24464,
+            "sha256": "fea4746222a8597026494b3e7cfb9f3e8ef1ade51415cf469b2bdbfa19d7520e"
+          },
+          "build/bootloader/bootloader.elf": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build/bootloader/bootloader.elf",
+            "size_bytes": 494360,
+            "sha256": "8897eebd420e642f68817b4a38f68cdc8757af1a8e2883fc08d4e6f6a3c38cb6"
+          },
+          "build-final.log": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build-final.log",
+            "size_bytes": 3758,
+            "sha256": "c8e029236af456f44827dce2457646076cf6a2a8999fe0bc4dbd271cc0323ad8"
+          },
+          "build-final-cmake.log": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build-final-cmake.log",
+            "size_bytes": 24909,
+            "sha256": "ecbd1991addb982dc49aa5765d7e92a74bca9fc241f606583df2c5b3d669c50b"
+          },
+          "build-final-snapshot.log": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build-final-snapshot.log",
+            "size_bytes": 2066,
+            "sha256": "fb54b1948cc942017d9f90254f325f3daba93e290c72d618417bf0f8e6dd2413"
+          },
+          "linked-symbols.txt": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/linked-symbols.txt",
+            "size_bytes": 287283,
+            "sha256": "682bbdbf53d47838298a6ccbaf477952bd227ab59cdb8c86e845b773bd9b3e2c"
+          },
+          "elf-sections.txt": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/elf-sections.txt",
+            "size_bytes": 4299,
+            "sha256": "ab0ac220c4d929b2f047dad86baec8f6c3858d97d6dbbbe18dfc1357d846a993"
+          },
+          "size-memory.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/size-memory.json",
+            "size_bytes": 1723,
+            "sha256": "00194f593436482a51214af791add4cfd79214f9a96b07ad397590dd6fcb96a5"
+          },
+          "size-components.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/size-components.json",
+            "size_bytes": 159290,
+            "sha256": "a16dfd9e2bf290a5aaed4251ce5d3711ada6dc8d919482c2245a5645019870ea"
+          },
+          "build/compile_commands.json": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/build/compile_commands.json",
+            "size_bytes": 9353257,
+            "sha256": "a2bc4422f552a70171cfbaece6d1f93fd11e413e2e21554a4e7088d9671ba437"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/esp-frp/examples/tcp_proxy/dependencies.lock",
+            "size_bytes": 516,
+            "sha256": "0fe4da669276a376c99bef4186a610edab82d2b860889b9117972b5224974309"
+          },
+          "esp-frp/examples/tcp_proxy/dependencies.lock.esp32": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/esp32/esp-frp/examples/tcp_proxy/dependencies.lock.esp32",
+            "size_bytes": 514,
+            "sha256": "074b78e74325e7dd12369b8b019403b08d8e256bf1c79c698178fca84b46df7c"
+          }
+        }
+      }
+    },
+    "host": {
+      "mbed_tls_49": {
+        "tests_passed": 49,
+        "tests_total": 49,
+        "seconds": 71.65,
+        "excluded_test": "xtcp_client_upstream",
+        "log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-r1-20261003-final-ctest.log",
+          "size_bytes": 5310,
+          "sha256": "d75383f50337887677936f860bbc61e92a010e05699089aa7bf659b3cec27969"
+        }
+      },
+      "xtcp_client_separate_ctest": {
+        "tests_passed": 1,
+        "tests_total": 1,
+        "seconds": 22.64,
+        "raw_log_file_preserved": false,
+        "stdout_tool_session": 99837,
+        "verbose_race_test": {
+          "test": "TestCClientFullCandidate",
+          "subcases_passed": 8,
+          "seconds": 22.609,
+          "log": {
+            "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-cxtcp-full.log",
+            "size_bytes": 32882,
+            "sha256": "5279eda20ff807fa7c1136982f7647196a86f49d6e627501dc28f0d01c117bc9"
+          }
+        },
+        "c_peer": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/xtcp_client_peer",
+          "size_bytes": 9954304,
+          "sha256": "b84010867bf95b8a7f7b3cab6f9e98a4ea7a7b6079b3bde9e8515d132e003816"
+        }
+      },
+      "openssl_21": {
+        "tests_passed": 21,
+        "tests_total": 21,
+        "seconds": 5.37,
+        "log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-extensions-openssl-final-ctest.log",
+          "size_bytes": 2340,
+          "sha256": "3427b1d44c553828d045b3bebbecec21832e83141dbca10ce26ad42a6cf02bf4"
+        }
+      },
+      "public_c_cpp_headers": {
+        "syntax_checks": 36,
+        "extern_c_declarations": 37,
+        "log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-public-headers-20261003.log",
+          "size_bytes": 10717,
+          "sha256": "f64c18fe8a959e92852a531303dc853526d84bf1547a8e3f998c7d3466d02792"
+        }
+      },
+      "public_consumer_trace": {
+        "off_compile_link_pass": true,
+        "on_compile_link_pass": true,
+        "runtime_executed": false,
+        "script": {
+          "path": "/Users/darrenyou/darren-space/tooling/esp-frp/tests/public_consumer_contract.py",
+          "size_bytes": 5488,
+          "sha256": "f83a6ce0b9cbb4d806e722f623a348d21bf312a38af47824d51c37ee46ba2308"
+        },
+        "log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-public-consumer-script-20261003.log",
+          "size_bytes": 262,
+          "sha256": "a900cc93038588d227dd27d183851d72dd054fdbaa41b0d26cba742dd8b77c80"
+        }
+      },
+      "nat_mode_zero_repeat": {
+        "runs_passed": 30,
+        "runs_total": 30,
+        "seconds": 0.734,
+        "log": {
+          "path": "/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/host/esp-frp-xtcp-nat-mode-zero-repeat.log",
+          "size_bytes": 3648,
+          "sha256": "5417375e08faac0305bea633e1d89d101a22f4821a92709cde0216cbdd85c404"
+        }
+      }
+    }
+  },
+  "quic_cleanup_regression": {
+    "schema_version": 1,
+    "date": "2026-10-03",
+    "scope": "正式 QUIC cleanup 真实 close 平台所有权，未改变协议或关闭报文期限",
+    "tests": [
+      "quic_cleanup_posix",
+      "quic_cleanup_idf"
+    ],
+    "registered_ctest_count": 52,
+    "source_old_sha256": "604013f7cd9e9ec508485e05ca02611be1381a9b1fd3551aced6294c44bb5624",
+    "source_fixed_sha256": "1986063d169b4d0f134e3d6d57f5aa592c0d075b932554347df76ee8172acf7f",
+    "fixture_sha256": "f5b4fffccbd7cb4d79a7371e9ab860ebea0d440969f881976ae19c2ea2705439",
+    "same_fixture_old_and_fixed": true,
+    "old": {
+      "ctest_exit": 8,
+      "passed": [
+        "quic_cleanup_idf"
+      ],
+      "failed": [
+        "quic_cleanup_posix"
+      ],
+      "actual_failure": "第二次 cancel 实际关闭同编号的 foreign UDP socket，fcntl 存活断言失败",
+      "source": "/tmp/esp-frp-quic-cleanup-old-source-20261003.c",
+      "binary": "/tmp/esp-frp-quic-cleanup-old-posix-20261003",
+      "log": "/tmp/esp-frp-quic-cleanup-old-ctest-20261003.log"
+    },
+    "fixed": {
+      "ctest_exit": 0,
+      "passed_count": 2,
+      "elapsed_seconds": 0.95,
+      "log": "/tmp/esp-frp-quic-cleanup-fixed-ctest-20261003.log"
+    },
+    "build_log": "/tmp/esp-frp-quic-cleanup-fixed-build-20261003.log",
+    "compiler_flags": "-fsanitize=address,undefined -fno-omit-frame-pointer -g -DMBEDTLS_PLATFORM_MEMORY -DMBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS",
+    "checks": [
+      "POSIX 一次 close 后清 fd/owns_socket 且保留 EINTR 诊断",
+      "重复 cancel 和 destroy 均不关闭真实复用 fd",
+      "IDF 分支两次失败实际 fd 存活并返回 WOULD_BLOCK",
+      "超过五秒仍保留未关闭 socket，最后真实 close 成功后销毁"
+    ],
+    "limits": [
+      "IDF 分支在 host 通过专用编译宏与真实 OS fd 验证，不替代 SDK 调度或实板持续内存压力",
+      "本轮仅运行两个新增定向 CTest，完整矩阵与双 SDK 由其它 owner 刷新"
+    ]
+  },
+  "quic_cleanup_evidence": {
+    "esp-frp-quic-cleanup-regression-20261003.json": {
+      "path": "/tmp/esp-frp-quic-cleanup-regression-20261003.json",
+      "size_bytes": 1898,
+      "sha256": "13953cdb8e0613f8b0fb25615186e603cdba523f544b5bf2a12d4a62661f6748"
+    },
+    "esp-frp-quic-cleanup-old-ctest-20261003.log": {
+      "path": "/tmp/esp-frp-quic-cleanup-old-ctest-20261003.log",
+      "size_bytes": 632,
+      "sha256": "ed6fc6f01e8ecabf4c8fb914f39c629a670ac5d41043bd49ce07b3cf266eabbe"
+    },
+    "esp-frp-quic-cleanup-fixed-ctest-20261003.log": {
+      "path": "/tmp/esp-frp-quic-cleanup-fixed-ctest-20261003.log",
+      "size_bytes": 404,
+      "sha256": "3e93e6d59f32389f23ae8a35247b3526a193b6291bade1acef3e4f1175117c94"
+    }
+  },
+  "current_cleanup_fixture": {
+    "path": "/Users/darrenyou/darren-space/tooling/esp-frp/tests/quic_cleanup_test.c",
+    "size_bytes": 4748,
+    "sha256": "f5b4fffccbd7cb4d79a7371e9ab860ebea0d440969f881976ae19c2ea2705439"
+  },
+  "public_consumer_contract": {
+    "path": "/Users/darrenyou/darren-space/tooling/esp-frp/tests/public_consumer_contract.py",
+    "size_bytes": 5488,
+    "sha256": "f83a6ce0b9cbb4d806e722f623a348d21bf312a38af47824d51c37ee46ba2308"
+  },
+  "final_software_verification_complete": true
+}

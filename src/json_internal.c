@@ -19,11 +19,11 @@ bool efrp_json_utf8(const uint8_t *p, size_t length)
     return true;
 }
 static bool whitespace(uint8_t c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; }
-static bool bounded_json(const uint8_t *p, size_t length)
+static bool bounded_json(const uint8_t *p, size_t length, unsigned max_punctuation)
 {
     /* Bound allocations and recursive parser depth before invoking cJSON.
      * Reject encoded NUL because cJSON exposes strings as C strings. */
-    if (!length || length > EFRP_JSON_MAX_BYTES || !efrp_json_utf8(p, length)) return false;
+    if (!max_punctuation || max_punctuation > EFRP_JSON_XTCP_MAX_PUNCTUATION || !length || length > EFRP_JSON_MAX_BYTES || !efrp_json_utf8(p, length)) return false;
     size_t first = 0;
     while (first < length && whitespace(p[first])) ++first;
     if (first == length || p[first] != '{') return false;
@@ -44,14 +44,14 @@ static bool bounded_json(const uint8_t *p, size_t length)
             if (c == '{' || c == '[') { if (++depth > 8) return false; ++punctuation; }
             if (c == '}' || c == ']') { if (!depth) return false; --depth; }
             if (c == ',' || c == ':') ++punctuation;
-            if (punctuation > 128) return false;
+            if (punctuation > max_punctuation) return false;
         }
     }
     return !string && !depth;
 }
-cJSON *efrp_json_parse(const uint8_t *p, size_t length)
+cJSON *efrp_json_parse(const uint8_t *p, size_t length, unsigned max_punctuation)
 {
-    if (!bounded_json(p, length)) return NULL;
+    if (!bounded_json(p, length, max_punctuation)) return NULL;
     const char *end = NULL;
     cJSON *value = cJSON_ParseWithLengthOpts((const char *)p, length, &end, 0);
     if (!value) return NULL;

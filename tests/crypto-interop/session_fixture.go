@@ -34,6 +34,7 @@ type sessionFixtureIO struct {
 
 type sessionFixtureOptions struct {
 	mode, token, clientID, proxyName string
+	proxyType                        string
 	timeout                          time.Duration
 }
 
@@ -146,7 +147,11 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 	if err = control.ReadMsgInto(&proxy); err != nil {
 		return err
 	}
-	if proxy.ProxyName != options.proxyName || proxy.ProxyType != "tcp" || proxy.UseEncryption || proxy.UseCompression || proxy.RemotePort != 0 {
+	expectedType := options.proxyType
+	if expectedType == "" {
+		expectedType = "tcp"
+	}
+	if proxy.ProxyName != options.proxyName || proxy.ProxyType != expectedType || proxy.UseEncryption || proxy.UseCompression || proxy.RemotePort != 0 {
 		return fmt.Errorf("incorrect or borrowed NewProxy configuration")
 	}
 	if mode == "fixture-register-timeout" {
@@ -347,8 +352,13 @@ func runSessionFixtureModes(path, dir string, modes []string) {
 	for _, mode := range modes {
 		listener := localListener()
 		result := make(chan error, 1)
+		accepted := make(chan net.Conn, 1)
 		go func() {
 			raw, err := listener.Accept()
+			if err == nil {
+				accepted <- raw
+			}
+			close(accepted)
 			if err == nil {
 				err = serveSessionFixture(raw, cert, sessionFixtureOptions{mode: mode, token: "public-session-token",
 					clientID: "fixture-client-" + mode + "-0", proxyName: "fixture-control-" + mode + "-0", timeout: 18 * time.Second}, nil)
@@ -360,6 +370,11 @@ func runSessionFixtureModes(path, dir string, modes []string) {
 		output, err := cmd.CombinedOutput()
 		cancel()
 		_ = listener.Close()
+		// The listener does not own accepted connections. Retire this fixture's
+		// TCP endpoint before waiting for its protocol reader to finish.
+		if raw := <-accepted; raw != nil {
+			_ = raw.Close()
+		}
 		if err != nil {
 			panic(fmt.Sprintf("session %s: %v\n%s", mode, err, output))
 		}
@@ -367,7 +382,7 @@ func runSessionFixtureModes(path, dir string, modes []string) {
 		case err = <-result:
 			must(err)
 		case <-time.After(time.Second):
-			panic("fixture did not stop")
+			panic("session " + mode + ": fixture did not stop")
 		}
 		fmt.Print(string(output))
 	}

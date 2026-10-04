@@ -12,11 +12,12 @@ static void length_header(uint32_t value, uint8_t out[4])
 }
 int main(int argc, char **argv)
 {
-    assert(argc == 3); size_t step = (size_t)strtoul(argv[1], NULL, 10); assert(step && step <= 100000);
+    assert(argc == 4); size_t step = (size_t)strtoul(argv[1], NULL, 10); assert(step && step <= 100000);
+    assert(!strcmp(argv[3], "tcp") || !strcmp(argv[3], "quic"));
     const uint8_t token[] = "public-handshake-token";
     efrp_handshake_config_t config = {.token = token, .token_length = sizeof token - 1,
         .hostname = "board\"\\\n", .user = "公开测试", .client_id = "fixture", .run_id = "old-id",
-        .unix_seconds = strtoll(argv[2], NULL, 10)};
+        .unix_seconds = strtoll(argv[2], NULL, 10), .quic = !strcmp(argv[3], "quic")};
     uint8_t storage[EFRP_HANDSHAKE_RX_BYTES], header[4]; efrp_handshake_t h = {0};
     assert(efrp_handshake_init(&h, &config, storage, sizeof storage, 0) == EFRP_OK);
     const uint8_t *p; size_t n;

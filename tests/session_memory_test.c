@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #define SESSION_ALLOCATION_SLOTS 2u
-/* session.c allocates its session and Yamux objects; Flash scratch is static
+/* session.c allocates its session and authenticated address; transport is borrowed; Flash scratch is static
  * within the session and the host fake store is owned by the test. */
 static struct { void *pointer; size_t bytes; } blocks[SESSION_ALLOCATION_SLOTS];
 static unsigned calls, fail_at, live;
@@ -19,6 +19,7 @@ void *fixture_session_calloc(size_t count, size_t bytes)
     }
     abort();
 }
+void *fixture_session_malloc(size_t bytes) { return fixture_session_calloc(1, bytes); }
 void fixture_session_free(void *pointer)
 {
     if (!pointer) return;
@@ -28,18 +29,20 @@ void fixture_session_free(void *pointer)
     }
     abort();
 }
-void fixture_session_check(const efrp_session_config_t *config, efrp_tls_t *tls, uint64_t now)
+void fixture_session_check(const efrp_session_config_t *config, efrp_transport_t *transport, uint64_t now)
 {
     assert(!live);
-    for (unsigned i=1;i<=2;++i) {
+    for (unsigned i=1;i<=1;++i) {
         calls=0; fail_at=i; efrp_session_t *session=NULL;
-        assert(efrp_session_create(config,tls,now,&session) == EFRP_NO_MEMORY && !session);
+        assert(efrp_session_create(config,transport,now,&session) == EFRP_NO_MEMORY && !session);
         assert(calls==i && !live);
     }
     calls=fail_at=0;
     efrp_session_config_t bad=*config; bad.login.token_length=0;
     efrp_session_t *session=NULL;
-    assert(efrp_session_create(&bad,tls,now,&session) == EFRP_INVALID_ARGUMENT && !session);
-    assert(calls==2 && !live);
+    assert(efrp_session_create(&bad,transport,now,&session) == EFRP_INVALID_ARGUMENT && !session);
+    assert(calls==1 && !live);
 }
 void fixture_session_released(void) { assert(!live); }
+
+void fixture_session_fail_next_allocation(void) { fail_at = calls + 1; }

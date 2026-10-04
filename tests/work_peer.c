@@ -49,11 +49,13 @@ int main(int argc, char **argv)
     efrp_aead_flash_store_t store = efrp_test_flash_store(&flash);
     assert(efrp_aead_flash_store_recover(&store) == EFRP_OK);
     char proxy_name[128]; snprintf(proxy_name, sizeof proxy_name, "fixture-work-proxy-%s-%u", argv[4], local_port);
+    efrp_transport_t *transport = NULL;
+    assert(efrp_transport_yamux_create(tls, now_ms(), &transport) == EFRP_OK);
     efrp_session_config_t config = {.login = {.token = (const uint8_t *)token, .token_length = strlen(token),
         .hostname = "fixture-work-board", .client_id = proxy_name, .unix_seconds = (int64_t)time(NULL)},
         .proxy_name = proxy_name, .local_ipv4 = {127, 0, 0, 1}, .local_port = (uint16_t)local_port,
         .flash_store = &store};
-    assert(efrp_session_create(&config, tls, now_ms(), &session) == EFRP_OK);
+    assert(efrp_session_create(&config, transport, now_ms(), &session) == EFRP_OK);
     memset(config.local_ipv4, 0, sizeof config.local_ipv4); config.local_port = 0;
     assert(fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL) | O_NONBLOCK) == 0);
     bool announced = false, stopping = false; uint64_t stop_deadline = 0, end = now_ms() + 200000, offset = 0, jump_at = 0;
@@ -71,7 +73,10 @@ int main(int argc, char **argv)
         assert(status.work.active <= 2 && status.work.waiting <= 1 && status.work.active + status.work.waiting + status.work.cleaning <= 3);
         if (status.work.active > peak) peak = status.work.active;
         if (!announced && status.phase == EFRP_SESSION_REGISTERED && status.pongs) {
-            printf("READY %s\n", status.remote_address); fflush(stdout); announced = true;
+            char address[257]; size_t length;
+            assert(efrp_session_remote_address(session, address, sizeof address, &length) == EFRP_OK);
+            assert(length == status.remote_address_length);
+            printf("READY %s\n", address); fflush(stdout); announced = true;
         }
         char command;
         if (read(STDIN_FILENO, &command, 1) == 1) {
@@ -96,7 +101,8 @@ int main(int argc, char **argv)
     assert(efrp_session_cancel(session) == EFRP_CANCELLED);
     do { result = efrp_session_destroy(&session); if (result == EFRP_WOULD_BLOCK) poll(NULL, 0, 1); } while (result == EFRP_WOULD_BLOCK);
     assert(!flash.busy && flash.clears == flash.begins);
-    assert(result == EFRP_OK && !session); efrp_tls_destroy(tls);
+    assert(result == EFRP_OK && !session);
+    assert(efrp_transport_destroy(&transport) == EFRP_OK && !transport); efrp_tls_destroy(tls);
     assert(efrp_connect_destroy(&connection) == EFRP_OK);
     fixture_work_released();
     assert(open_fds() == baseline);

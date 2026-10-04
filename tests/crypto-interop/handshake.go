@@ -18,10 +18,10 @@ import (
 	frpnet "github.com/fatedier/frp/pkg/util/net"
 )
 
-func handshakeRound(path, expectedArch string, step int, seconds int64, scenario string) {
+func handshakeRound(path, expectedArch, transport string, step int, seconds int64, scenario string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, path, fmt.Sprint(step), fmt.Sprint(seconds))
+	cmd := exec.CommandContext(ctx, path, fmt.Sprint(step), fmt.Sprint(seconds), transport)
 	input, err := cmd.StdinPipe()
 	must(err)
 	output, err := cmd.StdoutPipe()
@@ -53,14 +53,14 @@ func handshakeRound(path, expectedArch string, step int, seconds int64, scenario
 	var ch wire.ClientHello
 	must(json.Unmarshal(clientFrame.Payload, &ch))
 	must(wire.ValidateClientHello(ch))
-	if ch.Bootstrap.Transport != "tcp" || !ch.Bootstrap.TLS || !ch.Bootstrap.TCPMux ||
+	if ch.Bootstrap.Transport != transport || !ch.Bootstrap.TLS || ch.Bootstrap.TCPMux != (transport == "tcp") ||
 		len(ch.Capabilities.Crypto.Algorithms) != 1 || ch.Capabilities.Crypto.Algorithms[0] != wire.AEADAlgorithmAES256GCM ||
 		len(ch.Capabilities.Message.UDPPacketCodecs) != 0 {
 		panic("unexpected capabilities")
 	}
 	var login msg.Login
 	must(msg.NewV2ReadWriterWithConn(frames).ReadMsgInto(&login))
-	if reader.Len() != 0 || login.PoolCount != 0 || login.Timestamp != seconds || login.Version != "esp-frp/0.2.0" ||
+	if reader.Len() != 0 || login.PoolCount != 0 || login.Timestamp != seconds || login.Version != "esp-frp/0.3.0" ||
 		login.Hostname != "board\"\\\n" || login.User != "公开测试" || login.ClientID != "fixture" || login.RunID != "old-id" ||
 		login.Os != "esp-idf" || login.Arch != expectedArch {
 		panic("login field mismatch")
@@ -135,12 +135,14 @@ func handshakeRound(path, expectedArch string, step int, seconds int64, scenario
 }
 
 func runHandshake(path, expectedArch string) {
-	for _, step := range []int{1, 7, 8, 15, 17, 128, 4096, 100000} {
-		handshakeRound(path, expectedArch, step, 1790000000, "ok")
+	for _, transport := range []string{"tcp", "quic"} {
+		for _, step := range []int{1, 7, 8, 15, 17, 128, 4096, 100000} {
+			handshakeRound(path, expectedArch, transport, step, 1790000000, "ok")
+		}
+		handshakeRound(path, expectedArch, transport, 100000, math.MaxInt64, "ok")
+		for _, scenario := range []string{"algorithm", "random", "login-error", "transcript", "wrong-key", "truncated"} {
+			handshakeRound(path, expectedArch, transport, 100000, 1790000000, scenario)
+		}
 	}
-	handshakeRound(path, expectedArch, 100000, math.MaxInt64, "ok")
-	for _, scenario := range []string{"algorithm", "random", "login-error", "transcript", "wrong-key", "truncated"} {
-		handshakeRound(path, expectedArch, 100000, 1790000000, scenario)
-	}
-	fmt.Printf("Official FRP %s handshake: 9 login/AEAD round trips, 6 rejection cases passed\n", expectedArch)
+	fmt.Printf("Official FRP %s handshake: TCP/QUIC each 9 login/AEAD round trips and 6 rejection cases passed\n", expectedArch)
 }

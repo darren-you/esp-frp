@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: Apache-2.0
+package nathole
+
+import (
+	"testing"
+	"time"
+
+	"github.com/fatedier/frp/pkg/msg"
+	"github.com/fatedier/frp/pkg/transport"
+	"github.com/fatedier/frp/pkg/util/util"
+)
+
+type espFRPSender struct{ messages chan msg.Message }
+
+func (s *espFRPSender) Send(m msg.Message) error { s.messages <- m; return nil }
+func espFRPTransport() (transport.MessageTransporter, *espFRPSender) {
+	s := &espFRPSender{messages: make(chan msg.Message, 2)}
+	return transport.NewMessageTransporter(s), s
+}
+
+func TestESPFRPFixedOfficialActualVisitorSkipsAllowUsers(t *testing.T) {
+	c, err := NewController(time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const proxy, key = "provider.private", "public-controller-secret"
+	sidCh, err := c.ListenClient(proxy, key, []string{"allowed-user"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseClient(proxy)
+	tr, sent := espFRPTransport()
+	c.HandleVisitor(&msg.NatHoleVisitor{ProxyName: proxy, PreCheck: true, TransactionID: "precheck"}, tr, "wrong-user")
+	precheck := (<-sent.messages).(*msg.NatHoleResp)
+	if precheck.Error == "" {
+		t.Fatal("wrong user precheck unexpectedly allowed")
+	}
+	stamp := time.Now().Unix()
+	c.HandleVisitor(&msg.NatHoleVisitor{ProxyName: proxy, Timestamp: stamp, SignKey: "wrong-public-key"}, tr, "wrong-user")
+	wrongKey := (<-sent.messages).(*msg.NatHoleResp)
+	if wrongKey.Error == "" {
+		t.Fatal("wrong secret unexpectedly allowed")
+	}
+	// This timer only controls fixture cleanup; all admission logic remains the
+	// fixed upstream method. No successful NAT analysis or remote attack is claimed.
+	savedTimeout := NatHoleTimeout
+	NatHoleTimeout = 0
+	defer func() { NatHoleTimeout = savedTimeout }()
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		c.HandleVisitor(&msg.NatHoleVisitor{ProxyName: proxy, Timestamp: stamp, SignKey: util.GetAuthKey(key, stamp), TransactionID: "actual"}, tr, "wrong-user")
+	}()
+	select {
+	case sid := <-sidCh:
+		if sid == "" {
+			t.Fatal("empty admitted SID")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("actual visitor request did not reach provider SID notification")
+	}
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("fixture left controller session running")
+	}
+	t.Logf("actual signed request notified provider for wrong-user although precheck rejected that user (%s); wrong secret was rejected (%s)", precheck.Error, wrongKey.Error)
+}
+
+func TestESPFRPFixedOfficialClientSIDDoesNotBindProxy(t *testing.T) {
+	c, err := NewController(time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sid, target = "public-active-sid", "provider.private"
+	s := &Session{sid: sid, visitorMsg: &msg.NatHoleVisitor{ProxyName: target}, notifyCh: make(chan struct{}, 1)}
+	c.sessions[sid] = s
+	defer delete(c.sessions, sid)
+	tr, _ := espFRPTransport()
+	c.HandleClient(&msg.NatHoleClient{Sid: "wrong-sid", ProxyName: target}, tr)
+	if s.clientMsg != nil {
+		t.Fatal("wrong SID unexpectedly attached")
+	}
+	wrongProxy := &msg.NatHoleClient{Sid: sid, ProxyName: "unrelated.other-proxy", TransactionID: "unrelated-control-message"}
+	c.HandleClient(wrongProxy, tr)
+	if s.clientMsg != wrongProxy || s.clientTransporter != tr {
+		t.Fatal("fixed official behavior no longer accepts SID without target proxy binding")
+	}
+	select {
+	case <-s.notifyCh:
+	default:
+		t.Fatal("wrong proxy did not trigger active SID notification")
+	}
+	t.Log("actual HandleClient rejected unknown SID, but attached an unrelated proxy to a constructed active SID; the API carries no authenticated control-session identity")
+}

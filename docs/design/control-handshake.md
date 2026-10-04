@@ -1,16 +1,16 @@
 # 控制流握手
 
-`esp_frp_handshake.h` 实现固定 FRP v0.71.0 的 Hello/Login 交换。调用前必须已建立严格 TLS 和新的 Yamux 控制流；本层不验证证书、不创建 socket、worker 或计时器。当前完成协议核心与 host 官方交叉验证，完整客户端和实板尚未完成。
+`esp_frp_handshake.h` 实现固定 FRP v0.71.0 的 Hello/Login 交换。调用前必须取得已认证的 transport 和新控制流：TCP 使用严格 TLS/Yamux，QUIC 使用原生 bidi。本层不验证证书、不创建 socket、worker 或计时器。完整 C 客户端已通过 host 官方互操作；XTCP 使用本仓维护候选的显式登录扩展。软件与目标构建证据见[检查点](../verification/xtcp-candidate-software-20261003.md)，扩展实板与 Base 组合仍待验收。
 
 ## 输入与字节顺序
 
-init 深拷贝 Token 并构建全部输出，不保留配置指针。Token 非空、最多 1024 字节；hostname/user/client_id 各最多 128 字节，run_id 最多 64 字节，均为有效 UTF-8；时间为调用方提供的正 Unix 秒。主机、端口、证书及时间可信性由后续 transport owner 负责。
+init 深拷贝 Token 并构建全部输出，不保留配置指针。Token 非空、最多 1024 字节；hostname/user/client_id 各最多 128 字节，run_id 最多 64 字节，均为有效 UTF-8；时间为调用方提供的正 Unix 秒。服务主机、端口、证书及时间可信性由 transport owner 在握手前负责；这里的 hostname 是 Login 身份字段。正式 session 根据实际 transport kind、代理类型和角色填写 quic、udp_binary 与 xtcp_binding，不允许用配置伪造传输身份。
 
-输出顺序是 magic、ClientHello、Login。Hello 声明 TCP、TLS、TCPMux、JSON 与唯一 `aes-256-gcm`，不广告 UDP；32 字节 client random 来自密码随机源。Login 使用产品身份 `esp-frp/0.2.0`、`esp-idf`、`riscv32`，pool_count 固定 0，允许提交调用方选择的稳定 run ID 或上次已鉴权 run ID。版本身份不冒充官方 frpc。
+输出顺序是 magic、ClientHello、Login。Hello 声明实际 TCP 或 QUIC、TLS、JSON 与唯一 `aes-256-gcm`；TCP 的 tcpMux 为 true，原生 QUIC 为 false。只有 UDP provider 广告 `udpPacketCodecs=["binary-v1"]`；32 字节 client random 来自密码随机源。Login 使用产品身份 `esp-frp/0.3.0`、`esp-idf`，ESP32 的 arch 为 `xtensa`，ESP32-C3 为 `riscv32`，host fixture 未显式选择目标时同样模拟 `riscv32`；pool_count 固定 0，允许提交稳定 run ID 或上次已鉴权 run ID。XTCP 双角色另外发送 `xtcp_binding_protocol=esp-frp-xtcp/1`，原样官方 XTCP 不支持此合同。版本身份不冒充官方 frpc。
 
-Token 鉴权按官方要求为 `hex_lower(MD5(Token || decimal(unix_seconds)))`；SDK/OpenSSL 实现 MD5，本仓只装配输入。它不替代外层严格 TLS 或后续控制 AEAD。时间直接以经过整数格式化的 JSON number 输出，不经过 double，host 验证覆盖 `INT64_MAX`。公开 `efrp_token_auth` 可由后续 heartbeat/work scope 装配调用；本轮未实现这些消息的 scope 状态。
+Token 鉴权按官方要求为 `hex_lower(MD5(Token || decimal(unix_seconds)))`；SDK/OpenSSL 实现 MD5，本仓只装配输入。它不替代外层严格 TLS 或后续控制 AEAD。时间直接以经过整数格式化的 JSON number 输出，不经过 double，host 验证覆盖 `INT64_MAX`。正式 session 的 Ping 和普通 NewWorkConn 已调用同一 `efrp_token_auth` 装配 HeartBeats/NewWorkConns scope；Token 公式不因传输类型改变。
 
-ServerHello 必须先于 LoginResp，算法只能为已广告的 AES，message codec 必须为 JSON、UDP codec 必须为空，server random 必须为 32 字节的规范 Base64。ServerHello 非空 error 返回 NEGOTIATION_FAILED。LoginResp 必须为 wire message type 2，error 非空返回 LOGIN_REJECTED，成功必须有非空且不超过 64 字节的 run_id。服务端 version 可缺省，不用于放宽协议校验。
+ServerHello 必须先于 LoginResp，算法只能为已广告的 AES，message codec 必须为 JSON；UDP provider 必须精确选择 `binary-v1`，其余角色的 UDP codec 必须为空。server random 必须为 32 字节的规范 Base64。ServerHello 非空 error 返回 NEGOTIATION_FAILED。LoginResp 必须为 wire message type 2，error 非空返回 LOGIN_REJECTED，成功必须有非空且不超过 64 字节的 run_id。服务端 version 可缺省，不用于放宽协议校验。请求 XTCP 合同时，成功 LoginResp 还必须携带规范 Base64 编码的 32 字节 `xtcp_control_id`，由当前已认证服务端 Control 生成；在 take_result 前经 `efrp_handshake_xtcp_control_id` 复制并交给 XTCP controller，不能用 run_id 或调用方身份替代。
 
 派生使用实际发送的 ClientHello 与收到的 ServerHello 原始 payload；不重新编码服务端 JSON。密钥仅在合法 LoginResp 后移交给调用方，登录拒绝会清除已派生密钥。
 
@@ -24,7 +24,7 @@ ServerHello 必须先于 LoginResp，算法只能为已广告的 AES，message c
 - 非参数类协议/密码/期限错误为粘性错误，清除 Token、方向密钥、输出和接收缓存；销毁后才能重新初始化。外层必须关闭失败连接。
 - `take_result` 只允许一次，复制密钥/run ID 后清零并归还借用缓存，解除 frame reader 引用；之后 destroy 不再写该缓存。调用方可立即将它重新用于 AEAD。调用方创建 AEAD 对象后清除临时密钥。
 
-既有 C3 编译中的握手对象为 5968 字节；独立 API 可外借 4096 字节接收区，正式 Session 则复用对象内同尺寸输出区，不另申请。cJSON 和密码库有临时分配。这不是完整客户端的峰值或连续块结论。握手 DONE 仅表示语义交换完成；完整客户端还需通过控制 AEAD、代理注册和运行状态才能报告 ready。
+早期 C3 构建记录的握手对象为 5968 字节；当前新增 XTCP control ID 字段，不能沿用该历史对象尺寸作容量结论。独立 API 可外借 4096 字节接收区，正式 Session 则复用对象内同尺寸输出区，不另申请。cJSON 和密码库有临时分配。这不是完整客户端的峰值或连续块结论。握手 DONE 仅表示语义交换完成；完整客户端还需通过控制 AEAD、代理注册和运行状态才能报告 ready。
 
 ## 验证
 
