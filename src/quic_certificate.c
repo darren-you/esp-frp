@@ -31,11 +31,13 @@ bool efrp_quic_peer_certificate_parsed_check(mbedtls_x509_crt *certificate,
         mbedtls_x509_time_is_past(&certificate->valid_to) || mbedtls_x509_time_is_future(&certificate->valid_from) ||
         mbedtls_x509_crt_check_key_usage(certificate, MBEDTLS_X509_KU_DIGITAL_SIGNATURE) ||
         mbedtls_x509_crt_check_extended_key_usage(certificate, usage, MBEDTLS_OID_SIZE(MBEDTLS_OID_SERVER_AUTH))) return false;
-    bool named = false;
-    for (const mbedtls_x509_sequence *san = &certificate->subject_alt_names; san; san = san->next)
-        if (((unsigned)san->buf.tag & MBEDTLS_ASN1_TAG_VALUE_MASK) == MBEDTLS_X509_SAN_DNS_NAME &&
-            san->buf.len == strlen(name) && !memcmp(san->buf.p, name, san->buf.len)) named = true;
-    if (!named) return false;
+    const mbedtls_x509_sequence *san = &certificate->subject_alt_names;
+    const mbedtls_x509_sequence *extended = &certificate->ext_key_usage;
+    if (san->next || ((unsigned)san->buf.tag & MBEDTLS_ASN1_TAG_VALUE_MASK) != MBEDTLS_X509_SAN_DNS_NAME ||
+        san->buf.len != strlen(name) || !san->buf.p || memcmp(san->buf.p, name, san->buf.len) ||
+        extended->next || extended->buf.tag != MBEDTLS_ASN1_OID || !extended->buf.p ||
+        extended->buf.len != MBEDTLS_OID_SIZE(MBEDTLS_OID_SERVER_AUTH) ||
+        memcmp(extended->buf.p, usage, extended->buf.len)) return false;
     psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
     int attribute_result = mbedtls_pk_get_psa_attributes(&certificate->pk, PSA_KEY_USAGE_VERIFY_HASH, &attributes);
     bool curve = !attribute_result && psa_get_key_type(&attributes) == PSA_KEY_TYPE_ECC_PUBLIC_KEY(PSA_ECC_FAMILY_SECP_R1);

@@ -154,6 +154,12 @@ int main(void)
     assert(w->phase == EFRP_WORK_ACTIVE && !set.handshake_json);
     uint8_t received[16]; ssize_t got = client_read(first, received, sizeof received);
     assert(got == (ssize_t)sizeof tail && !memcmp(received, tail, sizeof tail));
+    /* send() accepts bytes into the local TCP stack; the reverse tail does
+     * not guarantee that a nonblocking local recv has completed. Drive this
+     * same admitted stream within the existing one-second I/O fixture bound. */
+    for (unsigned i = 0; i < 1000 && set.status.local_received < sizeof untrusted; ++i) {
+        poll(NULL, 0, 1); step(&set, &mux, 7); mux_flush(&mux);
+    }
     assert(set.status.local_sent == sizeof tail && set.status.local_received == sizeof untrusted);
     step(&set, &mux, 8); assert(set.status.requests == 2 && open_fds() == baseline + 5);
     accept_auth(&set, &mux, 9);

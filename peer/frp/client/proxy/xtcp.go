@@ -42,7 +42,8 @@ func init() {
 type XTCPProxy struct {
 	*BaseProxy
 
-	cfg *v1.XTCPProxyConfig
+	cfg    *v1.XTCPProxyConfig
+	cancel context.CancelFunc
 }
 
 func NewXTCPProxy(baseProxy *BaseProxy, cfg v1.ProxyConfigurer) Proxy {
@@ -50,15 +51,28 @@ func NewXTCPProxy(baseProxy *BaseProxy, cfg v1.ProxyConfigurer) Proxy {
 	if !ok {
 		return nil
 	}
+	ctx, cancel := context.WithCancel(baseProxy.ctx)
+	baseProxy.ctx = ctx
 	return &XTCPProxy{
 		BaseProxy: baseProxy,
 		cfg:       unwrapped,
+		cancel:    cancel,
 	}
+}
+
+func (pxy *XTCPProxy) Close() {
+	pxy.cancel()
+	pxy.BaseProxy.Close()
 }
 
 func (pxy *XTCPProxy) InWorkConn(conn net.Conn, startWorkConnMsg *msg.StartWorkConn) {
 	xl := pxy.xl
 	defer conn.Close()
+	stopWorkCancel := context.AfterFunc(pxy.ctx, func() { _ = conn.Close() })
+	defer stopWorkCancel()
+	if pxy.ctx.Err() != nil {
+		return
+	}
 	if pxy.clientCfg.Transport.WireProtocol != "v2" || len(pxy.clientCfg.XTCPControlID) != 32 {
 		xl.Errorf("XTCP requires candidate v2 authenticated control")
 		return
@@ -77,7 +91,7 @@ func (pxy *XTCPProxy) InWorkConn(conn net.Conn, startWorkConnMsg *msg.StartWorkC
 		opts.DisableAssistedAddrs = true
 	}
 
-	prepareResult, err := nathole.Prepare([]string{pxy.clientCfg.NatHoleSTUNServer}, opts)
+	prepareResult, err := nathole.Prepare(pxy.ctx, []string{pxy.clientCfg.NatHoleSTUNServer}, opts)
 	if err != nil {
 		xl.Warnf("nathole prepare error: %v", err)
 		return
@@ -202,6 +216,7 @@ func (pxy *XTCPProxy) listenByQUIC(listenConn *net.UDPConn, _ *net.UDPAddr, star
 			_ = candidate.CloseWithError(1, "admission expired")
 			return
 		}
+		stopPeerCancel := context.AfterFunc(pxy.ctx, func() { _ = candidate.CloseWithError(1, "owner closed") })
 		proofCtx, proofCancel := context.WithTimeout(pxy.ctx, 10*time.Second)
 		select {
 		case <-candidate.HandshakeComplete():
@@ -214,10 +229,13 @@ func (pxy *XTCPProxy) listenByQUIC(listenConn *net.UDPConn, _ *net.UDPAddr, star
 		}
 		proofCancel()
 		if err != nil {
+			stopPeerCancel()
 			_ = candidate.CloseWithError(1, "binding rejected")
 			continue
 		}
 		c = candidate
+		defer stopPeerCancel()
+		defer c.CloseWithError(0, "")
 		break
 	}
 
@@ -228,6 +246,6 @@ func (pxy *XTCPProxy) listenByQUIC(listenConn *net.UDPConn, _ *net.UDPAddr, star
 			_ = c.CloseWithError(0, "")
 			return
 		}
-		go pxy.HandleTCPWorkConnection(netpkg.QuicStreamToNetConn(stream, c), startWorkConnMsg, []byte(pxy.cfg.Secretkey))
+		go pxy.handleTCPWorkConnection(pxy.ctx, netpkg.QuicStreamToNetConn(stream, c), startWorkConnMsg, []byte(pxy.cfg.Secretkey))
 	}
 }

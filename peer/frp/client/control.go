@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/fatedier/frp/pkg/util/wait"
 	"github.com/fatedier/frp/pkg/util/xlog"
 	"github.com/fatedier/frp/pkg/vnet"
+	"github.com/fatedier/frp/pkg/xtcpbinding"
 )
 
 type SessionContext struct {
@@ -52,9 +54,10 @@ type SessionContext struct {
 }
 
 type Control struct {
-	// service context
-	ctx context.Context
-	xl  *xlog.Logger
+	// This context belongs to this real control, not the reconnecting Service.
+	ctx    context.Context
+	cancel context.CancelFunc
+	xl     *xlog.Logger
 
 	// session context
 	sessionCtx *SessionContext
@@ -81,9 +84,11 @@ type Control struct {
 }
 
 func NewControl(ctx context.Context, sessionCtx *SessionContext) (*Control, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	// new xlog instance
 	ctl := &Control{
 		ctx:        ctx,
+		cancel:     cancel,
 		xl:         xlog.FromContextSafe(ctx),
 		sessionCtx: sessionCtx,
 		doneCh:     make(chan struct{}),
@@ -107,7 +112,10 @@ func NewControl(ctx context.Context, sessionCtx *SessionContext) (*Control, erro
 	return ctl, nil
 }
 
-func (ctl *Control) Run(proxyCfgs []v1.ProxyConfigurer, visitorCfgs []v1.VisitorConfigurer) {
+func (ctl *Control) Run(proxyCfgs []v1.ProxyConfigurer, visitorCfgs []v1.VisitorConfigurer) error {
+	if err := ctl.checkConfigAdmission(proxyCfgs, visitorCfgs); err != nil {
+		return err
+	}
 	go ctl.worker()
 
 	// start all proxies
@@ -115,6 +123,7 @@ func (ctl *Control) Run(proxyCfgs []v1.ProxyConfigurer, visitorCfgs []v1.Visitor
 
 	// start all visitors
 	ctl.vm.UpdateAll(visitorCfgs)
+	return nil
 }
 
 func (ctl *Control) SetInWorkConnCallback(cb func(*v1.ProxyBaseConfig, net.Conn, *msg.StartWorkConn) bool) {
@@ -201,6 +210,8 @@ func (ctl *Control) handlePong(m msg.Message) {
 
 // closeSession closes the control connection.
 func (ctl *Control) closeSession() {
+	// GracefulClose keeps its original delay before actual control revocation.
+	ctl.cancel()
 	ctl.sessionCtx.Conn.Close()
 	ctl.sessionCtx.Connector.Close()
 }
@@ -292,7 +303,30 @@ func (ctl *Control) worker() {
 }
 
 func (ctl *Control) UpdateAllConfigurer(proxyCfgs []v1.ProxyConfigurer, visitorCfgs []v1.VisitorConfigurer) error {
+	if err := ctl.checkConfigAdmission(proxyCfgs, visitorCfgs); err != nil {
+		return err
+	}
 	ctl.vm.UpdateAll(visitorCfgs)
 	ctl.pm.UpdateAll(proxyCfgs)
+	return nil
+}
+
+func (ctl *Control) hasXTCPBinding() bool {
+	_, err := xtcpbinding.ID(ctl.sessionCtx.Common.XTCPControlID)
+	return err == nil
+}
+
+func (ctl *Control) checkConfigAdmission(proxies []v1.ProxyConfigurer, visitors []v1.VisitorConfigurer) error {
+	if err := ctl.ctx.Err(); err != nil {
+		return err
+	}
+	if configsNeedXTCPBinding(proxies, visitors) {
+		if !canRequestXTCPBinding(ctl.sessionCtx.Common, ctl.sessionCtx.Auth, nil) {
+			return fmt.Errorf("XTCP requires verified TLS, Token authentication and v2 control")
+		}
+		if !ctl.hasXTCPBinding() {
+			return fmt.Errorf("XTCP requires this control's authenticated binding identity")
+		}
+	}
 	return nil
 }

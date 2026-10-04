@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"io"
 	"math/big"
 	"time"
@@ -88,6 +89,19 @@ func ValidateCertificate(role byte, der, expectedSPKI []byte) (*x509.Certificate
 	if len(cert.DNSNames) != 1 || cert.DNSNames[0] != PeerName(role) || len(cert.IPAddresses) != 0 || len(cert.EmailAddresses) != 0 || len(cert.URIs) != 0 || cert.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
 		return nil, ErrBinding
 	}
+	// crypto/x509 omits unsupported GeneralName kinds from its public lists.
+	// Check the original SAN extension so every additional identity is rejected.
+	for _, extension := range cert.Extensions {
+		if extension.Id.Equal(asn1.ObjectIdentifier{2, 5, 29, 17}) {
+			var names []asn1.RawValue
+			rest, err := asn1.Unmarshal(extension.Value, &names)
+			if err != nil || len(rest) != 0 || len(names) != 1 ||
+				names[0].Class != asn1.ClassContextSpecific || names[0].Tag != 2 || names[0].IsCompound ||
+				string(names[0].Bytes) != PeerName(role) {
+				return nil, ErrBinding
+			}
+		}
+	}
 	if err = cert.VerifyHostname(PeerName(role)); err != nil {
 		return nil, err
 	}
@@ -100,7 +114,7 @@ func ValidateCertificate(role byte, der, expectedSPKI []byte) (*x509.Certificate
 	if role == Visitor {
 		usage = x509.ExtKeyUsageClientAuth
 	}
-	if len(cert.ExtKeyUsage) != 1 || cert.ExtKeyUsage[0] != usage {
+	if len(cert.ExtKeyUsage) != 1 || cert.ExtKeyUsage[0] != usage || len(cert.UnknownExtKeyUsage) != 0 {
 		return nil, ErrBinding
 	}
 	if _, err = cert.Verify(x509.VerifyOptions{Roots: roots, KeyUsages: []x509.ExtKeyUsage{usage}, DNSName: PeerName(role)}); err != nil {
@@ -184,6 +198,11 @@ func ExchangeProof(ctx context.Context, conn *quic.Conn, m Manifest, role byte) 
 		stream.CancelWrite(1)
 		return ErrBinding
 	}
+	stopCancel := context.AfterFunc(ctx, func() {
+		stream.CancelRead(1)
+		stream.CancelWrite(1)
+	})
+	defer stopCancel()
 	deadline := time.Now().Add(10 * time.Second)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 		deadline = d

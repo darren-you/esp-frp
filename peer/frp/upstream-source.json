@@ -7,5 +7,31 @@
   "candidate_version": "0.71.0-esp-frp-xtcp.1",
   "candidate_xtcp_alpn": "esp-frp-xtcp/1",
   "owner": "esp-frp/peer/frp",
-  "production_catalog_changed": false
+  "production_catalog_changed": false,
+  "preserved_files": [
+    {
+      "path": "AGENTS.md",
+      "type": "file",
+      "mode": "100644",
+      "sha256": "669d5a2d67e25c848da00c80b6897998746ecdc1611e266f2ef4bfdd47abbc2b"
+    },
+    {
+      "path": "CLAUDE.md",
+      "type": "symlink",
+      "mode": "120000",
+      "sha256": "a54ff182c7e8acf56acfd6e4b9c3ff41e2c41a31c9b211b2deb9df75d9a478f9"
+    },
+    {
+      "path": "web/frpc/src/api/http.ts",
+      "type": "file",
+      "mode": "100644",
+      "sha256": "464ae1674b4c52c0459884fdde8531d94b82932881dd3b8ba6f70d4866eb9966"
+    },
+    {
+      "path": "web/frps/src/api/http.ts",
+      "type": "file",
+      "mode": "100644",
+      "sha256": "a93a5d2162402f1f7e905b6049191ef1746e402b6afe1835b8d68ad72987429d"
+    }
+  ]
 }

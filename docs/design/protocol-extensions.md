@@ -41,7 +41,7 @@ XTCP 明确消费本仓维护源 [peer/frp](../../peer/frp/candidate-development
 
 唯一 UDP fd 从 STUN 映射、认证探测延续到 peer factory；NAT 轮次含信令等待最多 60 秒。原生模式为 0..4，探测对候选地址、端口范围、TTL 和发送节奏有明确边界；要求额外随机监听 socket 的模式明确失败。不存在自动 STCP 或其他协议回退。manifest 在 peer 入场前核对真实 UTC 期限，入场后的握手与保留证明共享另外一个 10 秒绝对期限；已认证业务连接不因 manifest 到期中断。
 
-peer provider 是 QUIC server，visitor 是 client。双方证书须满足本轮 SPKI、P256/SHA256、精确角色 SAN/KU/EKU、自签与真实日期，并验证实际 CertificateVerify。TLS exporter 绑定 canonical manifest；首条 native stream 0 严格交换双方完整 69 字节证明及 FIN，完成并释放后才开放 ID≥4 的业务 stream。每个实例最多一条 peer connection、两条业务流和一条 FRPS SID 等待流；visitor 会合期间最多保留一条已接受本地 socket。取消清零秘密和业务缓冲，所有者保留到 fd/native 引用真正释放；子 peer 的 CONNECTION_CLOSE 重试也由原 worker 推进。
+peer provider 是 QUIC server，visitor 是 client。双方证书须满足本轮 SPKI、P256/SHA256、唯一角色 SAN/EKU、数字签名 KU、自签与真实日期，并验证实际 CertificateVerify。SAN 原始序列只能有一个固定角色 DNS，EKU 只能有对应的一个角色 OID，额外身份和未知 EKU 都拒绝；实际签名反例见[角色证书检查点](../verification/quic_peer_role_contract_checkpoint.md)。TLS exporter 绑定 canonical manifest；首条 native stream 0 严格交换双方完整 69 字节证明及 FIN，完成并释放后才开放 ID≥4 的业务 stream。每个实例最多一条 peer connection、两条业务流和一条 FRPS SID 等待流；visitor 会合期间最多保留一条已接受本地 socket。取消清零秘密和业务缓冲，所有者保留到 fd/native 引用真正释放；子 peer 的 CONNECTION_CLOSE 重试也由原 worker 推进。
 
 主状态 READY 表示已鉴权 control 与首个 Pong；`status.xtcp` 单独报告当前 control 内的会合阶段、错误和计数，不能把主 READY 写成 peer 直连完成。host 的证书、NAT 和双方证明定向用例，以及公共 C provider/visitor 的严格 FRPS 鉴权、STUN、会合、打洞、双方证明、双流业务和取消／同实例重启已通过；异网实板、运行资源和 Base 组合仍未验收。
 

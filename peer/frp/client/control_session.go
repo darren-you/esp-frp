@@ -39,10 +39,11 @@ import (
 type controlSessionDialer struct {
 	ctx context.Context
 
-	common         *v1.ClientCommonConfig
-	auth           *auth.ClientAuth
-	clientSpec     *msg.ClientSpec
-	vnetController *vnet.Controller
+	xtcpBindingRequired bool
+	common              *v1.ClientCommonConfig
+	auth                *auth.ClientAuth
+	clientSpec          *msg.ClientSpec
+	vnetController      *vnet.Controller
 
 	connectorCreator func(context.Context, *v1.ClientCommonConfig) Connector
 }
@@ -131,12 +132,10 @@ func (d *controlSessionDialer) buildLoginMsg(previousRunID string) (*msg.Login, 
 	if d.clientSpec != nil {
 		loginMsg.ClientSpec = *d.clientSpec
 	}
-	// 上游无 CA 时会跳过证书校验，不能据此申请安全绑定身份。
-	if d.common.Transport.WireProtocol == wire.ProtocolV2 &&
-		d.common.Auth.Method == v1.AuthMethodToken && len(d.auth.EncryptionKey()) != 0 &&
-		d.common.Transport.TLS.TrustedCaFile != "" &&
-		(lo.FromPtr(d.common.Transport.TLS.Enable) || d.common.Transport.Protocol == "wss") &&
-		(d.clientSpec == nil || d.clientSpec.Type != "ssh-tunnel") {
+	if d.xtcpBindingRequired {
+		if !canRequestXTCPBinding(d.common, d.auth, d.clientSpec) {
+			return nil, fmt.Errorf("XTCP requires verified TLS, Token authentication and v2 control")
+		}
 		loginMsg.XTCPBindingProtocol = xtcpbinding.ALPN
 	}
 
@@ -241,4 +240,28 @@ func (d *controlSessionDialer) newControlReadWriter(conn net.Conn, cryptoContext
 		)
 	}
 	return netpkg.NewCryptoReadWriter(conn, d.auth.EncryptionKey())
+}
+
+// Required is derived from this login's actual completed configuration; a
+// transport capable of binding must not change ordinary login negotiation.
+func configsNeedXTCPBinding(proxies []v1.ProxyConfigurer, visitors []v1.VisitorConfigurer) bool {
+	for _, cfg := range proxies {
+		if _, ok := cfg.(*v1.XTCPProxyConfig); ok {
+			return true
+		}
+	}
+	for _, cfg := range visitors {
+		if _, ok := cfg.(*v1.XTCPVisitorConfig); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func canRequestXTCPBinding(common *v1.ClientCommonConfig, authRuntime *auth.ClientAuth, spec *msg.ClientSpec) bool {
+	return common != nil && authRuntime != nil && common.Transport.WireProtocol == wire.ProtocolV2 &&
+		common.Auth.Method == v1.AuthMethodToken && len(authRuntime.EncryptionKey()) != 0 &&
+		common.Transport.TLS.TrustedCaFile != "" &&
+		(lo.FromPtr(common.Transport.TLS.Enable) || common.Transport.Protocol == "wss") &&
+		(spec == nil || spec.Type != "ssh-tunnel")
 }

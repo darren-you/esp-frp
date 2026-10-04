@@ -168,6 +168,11 @@ func (pxy *BaseProxy) InWorkConn(conn net.Conn, m *msg.StartWorkConn) {
 
 // Common handler for tcp work connections.
 func (pxy *BaseProxy) HandleTCPWorkConnection(workConn net.Conn, m *msg.StartWorkConn, encKey []byte) {
+	// Ordinary proxy Dial has always used Background; preserve that contract.
+	pxy.handleTCPWorkConnection(context.Background(), workConn, m, encKey)
+}
+
+func (pxy *BaseProxy) handleTCPWorkConnection(dialCtx context.Context, workConn net.Conn, m *msg.StartWorkConn, encKey []byte) {
 	xl := pxy.xl
 	baseCfg := pxy.baseCfg
 
@@ -228,7 +233,7 @@ func (pxy *BaseProxy) HandleTCPWorkConnection(workConn net.Conn, m *msg.StartWor
 		defer recycleFn()
 	}
 
-	localConn, err := libnet.Dial(
+	localConn, err := libnet.DialContext(dialCtx,
 		net.JoinHostPort(baseCfg.LocalIP, strconv.Itoa(baseCfg.LocalPort)),
 		libnet.WithTimeout(10*time.Second),
 	)

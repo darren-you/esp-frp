@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	v1 "github.com/fatedier/frp/pkg/config/v1"
-	frplog "github.com/fatedier/frp/pkg/util/log"
 	"github.com/fatedier/frp/server"
 	"io"
 	"net"
@@ -216,7 +215,6 @@ func TestCClientFullCandidate(t *testing.T) {
 	if binary == "" {
 		t.Skip("formal CMake supplies the required actual C client peer")
 	}
-	frplog.InitLogger("console", "error", 1, true)
 	for _, role := range []string{"provider", "visitor"} {
 		t.Run(role, func(t *testing.T) {
 			p, ca, stun := strictServer(t)

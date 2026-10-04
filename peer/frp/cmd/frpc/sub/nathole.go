@@ -65,7 +65,7 @@ var natholeDiscoveryCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		addrs, localAddr, err := nathole.Discover([]string{cfg.NatHoleSTUNServer}, natHoleLocalAddr)
+		addrs, localAddr, err := nathole.Discover(cmd.Context(), []string{cfg.NatHoleSTUNServer}, natHoleLocalAddr)
 		if err != nil {
 			fmt.Println("discover error:", err)
 			os.Exit(1)

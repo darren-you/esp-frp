@@ -374,7 +374,7 @@ static efrp_result_t write_packets(efrp_quic_transport_t *t)
             efrp_quic_stream_t *candidate = t->streams[slot];
             if (candidate && !candidate->reset && !candidate->closed && !candidate->send_stopped &&
                 (candidate->submitted < candidate->transmit_used || (candidate->local_fin && !candidate->fin_submitted))) {
-                s = candidate; t->cursor = (slot + 1) % EFRP_QUIC_STREAMS; break;
+                s = candidate; t->cursor = slot; break;
             }
         }
         ngtcp2_vec vectors[2] = {{0}}; size_t count = 0;
@@ -390,12 +390,19 @@ static efrp_result_t write_packets(efrp_quic_transport_t *t)
         ngtcp2_ssize n = ngtcp2_conn_writev_stream(t->connection, &path.path, &info, t->output, sizeof t->output,
             &accepted, s && s->local_fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0,
             s ? (int64_t)s->id : -1, s ? vectors : NULL, count, t->now * NGTCP2_MILLISECONDS);
-        if (n == NGTCP2_ERR_STREAM_DATA_BLOCKED) continue;
+        if (n == NGTCP2_ERR_STREAM_DATA_BLOCKED) {
+            if (s) t->cursor = (t->cursor + 1) % EFRP_QUIC_STREAMS;
+            continue;
+        }
         if (n < 0) return library_failure(t, (int)n);
         if (s && accepted >= 0) {
             if ((size_t)accepted > s->transmit_used - s->submitted) return fail(t, EFRP_PROTOCOL_ERROR);
             s->submitted += (size_t)accepted;
             if (s->local_fin && s->submitted == s->transmit_used) s->fin_submitted = true;
+            /* Pacing/cwnd or control-only packets do not consume this stream's
+             * turn. Rotate only after native data or a zero-byte FIN is accepted. */
+            if (accepted > 0 || s->fin_submitted)
+                t->cursor = (t->cursor + 1) % EFRP_QUIC_STREAMS;
         }
         if (!n) return EFRP_OK;
         if (path.path.remote.addrlen != sizeof t->remote || path.path.local.addrlen != sizeof t->local ||

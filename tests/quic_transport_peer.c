@@ -115,15 +115,22 @@ int main(int argc, char **argv)
                     assert(streams[slot] == (uint64_t)slot * 4); /* Native stream 0 remains valid. */
                     assert(efrp_stream_release(transport, streams[slot]) == EFRP_INVALID_STATE);
                 }
-                if (released[slot]) continue;
+            }
+            for (unsigned slot = 0; slot < 2; ++slot) {
+                if (streams[slot] == EFRP_STREAM_NONE || released[slot]) continue;
                 uint8_t bytes[713];
                 if (sent[slot] < total) {
-                    size_t count = total - sent[slot]; if (count > sizeof bytes) count = sizeof bytes;
-                    for (size_t i = 0; i < count; ++i) bytes[i] = (uint8_t)((sent[slot] + i) * 31 + slot * 7);
-                    size_t used = 999; result = efrp_stream_write(transport, streams[slot], bytes, count, &used);
-                    assert(acceptable(result)); if (result == EFRP_WOULD_BLOCK) { assert(!used); ++blocked; }
-                    else { assert(used && used <= count); sent[slot] += used; }
-                    memset(bytes, 0xa5, sizeof bytes); /* Accepted caller bytes can be overwritten immediately. */
+                    /* Both streams are open. Before stepping the transport,
+                       fill each real TX ring and prove its next write blocks. */
+                    bool prefill = total == LONG_BYTES && !sent[slot];
+                    do {
+                        size_t count = total - sent[slot]; if (count > sizeof bytes) count = sizeof bytes;
+                        for (size_t i = 0; i < count; ++i) bytes[i] = (uint8_t)((sent[slot] + i) * 31 + slot * 7);
+                        size_t used = 999; result = efrp_stream_write(transport, streams[slot], bytes, count, &used);
+                        assert(acceptable(result)); if (result == EFRP_WOULD_BLOCK) { assert(!used); ++blocked; }
+                        else { assert(used && used <= count); sent[slot] += used; }
+                        memset(bytes, 0xa5, sizeof bytes); /* Accepted caller bytes can be overwritten immediately. */
+                    } while (prefill && result != EFRP_WOULD_BLOCK && sent[slot] < total);
                 }
                 if (sent[slot] == total && !closed[slot] && !late_stop) {
                     assert(efrp_stream_close_write(transport, streams[slot]) == EFRP_OK);

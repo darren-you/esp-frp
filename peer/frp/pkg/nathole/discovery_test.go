@@ -1,6 +1,7 @@
 package nathole
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -165,7 +166,7 @@ func TestDiscoverReusesLocalPortAndPreservesNATClassification(t *testing.T) {
 				)
 			})
 
-			addresses, localAddr, err := Discover([]string{primary.LocalAddr().String()}, "")
+			addresses, localAddr, err := Discover(context.Background(), []string{primary.LocalAddr().String()}, "")
 			require.NoError(t, err)
 			require.Equal(t, []string{"198.51.100.10:40000", tt.secondMapped}, addresses)
 
@@ -217,11 +218,11 @@ func TestDoSTUNRequestMapsLegacyAndModernAddresses(t *testing.T) {
 			done := serveOneSTUNRequest(server, func(request []byte, _ *net.UDPAddr) ([]byte, error) {
 				return makeTestSTUNResponse(request, testBindingSuccess, tt.attributes...)
 			})
-			conn, err := listen("")
+			conn, err := listen(context.Background(), "")
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = conn.Close() })
 
-			response, err := conn.doSTUNRequest(server.LocalAddr().String())
+			response, err := conn.doSTUNRequest(context.Background(), server.LocalAddr().String())
 			require.NoError(t, err)
 			require.Equal(t, tt.wantExternal, response.externalAddr)
 			require.Equal(t, tt.wantOther, response.otherAddr)
@@ -247,7 +248,7 @@ func TestSTUNResponseErrorsAndMissingAddresses(t *testing.T) {
 				return response, err
 			},
 			request: func(conn *discoverConn, server string) error {
-				_, err := conn.doSTUNRequest(server)
+				_, err := conn.doSTUNRequest(context.Background(), server)
 				return err
 			},
 			checkError: func(t *testing.T, err error) {
@@ -263,7 +264,7 @@ func TestSTUNResponseErrorsAndMissingAddresses(t *testing.T) {
 				})
 			},
 			request: func(conn *discoverConn, server string) error {
-				_, err := conn.doSTUNRequest(server)
+				_, err := conn.doSTUNRequest(context.Background(), server)
 				return err
 			},
 			checkError: func(t *testing.T, err error) {
@@ -280,7 +281,7 @@ func TestSTUNResponseErrorsAndMissingAddresses(t *testing.T) {
 				)
 			},
 			request: func(conn *discoverConn, server string) error {
-				_, err := conn.discoverFromStunServer(server)
+				_, err := conn.discoverFromStunServer(context.Background(), server)
 				return err
 			},
 			checkError: func(t *testing.T, err error) {
@@ -293,7 +294,7 @@ func TestSTUNResponseErrorsAndMissingAddresses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := listenTestUDP4(t)
 			done := serveOneSTUNRequest(server, tt.buildResponse)
-			conn, err := listen("")
+			conn, err := listen(context.Background(), "")
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = conn.Close() })
 
@@ -311,7 +312,7 @@ func TestSTUNResponseErrorsAndMissingAddresses(t *testing.T) {
 			)
 		})
 
-		_, err := Prepare([]string{server.LocalAddr().String()}, PrepareOptions{})
+		_, err := Prepare(context.Background(), []string{server.LocalAddr().String()}, PrepareOptions{})
 		require.EqualError(t, err, "discover error: not enough addresses")
 		waitSTUNExchange(t, done)
 	})
@@ -324,11 +325,11 @@ func TestSTUNTimeoutUsesCallerDeadlineWithoutRetry(t *testing.T) {
 
 	server := listenTestUDP4(t)
 	done := serveOneSTUNRequest(server, nil)
-	conn, err := listen("")
+	conn, err := listen(context.Background(), "")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	_, err = conn.doSTUNRequest(server.LocalAddr().String())
+	_, err = conn.doSTUNRequest(context.Background(), server.LocalAddr().String())
 	require.EqualError(t, err, "wait response from stun server timeout")
 	waitSTUNExchange(t, done)
 
@@ -358,11 +359,11 @@ func TestSTUNClientLeavesSocketAndDeadlineWithCaller(t *testing.T) {
 		}
 		return response, nil
 	})
-	conn, err := listen("")
+	conn, err := listen(context.Background(), "")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	response, err := conn.doSTUNRequest(server.LocalAddr().String())
+	response, err := conn.doSTUNRequest(context.Background(), server.LocalAddr().String())
 	require.NoError(t, err)
 	require.Equal(t, "198.51.100.5:5000", response.externalAddr)
 	waitSTUNExchange(t, done)

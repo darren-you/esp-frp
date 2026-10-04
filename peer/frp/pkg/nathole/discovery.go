@@ -15,6 +15,7 @@
 package nathole
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -26,18 +27,31 @@ import (
 var responseTimeout = 3 * time.Second
 
 // If the localAddr is empty, it will listen on a random port.
-func Discover(stunServers []string, localAddr string) ([]string, net.Addr, error) {
-	discoverConn, err := listen(localAddr)
+func Discover(ctx context.Context, stunServers []string, localAddr string) ([]string, net.Addr, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	discoverConn, err := listen(ctx, localAddr)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer discoverConn.Close()
+	interrupted := make(chan struct{})
+	stopCancel := context.AfterFunc(ctx, func() { _ = discoverConn.Close(); close(interrupted) })
+	defer func() {
+		if !stopCancel() {
+			<-interrupted
+		}
+	}()
 
 	addresses := make([]string, 0, len(stunServers))
 	for _, addr := range stunServers {
 		// get external address from stun server
-		externalAddrs, err := discoverConn.discoverFromStunServer(addr)
+		externalAddrs, err := discoverConn.discoverFromStunServer(ctx, addr)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, nil, ctx.Err()
+			}
 			return nil, nil, err
 		}
 		addresses = append(addresses, externalAddrs...)
@@ -56,10 +70,10 @@ type discoverConn struct {
 	localAddr net.Addr
 }
 
-func listen(localAddr string) (*discoverConn, error) {
+func listen(ctx context.Context, localAddr string) (*discoverConn, error) {
 	var local *net.UDPAddr
 	if localAddr != "" {
-		addr, err := net.ResolveUDPAddr("udp4", localAddr)
+		addr, err := resolveUDPAddr(ctx, localAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -86,8 +100,8 @@ func (c *discoverConn) Close() error {
 	return c.conn.Close()
 }
 
-func (c *discoverConn) doSTUNRequest(addr string) (*stunResponse, error) {
-	serverAddr, err := net.ResolveUDPAddr("udp4", addr)
+func (c *discoverConn) doSTUNRequest(ctx context.Context, addr string) (*stunResponse, error) {
+	serverAddr, err := resolveUDPAddr(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -117,8 +131,8 @@ func (c *discoverConn) doSTUNRequest(addr string) (*stunResponse, error) {
 	return resp, nil
 }
 
-func (c *discoverConn) discoverFromStunServer(addr string) ([]string, error) {
-	resp, err := c.doSTUNRequest(addr)
+func (c *discoverConn) discoverFromStunServer(ctx context.Context, addr string) ([]string, error) {
+	resp, err := c.doSTUNRequest(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +148,7 @@ func (c *discoverConn) discoverFromStunServer(addr string) ([]string, error) {
 	}
 
 	// find external address from changed address
-	resp, err = c.doSTUNRequest(resp.otherAddr)
+	resp, err = c.doSTUNRequest(ctx, resp.otherAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -142,4 +156,29 @@ func (c *discoverConn) discoverFromStunServer(addr string) ([]string, error) {
 		externalAddrs = append(externalAddrs, resp.externalAddr)
 	}
 	return externalAddrs, nil
+}
+
+// Resolve through the owning context instead of an uncancellable STUN DNS wait.
+func resolveUDPAddr(ctx context.Context, addr string) (*net.UDPAddr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	number, err := net.LookupPort("udp", port)
+	if err != nil {
+		return nil, err
+	}
+	if host == "" {
+		return &net.UDPAddr{Port: number}, ctx.Err()
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if v4 := ip.IP.To4(); v4 != nil {
+			return &net.UDPAddr{IP: v4, Port: number}, ctx.Err()
+		}
+	}
+	return nil, fmt.Errorf("no IPv4 STUN address")
 }

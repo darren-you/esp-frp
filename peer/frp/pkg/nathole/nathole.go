@@ -117,9 +117,9 @@ func PreCheck(
 }
 
 // Prepare is used to do some preparation work before penetration.
-func Prepare(stunServers []string, opts PrepareOptions) (*PrepareResult, error) {
+func Prepare(ctx context.Context, stunServers []string, opts PrepareOptions) (*PrepareResult, error) {
 	// discover for Nat type
-	addrs, localAddr, err := Discover(stunServers, "")
+	addrs, localAddr, err := Discover(ctx, stunServers, "")
 	if err != nil {
 		return nil, fmt.Errorf("discover error: %v", err)
 	}
@@ -142,6 +142,10 @@ func Prepare(stunServers []string, opts PrepareOptions) (*PrepareResult, error) 
 		return nil, fmt.Errorf("listen local udp addr error: %v", err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		_ = listenConn.Close()
+		return nil, err
+	}
 	// Apply NAT traversal options
 	var assistedAddrs []string
 	if !opts.DisableAssistedAddrs {

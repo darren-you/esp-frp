@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/binary"
 	"encoding/pem"
+	"errors"
 	"io"
 	"math/big"
 	"net"
@@ -25,7 +26,6 @@ import (
 	"github.com/fatedier/frp/client"
 	"github.com/fatedier/frp/pkg/config/source"
 	v1 "github.com/fatedier/frp/pkg/config/v1"
-	frplog "github.com/fatedier/frp/pkg/util/log"
 	"github.com/fatedier/frp/server"
 )
 
@@ -174,8 +174,21 @@ func startClient(t *testing.T, p int, ca, stunAddr, user string, proxies []v1.Pr
 	t.Cleanup(stop)
 	return svc, stop
 }
+
 func TestPublicDesktopFullStrictSignalAndP2P(t *testing.T) {
-	frplog.InitLogger("console", "error", 1, true)
+	testDesktopFullStrictSignalAndP2P(t, "service-stop")
+}
+func TestProviderProxyRemovalClosesPeerWhileServicesLive(t *testing.T) {
+	testDesktopFullStrictSignalAndP2P(t, "remove-readd")
+}
+func TestProviderControlReplacementClosesOldPeerWhileServicesLive(t *testing.T) {
+	testDesktopFullStrictSignalAndP2P(t, "control-reconnect")
+}
+func TestOrdinaryControlAutomaticallyReloginsBeforeXTCPStarts(t *testing.T) {
+	testDesktopFullStrictSignalAndP2P(t, "ordinary-add")
+}
+
+func testDesktopFullStrictSignalAndP2P(t *testing.T, action string) {
 	ca, cert, key := certificates(t)
 	serverPort := port(t)
 	stunAddr := stun(t)
@@ -200,6 +213,7 @@ func TestPublicDesktopFullStrictSignalAndP2P(t *testing.T) {
 		t.Fatal(e)
 	}
 	var backendCount atomic.Uint32
+	var backendActive atomic.Int32
 	backendDone := make(chan struct{})
 	var backendWorkers sync.WaitGroup
 	go func() {
@@ -210,16 +224,34 @@ func TestPublicDesktopFullStrictSignalAndP2P(t *testing.T) {
 				return
 			}
 			backendCount.Add(1)
+			backendActive.Add(1)
 			backendWorkers.Add(1)
-			go func() { defer backendWorkers.Done(); defer c.Close(); _, _ = io.Copy(c, c) }()
+			go func() {
+				defer backendWorkers.Done()
+				defer backendActive.Add(-1)
+				defer c.Close()
+				_, _ = io.Copy(c, c)
+			}()
 		}
 	}()
 	t.Cleanup(func() { _ = backend.Close(); <-backendDone; backendWorkers.Wait() })
 	pconf := &v1.XTCPProxyConfig{ProxyBaseConfig: v1.ProxyBaseConfig{Name: "private", Type: "xtcp", ProxyBackend: v1.ProxyBackend{LocalIP: "127.0.0.1", LocalPort: backend.Addr().(*net.TCPAddr).Port}}, Secretkey: "public-full-flow-secret", AllowUsers: []string{"visitor"}, NatTraversal: &v1.NatTraversalConfig{DisableAssistedAddrs: true}}
-	provider, stopProvider := startClient(t, serverPort, ca, stunAddr, "provider", []v1.ProxyConfigurer{pconf}, nil)
+	providerPort := serverPort
+	var relay *controlRelay
+	if action == "control-reconnect" || action == "ordinary-add" {
+		relay = newControlRelay(t, serverPort)
+		providerPort = relay.listener.Addr().(*net.TCPAddr).Port
+	}
+	providerProxies := []v1.ProxyConfigurer{pconf}
+	initialName := "private"
+	if action == "ordinary-add" {
+		providerProxies = []v1.ProxyConfigurer{&v1.TCPProxyConfig{ProxyBaseConfig: v1.ProxyBaseConfig{Name: "ordinary", Type: "tcp"}, RemotePort: port(t)}}
+		initialName = "ordinary"
+	}
+	provider, stopProvider := startClient(t, providerPort, ca, stunAddr, "provider", providerProxies, nil)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		s, ok := provider.StatusExporter().GetProxyStatus("private")
+		s, ok := provider.StatusExporter().GetProxyStatus(initialName)
 		if ok && s.Phase == "running" {
 			break
 		}
@@ -228,6 +260,27 @@ func TestPublicDesktopFullStrictSignalAndP2P(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	if action == "ordinary-add" {
+		if relay.accepted.Load() != 1 {
+			t.Fatal("ordinary initial control not unique")
+		}
+		if e := provider.UpdateAllConfigurer([]v1.ProxyConfigurer{pconf}, nil); e != nil {
+			t.Fatal(e)
+		}
+		deadline = time.Now().Add(6 * time.Second)
+		for {
+			s, ok := provider.StatusExporter().GetProxyStatus("private")
+			if ok && s.Phase == "running" && relay.accepted.Load() >= 2 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("XTCP did not register on a new real control", s, relay.accepted.Load())
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Log("ordinary configured Control was revoked; new actual TLS control registered XTCP")
+	}
+
 	visitorPort := port(t)
 	vconf := &v1.XTCPVisitorConfig{VisitorBaseConfig: v1.VisitorBaseConfig{Name: "visit", Type: "xtcp", ServerUser: "provider", ServerName: "private", SecretKey: "public-full-flow-secret", BindAddr: "127.0.0.1", BindPort: visitorPort}, NatTraversal: &v1.NatTraversalConfig{DisableAssistedAddrs: true}}
 	_, stopVisitor := startClient(t, serverPort, ca, stunAddr, "visitor", nil, []v1.VisitorConfigurer{vconf})
@@ -278,12 +331,83 @@ func TestPublicDesktopFullStrictSignalAndP2P(t *testing.T) {
 	if backendCount.Load() != 2 {
 		t.Fatal("unexpected admitted backend count", backendCount.Load())
 	}
-	stopProvider()
-	for _, c := range flows {
-		var b [1]byte
-		if n, e := c.Read(b[:]); n != 0 || e == nil {
-			t.Fatal("provider control close retained business flow", n, e)
+	if action == "remove-readd" {
+		if err := provider.UpdateAllConfigurer(nil, nil); err != nil {
+			t.Fatal(err)
 		}
+		if _, present := provider.StatusExporter().GetProxyStatus("private"); present {
+			t.Fatal("removed provider proxy still registered locally")
+		}
+		t.Log("removed provider proxy through public UpdateAllConfigurer; both Service contexts stay live")
+	} else if action == "control-reconnect" {
+		if relay.accepted.Load() != 1 {
+			t.Fatal("provider control transport not unique before revoke", relay.accepted.Load())
+		}
+		relay.dropFirst(t)
+		t.Log("closed only provider control TCP transport; both Service contexts stay live")
+	} else {
+		stopProvider()
+	}
+	for _, c := range flows {
+		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+
+		var b [1]byte
+		n, e := c.Read(b[:])
+		var timeout net.Error
+		if errors.As(e, &timeout) && timeout.Timeout() {
+			_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+			probe := []byte("after-owner-remove")
+			_, writeErr := c.Write(probe)
+			got := make([]byte, len(probe))
+			_, readErr := io.ReadFull(c, got)
+			t.Fatalf("provider owner removal retained peer: operation read deadline expired; post-removal write=%v read=%v echo_equal=%t", writeErr, readErr, bytes.Equal(got, probe))
+		}
+		if n != 0 || e == nil {
+			t.Fatal("provider owner removal retained peer flow", n, e)
+		}
+	}
+	deadline = time.Now().Add(2 * time.Second)
+	for backendActive.Load() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("idle backend retained after owner removal", backendActive.Load())
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Log("both actual idle backend sockets ended after peer owner removal")
+	if action != "service-stop" && action != "ordinary-add" {
+		if action == "remove-readd" {
+			if e := provider.UpdateAllConfigurer([]v1.ProxyConfigurer{pconf}, nil); e != nil {
+				t.Fatal(e)
+			}
+		}
+		deadline = time.Now().Add(6 * time.Second)
+		for {
+			s, ok := provider.StatusExporter().GetProxyStatus("private")
+			if ok && s.Phase == "running" && (relay == nil || relay.accepted.Load() >= 2) {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("new owner did not register", s)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		// The existing visitor must re-establish a fresh authenticated peer.
+		c := dial()
+		defer c.Close()
+		// The existing visitor openTunnel contract allows 20s (including its 10s retry pacing).
+		_ = c.SetDeadline(time.Now().Add(22 * time.Second))
+		payload := []byte("new-same-name-control-backend")
+		if _, e := c.Write(payload); e != nil {
+			t.Fatal(e)
+		}
+		got := make([]byte, len(payload))
+		if _, e := io.ReadFull(c, got); e != nil || !bytes.Equal(payload, got) {
+			t.Fatal("new owner business failed", e)
+		}
+		if backendCount.Load() != 3 {
+			t.Fatal("new owner did not admit a new backend", backendCount.Load())
+		}
+		t.Log("new owner with same proxy name admitted fresh authenticated business")
 	}
 	stopVisitor()
 	t.Log("actual public FRPS/FRPC strict TLS+Token Login, control ownership, STUN, authenticated SID, mutual QUIC+manifest proof and two 300001-byte backend flows passed; provider control close released peer flows")

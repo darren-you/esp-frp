@@ -184,6 +184,9 @@ func NewService(options ServiceOptions) (*Service, error) {
 	proxyCfgs, visitorCfgs = config.FilterClientConfigurers(options.Common, proxyCfgs, visitorCfgs)
 	proxyCfgs = config.CompleteProxyConfigurers(proxyCfgs)
 	visitorCfgs = config.CompleteVisitorConfigurers(visitorCfgs)
+	if configsNeedXTCPBinding(proxyCfgs, visitorCfgs) && !canRequestXTCPBinding(options.Common, authRuntime, options.ClientSpec) {
+		return nil, fmt.Errorf("XTCP requires verified TLS, Token authentication and v2 control")
+	}
 
 	// Create the web server after all fallible steps so its listener is not
 	// leaked when an earlier error causes NewService to return.
@@ -318,54 +321,87 @@ func (svr *Service) loopLoginUntilSuccess(maxInterval time.Duration, firstLoginE
 
 	loginFunc := func() (bool, error) {
 		xl.Infof("try to connect to server...")
+		svr.cfgMu.RLock()
+		needBinding := configsNeedXTCPBinding(svr.proxyCfgs, svr.visitorCfgs)
+		svr.cfgMu.RUnlock()
 		dialer := &controlSessionDialer{
-			ctx:              svr.ctx,
-			common:           svr.common,
-			auth:             svr.auth,
-			clientSpec:       svr.clientSpec,
-			vnetController:   svr.vnetController,
-			connectorCreator: svr.connectorCreator,
+			ctx:                 svr.ctx,
+			xtcpBindingRequired: needBinding,
+			common:              svr.common,
+			auth:                svr.auth,
+			clientSpec:          svr.clientSpec,
+			vnetController:      svr.vnetController,
+			connectorCreator:    svr.connectorCreator,
 		}
 		sessionCtx, err := dialer.Dial(svr.runID)
 		if err != nil {
 			xl.Warnf("connect to server error: %v", err)
-			if firstLoginExit {
+			svr.cfgMu.RLock()
+			changed := configsNeedXTCPBinding(svr.proxyCfgs, svr.visitorCfgs) != needBinding
+			// An obsolete negotiation must not terminate the newly published
+			// configuration, including XTCP removal during an initial login.
+			if firstLoginExit && !changed {
 				svr.cancel(cancelErr{Err: err})
 			}
+			svr.cfgMu.RUnlock()
 			return false, err
 		}
 
-		svr.runID = sessionCtx.RunID
-		xl.AddPrefix(xlog.LogPrefix{Name: "runID", Value: svr.runID})
-		xl.Infof("login to server success, get run id [%s]", svr.runID)
-
-		svr.cfgMu.RLock()
-		proxyCfgs := svr.proxyCfgs
-		visitorCfgs := svr.visitorCfgs
-		svr.cfgMu.RUnlock()
-
-		ctl, err := NewControl(svr.ctx, sessionCtx)
-		if err != nil {
-			sessionCtx.Conn.Close()
-			sessionCtx.Connector.Close()
-			xl.Errorf("new control error: %v", err)
-			return false, err
-		}
-		ctl.SetInWorkConnCallback(svr.handleWorkConnCb)
-
-		ctl.Run(proxyCfgs, visitorCfgs)
-		// close and replace previous control
+		// Dial and connection close stay outside cfg/ctl publication locks. A reload
+		// between Dial and installation must not put XTCP on an unbound login.
+		svr.cfgMu.Lock()
 		svr.ctlMu.Lock()
 		if svr.ctx.Err() != nil {
 			svr.ctlMu.Unlock()
-			ctl.Close()
+			svr.cfgMu.Unlock()
+			sessionCtx.Conn.Close()
+			sessionCtx.Connector.Close()
 			return false, svr.ctx.Err()
 		}
-		if svr.ctl != nil {
-			svr.ctl.Close()
+		if configsNeedXTCPBinding(svr.proxyCfgs, svr.visitorCfgs) != needBinding {
+			svr.ctlMu.Unlock()
+			svr.cfgMu.Unlock()
+			sessionCtx.Conn.Close()
+			sessionCtx.Connector.Close()
+			return false, fmt.Errorf("XTCP binding requirement changed during login")
 		}
+		// Prefixes are immutable once workers receive their logger. Each actual
+		// Control gets a child logger rather than mutating the Service's logger.
+		controlLogger := xl.Spawn().AddPrefix(xlog.LogPrefix{Name: "runID", Value: sessionCtx.RunID})
+		ctl, err := NewControl(xlog.NewContext(svr.ctx, controlLogger), sessionCtx)
+		if err == nil {
+			err = ctl.checkConfigAdmission(svr.proxyCfgs, svr.visitorCfgs)
+		}
+		if err != nil {
+			svr.ctlMu.Unlock()
+			svr.cfgMu.Unlock()
+			if ctl != nil {
+				ctl.cancel()
+			}
+			sessionCtx.Conn.Close()
+			sessionCtx.Connector.Close()
+			xl.Infof("configuration requires a new authenticated control: %v", err)
+			return false, err
+		}
+		ctl.SetInWorkConnCallback(svr.handleWorkConnCb)
+		// Only the local managers and their workers are started here.
+		if err = ctl.Run(svr.proxyCfgs, svr.visitorCfgs); err != nil {
+			svr.ctlMu.Unlock()
+			svr.cfgMu.Unlock()
+			ctl.Close()
+			return false, err
+		}
+		old := svr.ctl
 		svr.ctl = ctl
+		svr.runID = sessionCtx.RunID
+		controlLogger.Infof("login to server success, get run id [%s]", svr.runID)
 		svr.ctlMu.Unlock()
+		svr.cfgMu.Unlock()
+		// Close only the captured old instance, never the newly published one.
+		if old != nil {
+			old.Close()
+		}
+
 		return true, nil
 	}
 
@@ -380,19 +416,33 @@ func (svr *Service) loopLoginUntilSuccess(maxInterval time.Duration, firstLoginE
 }
 
 func (svr *Service) UpdateAllConfigurer(proxyCfgs []v1.ProxyConfigurer, visitorCfgs []v1.VisitorConfigurer) error {
+	needBinding := configsNeedXTCPBinding(proxyCfgs, visitorCfgs)
+	if needBinding && !canRequestXTCPBinding(svr.common, svr.auth, svr.clientSpec) {
+		return fmt.Errorf("XTCP requires verified TLS, Token authentication and v2 control")
+	}
+	// Same ordering as login installation; publish the full config against one
+	// actual Control. Network close is outside both publication locks.
 	svr.cfgMu.Lock()
-	svr.proxyCfgs = proxyCfgs
-	svr.visitorCfgs = visitorCfgs
-	svr.cfgMu.Unlock()
-
 	svr.ctlMu.RLock()
 	ctl := svr.ctl
-	svr.ctlMu.RUnlock()
-
-	if ctl != nil {
-		return ctl.UpdateAllConfigurer(proxyCfgs, visitorCfgs)
+	svr.proxyCfgs = proxyCfgs
+	svr.visitorCfgs = visitorCfgs
+	if ctl == nil || ctl.ctx.Err() != nil {
+		svr.ctlMu.RUnlock()
+		svr.cfgMu.Unlock()
+		return nil
 	}
-	return nil
+	if needBinding && !ctl.hasXTCPBinding() {
+		svr.ctlMu.RUnlock()
+		svr.cfgMu.Unlock()
+		// Existing keepControllerWorking waits for Done then logs in using the
+		// new actual config. Do not start XTCP on the old unbound pm/vm.
+		return ctl.Close()
+	}
+	err := ctl.UpdateAllConfigurer(proxyCfgs, visitorCfgs)
+	svr.ctlMu.RUnlock()
+	svr.cfgMu.Unlock()
+	return err
 }
 
 func (svr *Service) UpdateConfigSource(

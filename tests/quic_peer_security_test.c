@@ -60,10 +60,12 @@ static void exchange(const char *mode)
         result = ptls_handshake(server, &server_bytes, client_bytes.base, &input_length, NULL);
         client_bytes.off = 0;
         if (result && result != PTLS_ERROR_IN_PROGRESS) break;
-        input_length = server_bytes.off;
-        result = ptls_handshake(client, &client_bytes, server_bytes.base, &input_length, &properties);
-        server_bytes.off = 0;
-        if (result && result != PTLS_ERROR_IN_PROGRESS) break;
+        if (!ptls_handshake_is_complete(client)) {
+            input_length = server_bytes.off;
+            result = ptls_handshake(client, &client_bytes, server_bytes.base, &input_length, &properties);
+            server_bytes.off = 0;
+            if (result && result != PTLS_ERROR_IN_PROGRESS) break;
+        }
         if (ptls_handshake_is_complete(server) && ptls_handshake_is_complete(client)) break;
     }
     bool success = !strcmp(mode, "ok") || !strcmp(mode, "different-context");

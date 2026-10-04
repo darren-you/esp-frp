@@ -47,16 +47,18 @@ func TestXTCPLoginRequiresVerifiedTokenTransport(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := newTestControlSessionDialer(t, tc.wire, nil, nil)
+			d.xtcpBindingRequired = true
 			d.common.Auth.Method = tc.method
 			d.common.Transport.Protocol = tc.transport
 			d.common.Transport.TLS.Enable = lo.ToPtr(tc.tls)
 			d.common.Transport.TLS.TrustedCaFile = tc.ca
 			login, err := d.buildLoginMsg("same-run-id")
-			require.NoError(t, err)
 			if tc.binding {
+				require.NoError(t, err)
 				require.Equal(t, xtcpbinding.ALPN, login.XTCPBindingProtocol)
 			} else {
-				require.Empty(t, login.XTCPBindingProtocol)
+				require.Error(t, err)
+				require.Nil(t, login)
 			}
 		})
 	}
@@ -84,6 +86,7 @@ func TestXTCPControlIdentityIsOwnedByEachLogin(t *testing.T) {
 			d := newTestControlSessionDialer(t, wire.ProtocolV2, connector, nil)
 			d.common.XTCPControlID = append([]byte{99}, make([]byte, 31)...)
 			if tc.negotiate {
+				d.xtcpBindingRequired = true
 				d.common.Auth.Method = v1.AuthMethodToken
 				d.common.Transport.TLS.Enable = lo.ToPtr(true)
 				d.common.Transport.TLS.TrustedCaFile = "explicit-ca.pem"
