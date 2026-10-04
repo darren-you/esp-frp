@@ -126,22 +126,25 @@ static void report(const char *phase)
 {
     efrp_status_t status={0};
     if (client) (void)efrp_get_status(client, &status);
+    char remote_address[257]={0}; size_t remote_address_length=0;
+    efrp_result_t address_result = client ? efrp_get_remote_address(client, remote_address,
+        sizeof remote_address, &remote_address_length) : EFRP_INVALID_STATE;
     wifi_ap_record_t access_point={0};
     bool rssi_valid=esp_wifi_sta_get_ap_info(&access_point)==ESP_OK;
     printf("EFRP_SAMPLE_STATUS cycle=%u client=%u phase=%d error=%d attempts=%" PRIu64 " sessions=%" PRIu64
         " retries=%" PRIu64 " pongs=%" PRIu64 " active=%u waiting=%u completed=%" PRIu64 " failed=%" PRIu64
         " requests=%" PRIu64 " rejected=%" PRIu64 " pending=%u cleaning=%u"
         " work_error=%d sent=%" PRIu64 " received=%" PRIu64 " tls_error=%d verify=%" PRIu32
-        " failure_phase=%d system_error=%d time_ms=%" PRIu64 " wifi=%u trusted=%u rssi_valid=%u rssi_dbm=%d remote=%s\n",
+        " failure_phase=%d system_error=%d time_ms=%" PRIu64 " wifi=%u trusted=%u rssi_valid=%u rssi_dbm=%d remote=%s remote_length=%zu remote_error=%d\n",
         cycle, client != NULL, status.phase, status.error, status.attempts, status.ready_sessions, status.retries,
         status.pongs, status.work.active, status.work.waiting, status.work.completed, status.work.failed,
         status.work.requests, status.work.rejected_requests, status.work.pending, status.work.cleaning,
         status.work.last_error, status.work.local_sent, status.work.local_received, status.tls_error, status.tls_verify_flags,
         status.failure_phase, status.system_error, (uint64_t)esp_timer_get_time()/1000u,
-        atomic_load(&wifi_ready), trusted(NULL), rssi_valid, rssi_valid ? access_point.rssi : 0, status.remote_address);
+        atomic_load(&wifi_ready), trusted(NULL), rssi_valid, rssi_valid ? access_point.rssi : 0, remote_address, remote_address_length, address_result);
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
-    printf("EFRP_SAMPLE_TIMEOUT work_source=%u stream_id=%" PRIu32 " age_ms=%" PRIu32
-        " incoming_pending_bytes=%u outgoing_pending_bytes=%u mux_source=%u mux_stream_id=%" PRIu32
+    printf("EFRP_SAMPLE_TIMEOUT work_source=%u stream_id=%" PRIu64 " age_ms=%" PRIu32
+        " incoming_pending_bytes=%u outgoing_pending_bytes=%u mux_source=%u mux_stream_id=%" PRIu64
         " mux_age_ms=%" PRIu32 " mux_pending_bytes=%" PRIu32 " control_source=%u\n",
         (unsigned)status.work.timeout_source, status.work.timeout_stream_id, status.work.timeout_age_ms,
         (unsigned)status.work.timeout_incoming_bytes, (unsigned)status.work.timeout_outgoing_bytes,

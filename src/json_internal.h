@@ -9,8 +9,10 @@
 #include <cjson/cJSON.h>
 #endif
 #define EFRP_JSON_MAX_BYTES 4096u
+#define EFRP_JSON_CONTROL_MAX_PUNCTUATION 128u
+#define EFRP_JSON_XTCP_MAX_PUNCTUATION 384u
 bool efrp_json_utf8(const uint8_t *bytes, size_t length);
-cJSON *efrp_json_parse(const uint8_t *bytes, size_t length);
+cJSON *efrp_json_parse(const uint8_t *bytes, size_t length, unsigned max_punctuation);
 bool efrp_json_shape(const cJSON *object, const char *const *allowed, size_t count);
 const cJSON *efrp_json_field(const cJSON *object, const char *name);
 const char *efrp_json_string(const cJSON *object, const char *name);

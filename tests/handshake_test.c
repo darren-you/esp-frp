@@ -240,9 +240,82 @@ static void allocation_failures(void)
         assert(limit != 99);
     }
 }
+static void udp_negotiation(void)
+{
+    const char selected[] = "{\"selected\":{\"message\":{\"codec\":\"json\",\"udpPacketCodec\":\"binary-v1\"},\"crypto\":{\"algorithm\":\"aes-256-gcm\",\"serverRandom\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"}}}";
+    for (unsigned mode = 0; mode < 4; ++mode) {
+        efrp_handshake_t h = {0}; uint8_t rx[EFRP_HANDSHAKE_RX_BYTES], wire[2048];
+        efrp_handshake_config_t c = config(); c.udp_binary = mode != 0;
+        assert(efrp_handshake_init(&h, &c, rx, sizeof rx, 0) == EFRP_OK);
+        assert((strstr((char *)h.client_hello, "udpPacketCodecs") != NULL) == c.udp_binary);
+        const uint8_t *out; size_t length, used;
+        assert(efrp_handshake_output(&h, &out, &length) == EFRP_OK);
+        assert(efrp_handshake_consume_output(&h, length) == EFRP_OK);
+        size_t n = frame(wire, EFRP_SERVER_HELLO, mode == 1 ? hello : selected);
+        n += frame(wire + n, EFRP_MESSAGE, login); wire[n] = 0xa5;
+        if (mode < 2) assert(efrp_handshake_feed(&h, wire, n, &used) == EFRP_NEGOTIATION_FAILED);
+        else {
+            if (mode == 3) for (size_t at = 0; at < n;) {
+                assert(efrp_handshake_feed(&h, wire + at, 1, &used) == EFRP_OK && used == 1); at += used;
+            }
+            else assert(efrp_handshake_feed(&h, wire, n + 1, &used) == EFRP_OK && used == n);
+            assert(h.state == EFRP_HANDSHAKE_DONE && h.udp_binary);
+            efrp_aead_keys_t keys; char id[EFRP_RUN_ID_BYTES];
+            assert(efrp_handshake_take_result(&h, &keys, id) == EFRP_OK);
+            assert(!strcmp(id, "0123456789abcdef")); efrp_aead_clear_keys(&keys);
+        }
+        efrp_handshake_destroy(&h); zero(&h, sizeof h);
+    }
+}
+static void xtcp_control_identity(void)
+{
+    const char *responses[] = {
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":\"ERERERERERERERERERERERERERERERERERERERERERE=\"}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\"}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":\"\"}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":\"ERERERERERERERERERERERERERERERERERERERERERER\"}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":\"ERERERERERERERERERERERERERERERERERERERERERF=\"}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":17}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":\"ERERERERERERERERERERERERERERERERERERERERERE=\",\"xtcp_control_id\":\"ERERERERERERERERERERERERERERERERERERERERERE=\"}",
+        "{\"version\":\"candidate\",\"run_id\":\"same-run-id\",\"xtcp_control_id\":\"ERERE!ERERERERERERERERERERERERERERERERERERE=\"}"
+    };
+    for (size_t mode = 0; mode <= sizeof responses / sizeof responses[0]; ++mode) {
+        efrp_handshake_t h = {0}; uint8_t rx[EFRP_HANDSHAKE_RX_BYTES], wire[2048], control_id[32];
+        efrp_handshake_config_t c = config(); c.xtcp_binding = mode != sizeof responses / sizeof responses[0];
+        assert(efrp_handshake_init(&h, &c, rx, sizeof rx, 0) == EFRP_OK);
+        const uint8_t *out; size_t length, used;
+        assert(efrp_handshake_output(&h, &out, &length) == EFRP_OK);
+        size_t login_offset = 7u + 8u + h.hello_length + 10u;
+        cJSON *request = cJSON_Parse((const char *)out + login_offset); assert(request);
+        const cJSON *protocol = cJSON_GetObjectItemCaseSensitive(request, "xtcp_binding_protocol");
+        if (c.xtcp_binding) assert(cJSON_IsString(protocol) && !strcmp(protocol->valuestring, "esp-frp-xtcp/1"));
+        else assert(!protocol);
+        cJSON_Delete(request);
+        memset(control_id, 0xaa, sizeof control_id);
+        assert(efrp_handshake_xtcp_control_id(&h, control_id) == EFRP_INVALID_STATE); zero(control_id, sizeof control_id);
+        assert(efrp_handshake_consume_output(&h, length) == EFRP_OK);
+        size_t count = frame(wire, EFRP_SERVER_HELLO, hello);
+        count += frame(wire + count, EFRP_MESSAGE, responses[c.xtcp_binding ? mode : 0]);
+        efrp_result_t result = efrp_handshake_feed(&h, wire, count, &used);
+        if (mode) {
+            assert(result == EFRP_PROTOCOL_ERROR); zero(h.xtcp_control_id, sizeof h.xtcp_control_id);
+            assert(efrp_handshake_xtcp_control_id(&h, control_id) == EFRP_PROTOCOL_ERROR); zero(control_id, sizeof control_id);
+        } else {
+            assert(result == EFRP_OK && h.state == EFRP_HANDSHAKE_DONE);
+            assert(efrp_handshake_xtcp_control_id(&h, control_id) == EFRP_OK);
+            for (size_t i = 0; i < sizeof control_id; ++i) assert(control_id[i] == 0x11);
+            efrp_aead_keys_t keys; char id[EFRP_RUN_ID_BYTES];
+            assert(efrp_handshake_take_result(&h, &keys, id) == EFRP_OK && !strcmp(id, "same-run-id"));
+            zero(h.xtcp_control_id, sizeof h.xtcp_control_id); efrp_aead_clear_keys(&keys);
+            assert(efrp_handshake_xtcp_control_id(&h, control_id) == EFRP_INVALID_STATE); zero(control_id, sizeof control_id);
+        }
+        efrp_handshake_destroy(&h); zero(&h, sizeof h);
+    }
+}
 int main(void)
 {
-    split_and_tail(); in_place_receive(); invalid_messages(); deadlines_and_limits(); allocation_failures();
+    xtcp_control_identity(); udp_negotiation(); split_and_tail(); in_place_receive(); invalid_messages(); deadlines_and_limits(); allocation_failures();
     puts("Handshake: framing, negotiation, JSON bounds, deadline, cleanup and allocation failures passed");
     return 0;
 }

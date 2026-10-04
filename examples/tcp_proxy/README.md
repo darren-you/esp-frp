@@ -29,6 +29,8 @@ source "$IDF_PATH/export.sh"
 idf.py -C examples/tcp_proxy -B /private/path/frp-build \
   -D SDKCONFIG=/private/path/frp-sdkconfig \
   -D IDF_TARGET=esp32c3 \
+  -D EFRP_NGTCP2_SOURCE_DIR=/path/to/locked-ngtcp2 \
+  -D EFRP_PICOTLS_SOURCE_DIR=/path/to/locked-picotls \
   -D EFRP_SAMPLE_INPUTS=/private/path/inputs.h build
 ```
 
@@ -66,6 +68,10 @@ Wi-Fi 使用 `nvs_enable=false` 和 RAM storage，PHY 校准持久化必须关�
 状态采样报告当前 AP 的 `rssi_dbm`；仅 `rssi_valid=1` 时有效，断线时不能把占位零值当信号强度。资源采样包含 heap、全程最低 heap、最大连续块、所有当前任务的栈余量、有界描述符扫描、SDK 分配失败次数/最后失败尺寸和 esp_timer 列表。分配失败回调只写原子计数，不在分配路径打印或申请内存。样例只在单核调度配置下暂停调度并复制任务名，避免跨采样借用 TCB；超过 32 个任务时数量为零，表示采样不完整。socket 扫描可能与 SDK 开关连接并发，需分别比较稳定在线和销毁后样本；它不是原子网络快照。esp_timer profiling 也不是全部 FreeRTOS/lwIP 计时资源枚举。
 
 样例将 Wi-Fi 静态 RX 数量设为 6（与 RX BA 窗口相同），动态 RX/TX 各 12，TCP 收发窗口各 2880 字节（两个默认 MSS）。这是为 C3 双流约束瞬态队列占用的装配配置，会限制吞吐；不改变 FRP、Yamux 或 AEAD 的协议容量，也不要求使用该库的其他应用照搬。
+
+本样例只使用 station，因此关闭未消费的 SoftAP 支持。断言保持检查与 abort，仅关闭断言文本；排障使用对应 ELF 和回溯。IPv6 保留，因为固定 ngtcp2 的 POSIX 地址合同包含 IPv6 结构。2026-10-03 同一非空公共输入的冻结源码复测中，原完整镜像 C3 `0x118b30`、ESP32 `0x104d40` 超过上述 1 MiB app 分区；关闭 SoftAP 与断言文本后分别为 `0x0f7740`、`0x0e7880`，原分区未变。这批源码尚未包含随后接入的完整 XTCP 控制器与证书生成，不能作为当前候选或 Base 五能力组合的容量验收。
+
+同日当前完整 XTCP 源码复测先得到 C3 `0x102320`（超原槽 8992 B）、ESP32 `0xf1460`。C3 专属默认配置随后仅开启 SDK 官方 `CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS=y`：有效配置唯一差异是寄存器保存/恢复使用调用，镜像减 24512 B 至 `0xfc360`，原 1 MiB 槽余 15520 B；ESP32 原配置余 60320 B。正式 QUIC/XTCP、NAT、双方证明、身份生成、严格证书/CV 与普通 TCP/Yamux 的 59 个必要符号都真实链接，RISC-V helper 实际位于 IRAM。该优化有轻微性能代价；没有启用 LTO、扩大分区或删除认证。精确公共编译输入、最终源码/制品摘要及原失败见[软件检查点](../../docs/verification/xtcp-candidate-software-20261003.md)。此样例仍执行 TCP 配置，编译和符号保留只证明组件装配与该独立样例静态容量，扩展实际握手、运行 heap/栈与五能力组合另测。
 
 串口输出和诊断本身消耗资源，实验配置使用 4 KiB main 栈，FRP worker 使用 6 KiB；两者根据 C3 高水位采样从较大的初始预算收敛。当前 6 KiB worker 的同板十轮双流压力采样中，最低栈余量为 3104 字节；ESP32 的栈、heap 和双流资源必须另测，不能沿用 C3 数值。完整样例包含 Wi-Fi、TLS、AEAD、四条 Yamux 流、两条 work socket 及回环对端，不能仅以静态对象大小或 host 数据推断内存安全。
 

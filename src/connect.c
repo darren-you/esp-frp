@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp_connect.h"
+#include "connect_internal.h"
 #include "dns_backend.h"
 #include <errno.h>
 #include <limits.h>
@@ -107,26 +108,29 @@ efrp_result_t efrp_connect_create(const char *hostname, uint16_t port, uint64_t 
     c->status.state = EFRP_CONNECT_RESOLVING; c->status.pending_dns = true;
     *out = c; return EFRP_OK;
 }
+static efrp_result_t configure_tcp_socket(int fd)
+{
+    /* Configure abortive cleanup before connect. Some POSIX systems reject
+     * setsockopt after a refused connect, so cleanup must not depend on it.
+     * Zero linger also prevents lwIP's 20-second FIN-memory retry wait. */
+    struct linger linger = {.l_onoff = 1, .l_linger = 0};
+    if (setsockopt(fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger) != 0) return EFRP_NETWORK_ERROR;
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) return EFRP_NETWORK_ERROR;
+    int enabled = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof enabled) != 0) return EFRP_NETWORK_ERROR;
+#if defined(SO_NOSIGPIPE)
+    if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof enabled) != 0) return EFRP_NETWORK_ERROR;
+#endif
+    return EFRP_OK;
+}
 static efrp_result_t start_tcp(efrp_connect_t *c, const uint8_t address[4], uint64_t now)
 {
     c->fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (c->fd < 0) return stop(c, EFRP_NETWORK_ERROR, errno);
     c->status.owns_socket = true;
-    /* Configure abortive cleanup before connect. Some POSIX systems reject
-     * setsockopt after a refused connect, so cleanup must not depend on it.
-     * Zero linger also prevents lwIP's 20-second FIN-memory retry wait. */
-    struct linger linger = {.l_onoff = 1, .l_linger = 0};
-    if (setsockopt(c->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger) != 0)
-        return stop(c, EFRP_NETWORK_ERROR, errno);
-    int flags = fcntl(c->fd, F_GETFL, 0);
-    if (flags < 0 || fcntl(c->fd, F_SETFL, flags | O_NONBLOCK) != 0) return stop(c, EFRP_NETWORK_ERROR, errno);
-    int enabled = 1;
-    if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof enabled) != 0)
-        return stop(c, EFRP_NETWORK_ERROR, errno);
-#if defined(SO_NOSIGPIPE)
-    if (setsockopt(c->fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof enabled) != 0)
-        return stop(c, EFRP_NETWORK_ERROR, errno);
-#endif
+    efrp_result_t configured = configure_tcp_socket(c->fd);
+    if (configured != EFRP_OK) return stop(c, configured, errno);
     struct sockaddr_in peer = {.sin_family = AF_INET, .sin_port = htons(c->port)};
     memcpy(&peer.sin_addr.s_addr, address, 4);
     c->status.state = EFRP_CONNECT_CONNECTING; c->deadline = now + EFRP_CONNECT_TCP_MS;
@@ -135,6 +139,24 @@ static efrp_result_t start_tcp(efrp_connect_t *c, const uint8_t address[4], uint
     }
     if (errno == EINPROGRESS || errno == EALREADY || errno == EINTR) return EFRP_WOULD_BLOCK;
     return stop(c, EFRP_NETWORK_ERROR, errno);
+}
+efrp_result_t efrp_connect_adopt_fd(int fd, uint64_t now, efrp_connect_t **out)
+{
+    if (!out || fd < 0 || now > UINT64_MAX - EFRP_CONNECT_TCP_MS) return EFRP_INVALID_ARGUMENT;
+    if (*out) return EFRP_INVALID_STATE;
+    int type = 0; socklen_t type_length = sizeof type;
+    struct sockaddr_in peer = {0}; socklen_t peer_length = sizeof peer;
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &type_length) != 0 || type != SOCK_STREAM ||
+        getpeername(fd, (struct sockaddr *)&peer, &peer_length) != 0 || peer.sin_family != AF_INET ||
+        peer_length != sizeof peer) return EFRP_INVALID_ARGUMENT;
+    efrp_connect_t *c = calloc(1, sizeof *c);
+    if (!c) return EFRP_NO_MEMORY;
+    efrp_result_t result = configure_tcp_socket(fd);
+    if (result != EFRP_OK) { memset(c, 0, sizeof *c); free(c); return result; }
+    c->fd = fd; c->port = ntohs(peer.sin_port); c->last_now = now;
+    memcpy(c->address, &peer.sin_addr.s_addr, sizeof c->address);
+    c->status.state = EFRP_CONNECT_OPEN; c->status.owns_socket = true;
+    *out = c; return EFRP_OK;
 }
 efrp_result_t efrp_connect_create_ipv4(const uint8_t address[4], uint16_t port,
                                      uint64_t now, efrp_connect_t **out)

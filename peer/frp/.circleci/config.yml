@@ -1,0 +1,25 @@
+version: 2
+jobs:
+  go-version-latest:
+    docker:
+    - image: cimg/go:1.25-node
+    resource_class: large
+    steps:
+    - checkout
+    - run:
+        name: Test and build web assets
+        command: make web-ci
+    - run:
+        name: Check Go formatting and build binaries
+        command: |
+          set -e
+          make env fmt
+          git diff --exit-code
+          make build
+    - run: make alltest
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+    - go-version-latest

@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.20)
+set(EFRP_NGTCP2_SOURCE_DIR "" CACHE PATH "Clean pinned ngtcp2 checkout")
+set(EFRP_PICOTLS_SOURCE_DIR "" CACHE PATH "Clean pinned Picotls checkout")
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/../../../tools/sdk.py"
+    check --path "$ENV{IDF_PATH}" --quiet RESULT_VARIABLE sdk_status)
+if(NOT sdk_status EQUAL 0)
+    message(FATAL_ERROR "Fixed ESP FRP SDK check failed")
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/../../../tools/quic_source_guard.cmake")
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(esp_frp_quic_prototype)

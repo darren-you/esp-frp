@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/fatedier/frp",
+  "upstream_version": "v0.71.0",
+  "upstream_commit": "4a23aa181c1d7e28eecaa8216024ed753b9d27c8",
+  "license": "Apache-2.0",
+  "source_import": "git archive of the exact upstream commit; no .git or runtime cache",
+  "candidate_version": "0.71.0-esp-frp-xtcp.1",
+  "candidate_xtcp_alpn": "esp-frp-xtcp/1",
+  "owner": "esp-frp/peer/frp",
+  "production_catalog_changed": false
+}

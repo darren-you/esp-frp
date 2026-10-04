@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 #include "esp_frp_session.h"
+#include "esp_frp_xtcp.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -10,7 +11,7 @@ typedef enum {
     EFRP_PHASE_AUTHENTICATING, EFRP_PHASE_REGISTERING, EFRP_PHASE_READY,
     EFRP_PHASE_DRAINING, EFRP_PHASE_BACKOFF, EFRP_PHASE_FAILED
 } efrp_phase_t;
-typedef struct {
+typedef struct efrp_status {
     efrp_phase_t phase, failure_phase;
     efrp_result_t error;
     uint64_t attempts, ready_sessions, retries, pongs;
@@ -19,10 +20,13 @@ typedef struct {
     int system_error, tls_error;
     uint32_t tls_verify_flags;
     efrp_work_status_t work; /* counters across attempts, gauges for this attempt */
-    char run_id[EFRP_RUN_ID_BYTES], remote_address[257];
+    efrp_xtcp_status_t xtcp; /* current candidate rendezvous/peer attempt */
+    char run_id[EFRP_RUN_ID_BYTES];
+    size_t remote_address_length;
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
     unsigned mux_timeout_source, control_timeout_source;
-    uint32_t mux_timeout_stream_id, mux_timeout_age_ms, mux_timeout_pending_bytes;
+    uint64_t mux_timeout_stream_id;
+    uint32_t mux_timeout_age_ms, mux_timeout_pending_bytes;
 #endif
 } efrp_status_t;
 /* Called on the sole worker, outside the status lock. Payload is borrowed only
@@ -35,6 +39,8 @@ typedef bool (*efrp_time_trusted_t)(void *context);
 typedef struct {
     const char *server_hostname; /* one DNS/TLS identity, <=253 ASCII bytes */
     uint16_t server_port;
+    efrp_transport_kind_t transport; /* default YAMUX_TLS; QUIC is explicit */
+    efrp_quic_profile_t quic_profile; /* zero for TCP; explicit profile for QUIC */
     const uint8_t *ca_pem; size_t ca_length;
     const uint8_t *token; size_t token_length;
     const char *hostname, *user, *client_id; /* optional UTF-8, <=128 bytes each */
@@ -46,6 +52,10 @@ typedef struct {
     const char *run_id;
     const char *proxy_name; /* required, exact wire identity, <=128 UTF-8 bytes */
     uint16_t remote_port;
+    efrp_proxy_type_t proxy_type;
+    const efrp_proxy_options_t *proxy_options; /* borrowed only during create */
+    const efrp_xtcp_options_t *xtcp_options; /* required only for XTCP; copied at create */
+    uint16_t udp_packet_size; /* UDP only, explicit 1..65507 */
     uint8_t local_ipv4[4]; uint16_t local_port; /* sole fixed allowlist entry */
     efrp_time_trusted_t time_is_trusted;
     /* Required, exclusive 64 KiB ciphertext scratch provider. The callback
@@ -73,6 +83,13 @@ efrp_result_t efrp_stop(efrp_client_t *client, uint32_t timeout_ms);
  * On any other result retains it; never abandons SDK DNS or socket cleanup. */
 efrp_result_t efrp_destroy(efrp_client_t **client, uint32_t timeout_ms);
 efrp_result_t efrp_get_status(efrp_client_t *client, efrp_status_t *status);
+/* Current complete registration address list, copied under the status lock.
+ * Caller-provided capacity includes NUL. Reports required length and refuses
+ * truncation; lifecycle/lifetime must be externally serialized as for status. */
+efrp_result_t efrp_get_remote_address(efrp_client_t *client, char *output,
+    size_t capacity, size_t *length);
+#include "esp_frp_stcp_visitor.h"
+#include "esp_frp_xtcp_visitor.h"
 #ifdef __cplusplus
 }
 #endif

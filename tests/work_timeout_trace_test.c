@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "work_internal.h"
+#include "stream_yamux_fixture.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,7 @@ static void run(efrp_work_phase_t phase, bool incoming, bool outgoing, bool part
 {
     efrp_yamux_t mux;
     efrp_yamux_init(&mux, 0);
+    efrp_test_yamux_transport_t transport; efrp_test_yamux_transport_init(&transport, &mux);
     uint32_t id = 0;
     assert(efrp_yamux_open(&mux, &id) == EFRP_OK);
     efrp_work_set_t work;
@@ -23,7 +25,7 @@ static void run(efrp_work_phase_t phase, bool incoming, bool outgoing, bool part
     stream->partial_header = partial;
     if (incoming) { stream->incoming_used = 64; stream->incoming_offset = 16; }
     if (outgoing) { stream->outgoing_used = 64; stream->outgoing_offset = 16; }
-    assert(efrp_work_step(&work, &mux, now, "unused", NULL, 0, 1) == EFRP_OK);
+    assert(efrp_work_step(&work, &transport.base, now, "unused", NULL, 0, 1) == EFRP_OK);
     efrp_work_status_t status;
     efrp_work_status(&work, &status);
     assert(status.failed == 1 && status.last_error == EFRP_TIMEOUT);
@@ -43,15 +45,15 @@ static void run(efrp_work_phase_t phase, bool incoming, bool outgoing, bool part
 
 int main(void)
 {
-    run(EFRP_WORK_ACTIVE, true, false, false, EFRP_YAMUX_STALL_MS, 0,
+    run(EFRP_WORK_ACTIVE, true, false, false, EFRP_WORK_IO_STALL_MS, 0,
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
         EFRP_WORK_TIMEOUT_INCOMING_LOCAL);
 #else
         0);
 #endif
-    run(EFRP_WORK_ACTIVE, false, true, false, EFRP_YAMUX_STALL_MS, 0,
+    run(EFRP_WORK_ACTIVE, false, true, false, EFRP_WORK_IO_STALL_MS, 0,
 #if defined(EFRP_LAB_TIMEOUT_TRACE)
-        EFRP_WORK_TIMEOUT_OUTGOING_YAMUX);
+        EFRP_WORK_TIMEOUT_OUTGOING_STREAM);
 #else
         0);
 #endif

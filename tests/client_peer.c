@@ -86,6 +86,13 @@ static void *stop_thread(void *context)
 {
     stop_thread_t *t = context; t->result = efrp_stop(t->client, 5000); return NULL;
 }
+static const char *remote_address(efrp_client_t *client)
+{
+    static char address[257]; size_t length;
+    assert(efrp_get_remote_address(client, address, sizeof address, &length) == EFRP_OK);
+    assert(length && strlen(address) == length);
+    return address;
+}
 int main(int argc, char **argv)
 {
     assert(argc == 5 || argc == 6);
@@ -123,6 +130,10 @@ int main(int argc, char **argv)
             .local_ipv4 = {127, 0, 0, 1}, .local_port = argc == 6 ? (uint16_t)strtoul(argv[5], NULL, 10) : 1,
             .time_is_trusted = trusted, .on_event = event, .context = &events,
             .flash_store = &store};
+#if defined(EFRP_CLIENT_QUIC_TEST)
+        config.transport = EFRP_TRANSPORT_QUIC;
+        config.quic_profile = EFRP_QUIC_PROFILE_P256_AES128_X25519;
+#endif
         if (stable) config.run_id = proxy;
         assert(efrp_create(&config, &events.client) == EFRP_OK);
         if (stable) {
@@ -188,7 +199,7 @@ int main(int argc, char **argv)
             char first_run_id[EFRP_RUN_ID_BYTES]; memcpy(first_run_id, s.run_id, sizeof first_run_id);
             if (!strcmp(mode, "stable-live")) {
                 assert(!strcmp(s.run_id, "fixture-client-stable-live-0"));
-                printf("READY %s\n", s.remote_address); fflush(stdout);
+                printf("READY %s\n", remote_address(events.client)); fflush(stdout);
                 char command = 0;
                 assert(read(STDIN_FILENO, &command, 1) == 1);
                 if (command == 'v') {
@@ -198,16 +209,23 @@ int main(int argc, char **argv)
                     puts("STILL_READY"); fflush(stdout); command_wait('q');
                 } else assert(command == 'q');
             } else if (!strcmp(mode, "duplex")) {
-                printf("READY %s\n", s.remote_address); fflush(stdout); command_wait('q');
+                printf("READY %s\n", remote_address(events.client)); fflush(stdout); command_wait('q');
                 uint64_t end = efrp_port_now_ms() + 5000;
                 do {
                     assert(efrp_get_status(events.client, &s) == EFRP_OK);
                     assert(efrp_port_now_ms() < end); poll(NULL, 0, 1);
-                } while (s.work.completed != 6 || s.work.active != 2);
+                } while (s.work.completed != 6 || s.work.active != 2
+#if defined(EFRP_CLIENT_QUIC_TEST)
+                    || s.work.waiting != 1
+#endif
+                );
                 assert(!s.work.failed && s.work.waiting <= 1);
+#if defined(EFRP_CLIENT_QUIC_TEST)
+                assert(s.work.waiting == 1); /* Control + spare + two native business streams. */
+#endif
                 assert(s.work.local_sent == 6 * UINT64_C(300006) && s.work.local_received == 6 * UINT64_C(300002));
             } else if (!strcmp(mode, "restart") || !strcmp(mode, "restart-active")) {
-                printf("READY %s\n", s.remote_address); fflush(stdout);
+                printf("READY %s\n", remote_address(events.client)); fflush(stdout);
                 if (!strcmp(mode, "restart-active")) {
                     command_wait('a');
                     uint64_t end = efrp_port_now_ms() + 5000;
@@ -225,7 +243,7 @@ int main(int argc, char **argv)
                 s = wait_phase(events.client, EFRP_PHASE_READY, 2);
                 assert(s.ready_sessions == 2 && s.retries >= 1 && s.tls_verify_flags == 0);
                 assert(!strcmp(first_run_id, s.run_id));
-                printf("RECOVERED %s\n", s.remote_address); fflush(stdout);
+                printf("RECOVERED %s\n", remote_address(events.client)); fflush(stdout);
                 if (!strcmp(mode, "restart-active")) {
                     command_wait('v');
                     uint64_t end = efrp_port_now_ms() + 5000;
