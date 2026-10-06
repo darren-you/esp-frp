@@ -1,6 +1,6 @@
 # 客户端生命周期
 
-`esp_frp.h` 组合严格传输、Hello/Login、控制 AEAD 和固定目标工作流。TCP 使用 DNS/TCP、Mbed TLS 和 Yamux；显式 QUIC 使用 DNS/UDP 与原生 bidi，不叠 Yamux。provider 与独立 STCP/XTCP visitor 共用一个 worker；候选 XTCP 的 child peer 使用同一流接口。目标为固定 ESP-IDF v6.1 / ESP32-C3 与 ESP32-D0WD-V3；host 通过相同 `client.c` 和仅测试调度适配验证。独立 sample 位于 `examples/tcp_proxy`；真实 SDK DNS、FreeRTOS 调度与资源、实板 FRPS 和 Base/MQTT 组合仍须验收。
+`esp_frp.h` 组合严格传输、Hello/Login、控制 AEAD 和固定目标工作流。TCP 使用 DNS/TCP、Mbed TLS 和 Yamux；显式 QUIC 使用 DNS/UDP 与原生 bidi，不叠 Yamux。provider 与独立 STCP/XTCP visitor 共用一个 worker；候选 XTCP 的 child peer 使用同一流接口。目标为固定 ESP-IDF v6.1 / ESP32-C3 与 ESP32-D0WD-V3；host 通过相同 `client.c` 和仅测试调度适配验证。独立 sample 位于 `examples/tcp-proxy`；真实 SDK DNS、FreeRTOS 调度与资源、实板 FRPS 和 Base/MQTT 组合仍须验收。
 
 ## 配置与所有权
 

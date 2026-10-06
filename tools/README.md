@@ -19,7 +19,7 @@ python3 tools/sdk.py prepare --path "$HOME/.espressif/frameworks/esp-frp-idf"
 bash "$HOME/.espressif/frameworks/esp-frp-idf/install.sh" esp32c3 esp32
 source "$HOME/.espressif/frameworks/esp-frp-idf/export.sh"
 python3 tools/sdk.py check --path "$IDF_PATH"
-idf.py -C examples/tcp_proxy build
+idf.py -C examples/tcp-proxy build
 ```
 
 首次准备需要网络并下载官方子模块；失败时保留新目录供排障，后续不自动覆盖或修复已有路径。安装工具链与准备源码是独立动作，`prepare` 不刷写设备、创建 Secret 或发布制品。Git 可能把唯一锁定的 lwIP gitlink 显示为修改，这正是显式 SDK 装配合同；其他修改、未初始化子模块或提交漂移一律拒绝。

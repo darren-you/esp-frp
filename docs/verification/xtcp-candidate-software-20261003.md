@@ -85,7 +85,7 @@ C3 的隔离实验复制第二轮源码与实际 sdkconfig 到新目录，只改
 
 ## 最终 canonical 两目标结果
 
-实验结论落实到 [C3 专属 sdkconfig defaults](../../examples/tcp_proxy/sdkconfig.defaults.esp32c3)。ESP32 默认配置不加该 RISC-V 选项。随后从最终源码生成两个独立快照与 fresh sdkconfig，再编译完整应用；公共头注释、CMake／README 和最后 QUIC 关闭修正同步后重新编译并核对产物。
+实验结论落实到 [C3 专属 sdkconfig defaults](https://github.com/esp-space/esp-frp/blob/4e6a80904e054735981b160348bb7380bc9b8003/examples/tcp_proxy/sdkconfig.defaults.esp32c3)。ESP32 默认配置不加该 RISC-V 选项。随后从最终源码生成两个独立快照与 fresh sdkconfig，再编译完整应用；公共头注释、CMake／README 和最后 QUIC 关闭修正同步后重新编译并核对产物。
 
 | 最终目标 | 编译／链接 | bin 字节／十六进制 | 原 factory 余量 | 原容量门禁 |
 | --- | --- | --- | --- | --- |
@@ -96,7 +96,7 @@ C3 的隔离实验复制第二轮源码与实际 sdkconfig 到新目录，只改
 
 从最终 ELF 使用对应 `nm -S --size-sort` 核对两目标各 **59 个必要符号**，全部非零 `T/t/D`：包括 XTCP controller／NAT／codec／绑定 HMAC 和双方 proof、FRPS QUIC 与 peer factory、运行时证书生成、`verify_signature`／`verify_chain`／`sign_certificate`，及普通 `efrp_create`、TCP connect／TLS、work、Yamux adapter／读写／tick。唯一数据符号是 peer ClientHello 注册表 `D`；其余为真实代码。C3 最终 26 个 save／restore helper 仍全在 IRAM。检查不是以头声明或静态库存在代替实际链接。
 
-[原 partitions.csv](../../examples/tcp_proxy/partitions.csv) 未修改：factory offset `0x10000`、size `0x100000`；独立 `frp_scratch` offset `0x110000`、size `0x10000`。CSV SHA-256 `3c2266004b96abda28f9a68e799521ce4e3f747e7d3ce90b7e666414f53d1cf4`；初次、第二轮、隔离实验、最终两目标的实际 `partition-table.bin` SHA-256 均为 `5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6`。没有扩大分区。
+[原 partitions.csv](https://github.com/esp-space/esp-frp/blob/4e6a80904e054735981b160348bb7380bc9b8003/examples/tcp_proxy/partitions.csv) 未修改：factory offset `0x10000`、size `0x100000`；独立 `frp_scratch` offset `0x110000`、size `0x10000`。CSV SHA-256 `3c2266004b96abda28f9a68e799521ce4e3f747e7d3ce90b7e666414f53d1cf4`；初次、第二轮、隔离实验、最终两目标的实际 `partition-table.bin` SHA-256 均为 `5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6`。没有扩大分区。
 
 最终主要制品 SHA-256：
 

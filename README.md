@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart LR
-    sample["examples/tcp_proxy：独立 C3 / ESP32 实验应用"] --> owner
+    sample["examples/tcp-proxy：独立 C3 / ESP32 实验应用"] --> owner
     inputs["仓外输入：RAM Wi-Fi、SNTP、CA 与实验 FRPS"] --> sample
     sample --> echo["sample_echo.c：固定回环 TCP 目标"]
     sample --> resources["sample_resources.c：任务、heap、socket 和 esp_timer 观测"]
@@ -109,7 +109,7 @@ ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公
 
 ## 独立开发
 
-[独立 TCP 样例](examples/tcp_proxy/README.md) 面向 C3 与 ESP32-D0WD-V3，使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。样例专用 4 MiB 分区表含独占 `frp_scratch`，启动时核对并恢复后才允许联网；默认空输入只供编译，真实设备必须先核对其分区与恢复基线。ESP32 样例采用单核实验配置，目标构建与实板矩阵仍须分别验证。
+[独立 TCP 样例](examples/tcp-proxy/README.md) 面向 C3 与 ESP32-D0WD-V3，使用仓外输入装配 RAM Wi-Fi、可信 SNTP、严格 TLS 与回环 echo；支持重复创建、重启、网络中断和资源采样，不读取 Base 配置或写 NVS。样例专用 4 MiB 分区表含独占 `frp_scratch`，启动时核对并恢复后才允许联网；默认空输入只供编译，真实设备必须先核对其分区与恢复基线。ESP32 样例采用单核实验配置，目标构建与实板矩阵仍须分别验证。
 
 [C3 生命周期故障探针](tests/c3-lifecycle/README.md)使用公开占位输入，在官方 QEMU 检查真实 FreeRTOS worker 的不可信时间拒绝和百次销毁回收；验证范围与实板边界见[运行记录](docs/operations/p4-c3-qemu-lifecycle.md)。
 

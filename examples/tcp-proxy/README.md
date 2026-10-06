@@ -26,7 +26,7 @@ flowchart LR
 
 ```bash
 source "$IDF_PATH/export.sh"
-idf.py -C examples/tcp_proxy -B /private/path/frp-build \
+idf.py -C examples/tcp-proxy -B /private/path/frp-build \
   -D SDKCONFIG=/private/path/frp-sdkconfig \
   -D IDF_TARGET=esp32c3 \
   -D EFRP_NGTCP2_SOURCE_DIR=/path/to/locked-ngtcp2 \
