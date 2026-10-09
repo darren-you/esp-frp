@@ -26,6 +26,6 @@
 
 ## 固定 SDK 与 C3 联合续验
 
-2026-10-02，相同运行源码的固定 SDK C3／ESP32 独立样例与 Base 双目标签名构建、官方验签、host 回归通过。Base `ffc88efbbb259b32ca75c944776ba77328f731b6` 使用已有 UUID 请求 run ID；C3 代表业务的一次 WRITE 联合 OTA、一次 MQTT restart 后，目标与第三 boot 均经实际 FRP 认证状态核验，十二项消息计数、卸载及 A／C／原代码字节核对通过。143 份实板索引为 `effd1620aa917549bd660eb246e00b050f48e80fc0747a630be06b80f2da2988`，此前 109 份失败保持；88 份来源下载均 MQTT／FRP ready，但最低历史 heap 4124 B，48 KiB 门继续失败。该历史功能切片不继承为当前原生固件资格，现役输入与验收前置见[Base 原生业务与固件 OTA 计划](https://github.com/esp-space/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)。
+2026-10-02，相同运行源码的固定 SDK C3／ESP32 独立样例与 Base 双目标签名构建、官方验签、host 回归通过。Base `ffc88efbbb259b32ca75c944776ba77328f731b6` 使用已有 UUID 请求 run ID；C3 代表业务的一次 WRITE 联合 OTA、一次 MQTT restart 后，目标与第三 boot 均经实际 FRP 认证状态核验，十二项消息计数、卸载及 A／C／原代码字节核对通过。143 份实板索引为 `effd1620aa917549bd660eb246e00b050f48e80fc0747a630be06b80f2da2988`，此前 109 份失败保持；88 份来源下载均 MQTT／FRP ready，但最低历史 heap 4124 B，48 KiB 门继续失败。该历史功能切片不继承为当前原生固件资格，现役输入与验收前置见[Base 原生业务与固件 OTA 计划](https://github.com/darren-you/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)。
 
 本库身份修正已获得该 C3 功能切片证据；最大负载、组合容量、ESP32 实板、掉电、长稳与生产仍未验收。不能把前文阶段性的未完成说明或本次功能成功解释为当前产品的整体验收。
