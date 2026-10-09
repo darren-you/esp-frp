@@ -481,5 +481,138 @@ class SourceObjectIntegrityTest(unittest.TestCase):
         self._corrupt_blob_preserving_storage_oid(blob)
 
 
+
+class SparseConfigurationTest(unittest.TestCase):
+    """Git 最终生效的布尔配置与实际完整源码共同决定是否接受来源。"""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.global_config = self.root / "global.gitconfig"
+        self.global_config.write_text("")
+        self.included_config = self.root / "included.gitconfig"
+        self.environment = patch.dict(os.environ, {
+            "GIT_CONFIG_GLOBAL": str(self.global_config), "GIT_CONFIG_NOSYSTEM": "1",
+        })
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+        self.source = self.root / "source"
+        self.source.mkdir()
+        self._git("init", "-q", "-b", "master")
+        self._git("config", "user.name", "稀疏配置 fixture")
+        self._git("config", "user.email", "sparse@example.invalid")
+        (self.source / "source.c").write_text("int source;\n")
+        (self.source / "omitted").mkdir()
+        (self.source / "omitted/source.c").write_text("int complete;\n")
+        self._git("add", ".")
+        self._git("commit", "-qm", "完整来源 fixture")
+
+    def _git(self, *args, check=True):
+        return subprocess.run(["git", "-C", str(self.source), *args], check=check,
+                              capture_output=True, text=True)
+
+    def _set(self, key, value, *scope):
+        self._git("config", *scope, key, value)
+
+    def _verify(self):
+        SOURCES.verify_complete_repository(self.source)
+
+    def _effective_sparse(self):
+        result = self._git("config", "--bool", "--get", "core.sparseCheckout", check=False)
+        return result.returncode, result.stdout.strip()
+
+    def _include(self, value):
+        self.included_config.write_text("[core]\n\tsparseCheckout = " + value + "\n")
+        self._set("include.path", str(self.included_config), "--local")
+
+    def test_accepts_global_true_overridden_by_local_false(self):
+        self._set("core.sparseCheckout", "true", "--global")
+        self._set("core.sparseCheckout", "false", "--local")
+        self.assertEqual(self._effective_sparse(), (0, "false"))
+        self._verify()
+
+    def test_rejects_global_false_overridden_by_local_true(self):
+        self._set("core.sparseCheckout", "false", "--global")
+        self._set("core.sparseCheckout", "true", "--local")
+        self.assertEqual(self._effective_sparse(), (0, "true"))
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            self._verify()
+
+    def test_accepts_worktree_false_overriding_local_true(self):
+        self._set("core.sparseCheckout", "true", "--local")
+        self._set("extensions.worktreeConfig", "true", "--local")
+        self._set("core.sparseCheckout", "false", "--worktree")
+        self.assertEqual(self._effective_sparse(), (0, "false"))
+        self._verify()
+
+    def test_rejects_worktree_true_overriding_local_false(self):
+        self._set("core.sparseCheckout", "false", "--local")
+        self._set("extensions.worktreeConfig", "true", "--local")
+        self._set("core.sparseCheckout", "true", "--worktree")
+        self.assertEqual(self._effective_sparse(), (0, "true"))
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            self._verify()
+
+    def test_accepts_included_local_false_after_local_true(self):
+        self._set("core.sparseCheckout", "true", "--local")
+        self._include("false")
+        self.assertEqual(self._effective_sparse(), (0, "false"))
+        self._verify()
+
+    def test_rejects_included_local_true_after_local_false(self):
+        self._set("core.sparseCheckout", "false", "--local")
+        self._include("true")
+        self.assertEqual(self._effective_sparse(), (0, "true"))
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            self._verify()
+
+    def test_accepts_inactive_cone_mode_with_complete_source(self):
+        self._set("core.sparseCheckout", "false", "--local")
+        self._set("core.sparseCheckoutCone", "true", "--local")
+        self.assertEqual(self._effective_sparse(), (0, "false"))
+        self._verify()
+
+    def test_rejects_invalid_effective_boolean(self):
+        self._set("core.sparseCheckout", "invalid-boolean", "--local")
+        self.assertNotEqual(self._effective_sparse()[0], 0)
+        with self.assertRaises((ValueError, RuntimeError, subprocess.CalledProcessError)) as raised:
+            self._verify()
+        detail = getattr(raised.exception, "stderr", "") or str(raised.exception)
+        self.assertIn("sparse", detail.lower())
+
+    def test_rejects_nonzero_numeric_effective_true(self):
+        self._set("core.sparseCheckout", "2", "--local")
+        self.assertEqual(self._effective_sparse(), (0, "true"))
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            self._verify()
+
+    def test_rejects_implicit_boolean_effective_true(self):
+        config = self.source / ".git/config"
+        with config.open("a") as output:
+            output.write("[core]\n\tsparseCheckout\n")
+        self.assertEqual(self._effective_sparse(), (0, "true"))
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            self._verify()
+
+    def _omit_tracked_source(self):
+        self._git("sparse-checkout", "set", "--no-cone", "/source.c")
+        self.assertTrue((self.source / "source.c").is_file())
+        self.assertFalse((self.source / "omitted/source.c").exists())
+
+    def test_rejects_actual_sparse_checkout(self):
+        self._omit_tracked_source()
+        self.assertEqual(self._effective_sparse(), (0, "true"))
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            self._verify()
+
+    def test_rejects_missing_raw_source_after_sparse_flag_disabled(self):
+        self._omit_tracked_source()
+        self._set("core.sparseCheckout", "false", "--worktree")
+        self.assertEqual(self._effective_sparse(), (0, "false"))
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            self._verify()
+
+
 if __name__ == "__main__":
     unittest.main()

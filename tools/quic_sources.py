@@ -224,9 +224,17 @@ def verify_complete_repository(path: Path, source_root: Path | None = None,
         if key == "extensions.partialclone" or (
                 key.startswith("remote.") and key.endswith((".promisor", ".partialclonefilter"))):
             raise ValueError(f"依赖 来源不能使用 partial clone：{path}")
-        if key in ("core.sparsecheckout", "core.sparsecheckoutcone") and value.lower() in (
-                "true", "yes", "on", "1"):
-            raise ValueError(f"依赖 来源不能使用 sparse checkout：{path}")
+    # Git resolves include, scope precedence and every accepted boolean spelling.
+    # Cone only selects a mode; it does not enable sparse checkout on its own.
+    sparse = subprocess.run(
+        ["git", "-C", str(path), "config", "--bool", "--get", "core.sparseCheckout"],
+        text=True, capture_output=True, env=git_environment())
+    effective_sparse = sparse.stdout.strip()
+    if sparse.returncode not in (0, 1) or (
+            sparse.returncode == 0 and effective_sparse not in ("true", "false")):
+        raise ValueError(f"依赖 来源 sparse checkout 配置无效：{path}\n{sparse.stderr.strip()}")
+    if sparse.returncode == 0 and effective_sparse == "true":
+        raise ValueError(f"依赖 来源不能使用 sparse checkout：{path}")
     revision = revision or git(path, "rev-parse", "HEAD")
     if git(path, "rev-parse", "HEAD") != revision:
         raise ValueError(f"来源未锁定完整提交 {revision}：{path}")
