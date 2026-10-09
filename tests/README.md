@@ -79,7 +79,7 @@ ctest --test-dir build --output-on-failure
 
 完整 Mbed TLS host 模式另有 `session_idf_flash_upstream`：正式 `session.c` 与正式 `idf_flash_store.c` 经测试分区 shim 组合，在随机回环端口与官方 FRPS 完成三轮注册/心跳，并用官方协议 fixture 验证 64 KiB 正确记录、64 KiB 错 tag 的零控制消息交付及小记录坏 tag。每轮重建 provider 并执行 boot recover，核对 owner 成对释放、64 KiB 擦写和逐窗口读取计数。运行范围与数据见[集成回归收据](../docs/operations/p6-frp-session-idf-provider-interop.md)。
 
-[lwIP 零窗口回环回归](https://github.com/esp-space/esp-lwip/blob/master/tests/zero-window/README.md) 是单独的 SDK 缺陷复现入口，直接编译显式提供的依赖源码，不混入 FRP host 通过结论。原始官方 SDK 会失败；[sdk-lock.json](../sdk-lock.json) 已锁定通过该回归的修正源依赖，不用预期失败规则将原始 SDK 标绿。SDK 身份与脏内容守卫使用 `python3 -m unittest discover -s tools/tests -p 'test_*.py'` 验证。
+[lwIP 零窗口回环回归](https://github.com/darren-you/esp-lwip/blob/master/tests/zero-window/README.md) 是单独的 SDK 缺陷复现入口，直接编译显式提供的依赖源码，不混入 FRP host 通过结论。原始官方 SDK 会失败；[sdk-lock.json](../sdk-lock.json) 已锁定通过该回归的修正源依赖，不用预期失败规则将原始 SDK 标绿。SDK 身份与脏内容守卫使用 `python3 -m unittest discover -s tools/tests -p 'test_*.py'` 验证。
 
 OpenSSL 不在系统路径时添加 `-DOPENSSL_ROOT_DIR=/absolute/path/to/openssl`；cJSON 不在系统路径时用 `-DCMAKE_PREFIX_PATH=/absolute/path/to/cjson`。ESP-IDF 构建固定使用 SDK PSA API 与 manifest 中精确锁定的 espressif/cjson，不使用 OpenSSL。
 
