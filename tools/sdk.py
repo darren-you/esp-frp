@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -36,6 +37,13 @@ def read_lock() -> dict:
 
 
 def verify_complete_repository(path: Path) -> None:
+    if os.environ.get("GIT_ALTERNATE_OBJECT_DIRECTORIES") or os.environ.get("GIT_OBJECT_DIRECTORY"):
+        raise ValueError("SDK 来源不能使用环境提供的 alternate 对象目录")
+    alternate = Path(git(path, "rev-parse", "--git-path", "objects/info/alternates"))
+    if not alternate.is_absolute():
+        alternate = path / alternate
+    if alternate.exists() or alternate.is_symlink():
+        raise ValueError(f"SDK 来源不能通过 alternates 借用其他仓库对象：{path}")
     if git(path, "rev-parse", "--show-toplevel") != str(path.resolve()):
         raise ValueError(f"SDK 来源未独立初始化：{path}")
     if git(path, "rev-parse", "--is-shallow-repository") != "false":

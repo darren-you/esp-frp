@@ -2,6 +2,9 @@
 import importlib.util
 from pathlib import Path
 import subprocess
+import os
+import shutil
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -114,6 +117,23 @@ class SDKContractTest(unittest.TestCase):
         object_path.unlink()
         with self.assertRaisesRegex(ValueError, "对象不完整"):
             SDK.verify_complete_repository(self.lwip)
+
+    def test_rejects_shared_nested_source_even_when_fsck_passes(self):
+        shutil.rmtree(self.lwip)
+        self.run_git(self.root, "clone", "-q", "--shared", str(self.source), str(self.lwip))
+        self.run_git(self.lwip, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "alternates"):
+            SDK.verify(self.sdk, self.lock)
+
+    def test_rejects_environment_alternate_objects(self):
+        with patch.dict(os.environ, {"GIT_ALTERNATE_OBJECT_DIRECTORIES": str(self.source / '.git/objects')}):
+            with self.assertRaisesRegex(ValueError, "alternate"):
+                SDK.verify(self.sdk, self.lock)
+
+    def test_rejects_environment_object_directory(self):
+        with patch.dict(os.environ, {"GIT_OBJECT_DIRECTORY": str(self.source / '.git/objects')}):
+            with self.assertRaisesRegex(ValueError, "alternate"):
+                SDK.verify_complete_repository(self.sdk)
 
     def test_prepare_never_overwrites_existing_path(self):
         before = (self.sdk / "sdk.c").read_bytes()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -21,6 +22,8 @@ def git(path: Path, *args: str) -> str:
     return result.stdout.strip()
 
 def verify(path: Path, entry: dict) -> None:
+    if os.environ.get("GIT_ALTERNATE_OBJECT_DIRECTORIES") or os.environ.get("GIT_OBJECT_DIRECTORY"):
+        raise ValueError("依赖不能使用环境提供的 alternate 对象目录")
     if git(path, "rev-parse", "--show-toplevel") != str(path.resolve()):
         raise ValueError("依赖必须是独立 checkout")
     if git(path, "rev-parse", "HEAD") != entry["revision"]:
@@ -34,6 +37,11 @@ def verify(path: Path, entry: dict) -> None:
             raise ValueError("依赖子模块必须完整初始化并匹配精确 gitlink")
         sources.append(path / relative)
     for source in sources:
+        alternate = Path(git(source, "rev-parse", "--git-path", "objects/info/alternates"))
+        if not alternate.is_absolute():
+            alternate = source / alternate
+        if alternate.exists() or alternate.is_symlink():
+            raise ValueError("依赖不能通过 alternates 借用其他仓库对象")
         if git(source, "rev-parse", "--show-toplevel") != str(source.resolve()):
             raise ValueError("依赖子来源未独立初始化")
         if git(source, "rev-parse", "--is-shallow-repository") != "false":
@@ -56,7 +64,7 @@ def stream_sha256(stream) -> str:
     return digest.hexdigest()
 
 
-def verify_host_archive(path: Path, entry: dict) -> None:
+def verify_host_archive(path: Path, entry: dict, *, download: bool) -> None:
     # 正式归档摘要与从精确 Git 源重建的归档必须同时匹配；不保留第二份来源缓存。
     version = entry["version"]
     expected_url = (entry["repository"][:-4] + f"/releases/download/v{version}/"
@@ -64,10 +72,11 @@ def verify_host_archive(path: Path, entry: dict) -> None:
     if not re.fullmatch(r"[0-9a-f]{64}", entry["archive_sha256"]) or not re.fullmatch(
             r"[0-9]+\.[0-9]+\.[0-9]+", version) or entry["archive_url"] != expected_url:
         raise ValueError("host Mbed TLS 必须锁定正式完整源归档")
-    with urllib.request.urlopen(entry["archive_url"], timeout=180) as response:
-        digest = stream_sha256(response)
-    if digest != entry["archive_sha256"]:
-        raise ValueError("正式 host Mbed TLS 归档摘要与 quic-lock.json 不符")
+    if download:
+        with urllib.request.urlopen(entry["archive_url"], timeout=180) as response:
+            digest = stream_sha256(response)
+        if digest != entry["archive_sha256"]:
+            raise ValueError("正式 host Mbed TLS 归档摘要与 quic-lock.json 不符")
     with tempfile.TemporaryDirectory(prefix="esp-frp-host-source-") as directory:
         archive = Path(directory) / "source.tar.bz2"
         subprocess.run([sys.executable, str(path / "tools/package_source_archive.py"),
@@ -121,10 +130,11 @@ def main() -> int:
             path = path.expanduser().absolute()
             if args.action == "prepare":
                 prepare(path, entry)
-                if entry is lock["host_mbedtls"]:
-                    verify_host_archive(path, entry)
             else:
                 verify(path, entry)
+            if entry is lock["host_mbedtls"]:
+                # check 独立重建并核锁定摘要，不依赖先前 prepare 成功或联网收据。
+                verify_host_archive(path, entry, download=args.action == "prepare")
         if not args.quiet:
             print("ESP FRP QUIC 依赖\n  结果  精确源码已验证\n"
                   + "\n".join(f"  {path.name} {entry['revision']}" for path, entry in entries))
