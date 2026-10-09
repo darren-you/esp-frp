@@ -13,8 +13,18 @@ import sys
 LOCK_PATH = Path(__file__).resolve().parents[1] / "sdk-lock.json"
 
 
+def git_environment() -> dict:
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+                 "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+                 "GIT_REPLACE_REF_BASE", "GIT_GRAFT_FILE"):
+        if os.environ.get(name):
+            raise ValueError(f"Git 环境不能重定向来源或 alternate 对象：{name}")
+    # Every Git command reads the actual locked objects, regardless of caller flags.
+    return {**os.environ, "GIT_NO_REPLACE_OBJECTS": "1"}
+
+
 def git(path: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(path), *args], text=True, capture_output=True)
+    result = subprocess.run(["git", "-C", str(path), *args], text=True, capture_output=True, env=git_environment())
     if result.returncode:
         raise RuntimeError(f"Git 失败：{' '.join(args)}\n{result.stderr.strip()}")
     return result.stdout.strip()
@@ -36,9 +46,8 @@ def read_lock() -> dict:
     return lock
 
 
-def verify_complete_repository(path: Path) -> None:
-    if os.environ.get("GIT_ALTERNATE_OBJECT_DIRECTORIES") or os.environ.get("GIT_OBJECT_DIRECTORY"):
-        raise ValueError("SDK 来源不能使用环境提供的 alternate 对象目录")
+def verify_complete_repository(path: Path, source_root: Path | None = None) -> None:
+    git_environment()
     def git_path(*arguments: str) -> Path:
         value = Path(git(path, *arguments))
         return value if value.is_absolute() else path / value
@@ -51,10 +60,27 @@ def verify_complete_repository(path: Path) -> None:
     common_directory = git_path("rev-parse", "--git-common-dir").resolve(strict=True)
     if git_directory != common_directory:
         raise ValueError(f"SDK 来源不能使用借用主仓对象库的 linked worktree：{path}")
+    source_root = (source_root or path).resolve(strict=True)
+    if not path.resolve().is_relative_to(source_root):
+        raise ValueError(f"SDK 子来源必须位于完整根来源目录：{path}")
+    if path.resolve() == source_root:
+        if not git_directory.is_relative_to(source_root):
+            raise ValueError(f"SDK 根 Git 元数据必须位于来源自身目录：{path}")
+    elif git_metadata.is_file():
+        root_git_directory = Path(git(source_root, "rev-parse", "--absolute-git-dir")).resolve(strict=True)
+        if not git_directory.is_relative_to(root_git_directory / "modules"):
+            raise ValueError(f"SDK absorbed 子模块 Git 元数据必须归属根来源的 modules：{path}")
+    elif git_directory != (path / ".git").resolve(strict=True):
+        raise ValueError(f"SDK 子来源必须拥有自身 .git 目录：{path}")
+    if git(path, "for-each-ref", "--format=%(refname)", "refs/replace/"):
+        raise ValueError(f"SDK 来源不能包含 replace 对象引用：{path}")
+    grafts = git_path("rev-parse", "--git-path", "info/grafts")
+    if grafts.exists() or grafts.is_symlink():
+        raise ValueError(f"SDK 来源不能包含 grafts 历史替换：{path}")
     if git_metadata.is_file():
         binding = subprocess.run(
             ["git", "-C", str(path), "config", "--local", "--path", "--get", "core.worktree"],
-            text=True, capture_output=True)
+            text=True, capture_output=True, env=git_environment())
         if binding.returncode or not binding.stdout.strip():
             raise ValueError(f"SDK Git 元数据文件必须原生绑定当前来源：{path}")
         worktree = Path(binding.stdout.rstrip("\n"))
@@ -86,7 +112,7 @@ def verify_complete_repository(path: Path) -> None:
             raise ValueError(f"SDK 来源不能使用 sparse checkout：{path}")
     result = subprocess.run(["git", "-C", str(path), "fsck", "--connectivity-only",
                              "--no-dangling"], text=True, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.PIPE)
+                            stderr=subprocess.PIPE, env=git_environment())
     if result.returncode:
         raise ValueError(f"SDK 来源对象不完整：{path}\n{result.stderr.strip()}")
 
@@ -125,7 +151,7 @@ def verify(sdk: Path, lock: dict) -> None:
         if git(source, "status", "--porcelain", "--untracked-files=normal",
                "--ignore-submodules=none"):
             raise ValueError(f"SDK 递归源码存在未提交内容：{source}")
-        verify_complete_repository(source)
+        verify_complete_repository(source, source_root=sdk)
 
 
 def prepare(output: Path, lock: dict) -> None:

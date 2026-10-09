@@ -116,7 +116,7 @@ class SDKContractTest(unittest.TestCase):
             object_path = self.lwip / object_path
         object_path.unlink()
         with self.assertRaisesRegex(ValueError, "对象不完整"):
-            SDK.verify_complete_repository(self.lwip)
+            SDK.verify_complete_repository(self.lwip, source_root=self.sdk)
 
     def test_rejects_shared_nested_source_even_when_fsck_passes(self):
         shutil.rmtree(self.lwip)
@@ -212,6 +212,83 @@ class SDKContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "输出路径已存在"):
             SDK.prepare(self.sdk, self.lock)
         self.assertEqual((self.sdk / "sdk.c").read_bytes(), before)
+
+    def test_rejects_external_separate_git_directory_with_worktree_binding(self):
+        separate = self.root / "separate"
+        outside = self.root / "separate.git"
+        self.run_git(self.root, "clone", "-q", "--separate-git-dir=" + str(outside),
+                 str(self.source), str(separate))
+        self.run_git(separate, "config", "core.worktree", str(separate))
+        self.assertEqual(self.run_git(separate, "status", "--porcelain"), "")
+        self.run_git(separate, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "Git 元数据"):
+            SDK.verify_complete_repository(separate)
+
+    def test_rejects_git_environment_redirecting_metadata_and_worktree(self):
+        alias = self.root / "environment-redirect"
+        shutil.copytree(self.source, alias, ignore=shutil.ignore_patterns(".git"))
+        with patch.dict(os.environ, {"GIT_DIR": str(self.source / ".git"),
+                                    "GIT_WORK_TREE": str(alias)}):
+            with self.assertRaisesRegex(ValueError, "Git 环境"):
+                SDK.verify_complete_repository(alias)
+
+    def test_rejects_replace_ref_even_when_head_and_status_match(self):
+        original = self.run_git(self.source, "rev-parse", "HEAD")
+        filename = self.source / "tcp.c"
+        original_bytes = filename.read_bytes()
+        filename.write_text("int substituted_business;\n")
+        self.run_git(self.source, "add", filename.name)
+        self.run_git(self.source, "commit", "-qm", "different source fixture")
+        replacement = self.run_git(self.source, "rev-parse", "HEAD")
+        self.run_git(self.source, "replace", original, replacement)
+        self.run_git(self.source, "checkout", "-q", "--detach", original)
+        self.assertEqual(self.run_git(self.source, "rev-parse", "HEAD"), original)
+        self.assertEqual(self.run_git(self.source, "status", "--porcelain"), "")
+        self.assertEqual(filename.read_text(), "int substituted_business;\n")
+        # The verifier's ordinary Git reads ignore replacement refs even before rejection.
+        self.assertEqual(SDK.git(self.source, "show", "HEAD:" + filename.name).encode(),
+                         original_bytes.rstrip(b"\n"))
+        with self.assertRaisesRegex(ValueError, "replace"):
+            SDK.verify_complete_repository(self.source)
+
+    def test_rejects_grafts_even_when_fsck_passes(self):
+        head = self.run_git(self.source, "rev-parse", "HEAD")
+        (self.source / ".git/info/grafts").write_text(head + "\n")
+        self.run_git(self.source, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "grafts"):
+            SDK.verify_complete_repository(self.source)
+
+    def test_rejects_absorbed_submodule_metadata_outside_sdk_modules(self):
+        directory = Path(self.run_git(self.lwip, "rev-parse", "--absolute-git-dir"))
+        outside = self.root / "outside-lwip.git"
+        directory.rename(outside)
+        (self.lwip / ".git").write_text("gitdir: " + str(outside) + "\n")
+        self.run_git(self.root, "config", "--file", str(outside / "config"), "core.worktree", str(self.lwip))
+        self.run_git(self.lwip, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "Git 元数据"):
+            SDK.verify(self.sdk, self.lock)
+
+    def test_rejects_replace_ref_in_actual_sdk_verification(self):
+        original = self.run_git(self.sdk, "rev-parse", "HEAD")
+        (self.sdk / "sdk.c").write_text("substituted SDK implementation\n")
+        self.run_git(self.sdk, "add", "sdk.c")
+        self.run_git(self.sdk, "commit", "-qm", "different SDK fixture")
+        replacement = self.run_git(self.sdk, "rev-parse", "HEAD")
+        self.run_git(self.sdk, "replace", original, replacement)
+        self.run_git(self.sdk, "checkout", "-q", "--detach", original)
+        self.assertEqual(self.run_git(self.sdk, "rev-parse", "HEAD"), original)
+        self.assertEqual(self.run_git(self.sdk, "status", "--porcelain"),
+                         "M components/lwip/lwip")
+        self.assertEqual((self.sdk / "sdk.c").read_text(), "substituted SDK implementation\n")
+        with self.assertRaises(ValueError):
+            SDK.verify(self.sdk, self.lock)
+
+    def test_accepts_direct_submodule_with_complete_self_owned_metadata(self):
+        shutil.rmtree(self.lwip)
+        self.run_git(self.root, "clone", "-q", str(self.source), str(self.lwip))
+        self.run_git(self.lwip, "checkout", "-q", "--detach", self.lock["lwip"]["revision"])
+        self.assertTrue((self.lwip / ".git").is_dir())
+        SDK.verify(self.sdk, self.lock)
 
 
 if __name__ == "__main__":

@@ -15,15 +15,24 @@ import urllib.request
 
 LOCK_PATH = Path(__file__).resolve().parents[1] / "quic-lock.json"
 
+def git_environment() -> dict:
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+                 "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+                 "GIT_REPLACE_REF_BASE", "GIT_GRAFT_FILE"):
+        if os.environ.get(name):
+            raise ValueError(f"Git 环境不能重定向来源或 alternate 对象：{name}")
+    # Every Git command reads the actual locked objects, regardless of caller flags.
+    return {**os.environ, "GIT_NO_REPLACE_OBJECTS": "1"}
+
+
 def git(path: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(path), *args], text=True, capture_output=True)
+    result = subprocess.run(["git", "-C", str(path), *args], text=True, capture_output=True, env=git_environment())
     if result.returncode:
         raise RuntimeError(f"Git 失败：{' '.join(args)}\n{result.stderr.strip()}")
     return result.stdout.strip()
 
 def verify(path: Path, entry: dict) -> None:
-    if os.environ.get("GIT_ALTERNATE_OBJECT_DIRECTORIES") or os.environ.get("GIT_OBJECT_DIRECTORY"):
-        raise ValueError("依赖不能使用环境提供的 alternate 对象目录")
+    git_environment()
     if git(path, "rev-parse", "--show-toplevel") != str(path.resolve()):
         raise ValueError("依赖必须是独立 checkout")
     if git(path, "rev-parse", "HEAD") != entry["revision"]:
@@ -49,10 +58,27 @@ def verify(path: Path, entry: dict) -> None:
         common_directory = git_path("rev-parse", "--git-common-dir").resolve(strict=True)
         if git_directory != common_directory:
             raise ValueError(f"依赖来源不能使用借用主仓对象库的 linked worktree：{source}")
+        source_root = path.resolve(strict=True)
+        if not source.resolve().is_relative_to(source_root):
+            raise ValueError(f"依赖子来源必须位于完整根来源目录：{source}")
+        if source.resolve() == source_root:
+            if not git_directory.is_relative_to(source_root):
+                raise ValueError(f"依赖 根 Git 元数据必须位于来源自身目录：{source}")
+        elif git_metadata.is_file():
+            root_git_directory = Path(git(source_root, "rev-parse", "--absolute-git-dir")).resolve(strict=True)
+            if not git_directory.is_relative_to(root_git_directory / "modules"):
+                raise ValueError(f"依赖 absorbed 子模块 Git 元数据必须归属根来源的 modules：{source}")
+        elif git_directory != (source / ".git").resolve(strict=True):
+            raise ValueError(f"依赖 子来源必须拥有自身 .git 目录：{source}")
+        if git(source, "for-each-ref", "--format=%(refname)", "refs/replace/"):
+            raise ValueError(f"依赖 来源不能包含 replace 对象引用：{source}")
+        grafts = git_path("rev-parse", "--git-path", "info/grafts")
+        if grafts.exists() or grafts.is_symlink():
+            raise ValueError(f"依赖 来源不能包含 grafts 历史替换：{source}")
         if git_metadata.is_file():
             binding = subprocess.run(
                 ["git", "-C", str(source), "config", "--local", "--path", "--get", "core.worktree"],
-                text=True, capture_output=True)
+                text=True, capture_output=True, env=git_environment())
             if binding.returncode or not binding.stdout.strip():
                 raise ValueError(f"依赖 Git 元数据文件必须原生绑定当前来源：{source}")
             worktree = Path(binding.stdout.rstrip("\n"))
@@ -111,7 +137,7 @@ def verify_host_archive(path: Path, entry: dict, *, download: bool) -> None:
         archive = Path(directory) / "source.tar.bz2"
         subprocess.run([sys.executable, str(path / "tools/package_source_archive.py"),
                         "--output", str(archive)], check=True, capture_output=True, text=True,
-                       timeout=180)
+                       timeout=180, env=git_environment())
         with archive.open("rb") as stream:
             rebuilt = stream_sha256(stream)
     if rebuilt != entry["archive_sha256"]:
