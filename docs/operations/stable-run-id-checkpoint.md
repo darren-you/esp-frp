@@ -4,7 +4,7 @@
 
 ## 问题与合同
 
-Base 五能力实验在联合 OTA 成功后通过 MQTT 重启，第三 boot 的 FRP 被官方 FRPS 以同 client_id 仍在线拒绝。旧控制连接未注销时，新实例使用服务端新生成的 run ID，不能接管相同设备身份。该拒绝是 LOGIN_REJECTED，不能由此认定为内存不足。
+历史 Base OTA 实验成功后通过 MQTT 重启，第三 boot 的 FRP 被官方 FRPS 以同 client_id 仍在线拒绝。旧控制连接未注销时，新实例使用服务端新生成的 run ID，不能接管相同设备身份。该拒绝是 LOGIN_REJECTED，不能由此认定为内存不足。
 
 依据[官方 v0.71.0 注册控制连接](https://github.com/fatedier/frp/blob/v0.71.0/server/service.go)，客户端可提交自己的 run ID；服务端先验证 Login，再替换该 run ID 的旧控制连接并等待清理。组件可选字段从 previous_run_id 硬切为 `run_id`，无旧字段别名，限定为 64 UTF-8 字节；组件及 Login 产品版本为 0.2.0。调用方可提交已有稳定设备 UUID，或上次已鉴权的服务端 run ID；不提交则继续请求服务端生成。
 
@@ -20,12 +20,12 @@ Base 五能力实验在联合 OTA 成功后通过 MQTT 重启，第三 boot 的 
 
 ## 尚未完成
 
-固定 SDK 双目标编译、Base 精确依赖锁升级、新签名实验镜像和 C3 联合 OTA／MQTT 重启后的 FRP 恢复继续执行。先前失败证据保持不变。来源下载最低普通 heap 6500 B，48 KiB 门仍未通过；本次身份修正不作为容量优化。ESP32 实板、完整负载、掉电和长稳继续开放。
+固定 SDK 双目标编译、Base 精确依赖锁升级、新签名实验镜像和 C3 联合 OTA／MQTT 重启后的 FRP 恢复继续执行。先前失败证据保持不变。当轮来源下载最低普通 heap 6500 B，原 48 KiB 容量门未通过；本次身份修正不作为容量优化。ESP32 实板、完整负载、掉电和长稳继续开放。
 
 接口与生命周期见[客户端合同](../design/client-lifecycle.md)与[握手合同](../design/control-handshake.md)。
 
 ## 固定 SDK 与 C3 联合续验
 
-2026-10-02，相同运行源码的固定 SDK C3／ESP32 独立样例与 Base 双目标签名构建、官方验签、host 回归通过。Base `ffc88efbbb259b32ca75c944776ba77328f731b6` 使用已有 UUID 请求 run ID；C3 代表业务的一次 WRITE 联合 OTA、一次 MQTT restart 后，目标与第三 boot 均经实际 FRP 认证状态核验，十二项消息计数、卸载及 A／C／原代码字节核对通过。143 份实板索引为 `effd1620aa917549bd660eb246e00b050f48e80fc0747a630be06b80f2da2988`，此前 109 份失败保持；88 份来源下载均 MQTT／FRP ready，但最低历史 heap 4124 B，48 KiB 门继续失败。详细输入与恢复边界见[Base 联合检查点](https://github.com/esp-space/esp-base/blob/master/docs/operations/c3-five-capability-run-id-checkpoint.md)。
+2026-10-02，相同运行源码的固定 SDK C3／ESP32 独立样例与 Base 双目标签名构建、官方验签、host 回归通过。Base `ffc88efbbb259b32ca75c944776ba77328f731b6` 使用已有 UUID 请求 run ID；C3 代表业务的一次 WRITE 联合 OTA、一次 MQTT restart 后，目标与第三 boot 均经实际 FRP 认证状态核验，十二项消息计数、卸载及 A／C／原代码字节核对通过。143 份实板索引为 `effd1620aa917549bd660eb246e00b050f48e80fc0747a630be06b80f2da2988`，此前 109 份失败保持；88 份来源下载均 MQTT／FRP ready，但最低历史 heap 4124 B，48 KiB 门继续失败。该历史功能切片不继承为当前原生固件资格，现役输入与验收前置见[Base 原生业务与固件 OTA 计划](https://github.com/esp-space/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)。
 
-本库身份修正已获得该 C3 功能切片证据；最大负载、组合容量、ESP32 实板、掉电、长稳与生产仍未验收。不能把前文阶段性的未完成说明或本次功能成功解释为五能力总验收。
+本库身份修正已获得该 C3 功能切片证据；最大负载、组合容量、ESP32 实板、掉电、长稳与生产仍未验收。不能把前文阶段性的未完成说明或本次功能成功解释为当前产品的整体验收。

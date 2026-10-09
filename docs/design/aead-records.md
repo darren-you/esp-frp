@@ -47,6 +47,6 @@ IDF 的 `MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS` 不保证重叠缓冲有效。适
 
 host 回归覆盖逐字节/边界拆分、部分读写、64 KiB 与多记录、空记录、篡改/错误密钥/重放、截断、计数边界、lease 争用和清理失败重试。可选测试直接调用官方 FRP 的 `NewClientCryptoContext` 和 `NewAEADCryptoReadWriter`，覆盖两后端各 12 组双向用例、10 组拒绝用例；小发送缓存 33 字节、4128 字节和最大缓存均有交叉验证。具体入口见 [tests](../../tests/README.md)。
 
-历史 RAM reader 的容量结果见 [P6 连续内存检查点](../operations/p6-frp-chunked-aead.md)和[逐块分配审计](../operations/p6-frp-lazy-aead-memory-audit.md)。它们不代表当前 Flash reader 的设备容量。当前唯一接收路径已通过 OpenSSL、独立 PSA 与 Mbed TLS host 互操作；固定 ESP-IDF 双目标空输入 sample 已编译、分区表与 app size 已由官方工具核对。真实设备 Flash/PSA、掉电和 Base 产品容量尚待验证。
+当前唯一接收路径已通过 OpenSSL、独立 PSA 与 Mbed TLS host 互操作；固定 ESP-IDF 双目标空输入 sample 已编译、分区表与 app size 已由官方工具核对。真实设备 Flash/PSA、掉电和 Base 产品容量尚待验证。
 
 协议依据：[FRP crypto](https://github.com/fatedier/frp/blob/v0.71.0/pkg/proto/wire/crypto.go)、[FRP 方向密钥装配](https://github.com/fatedier/frp/blob/v0.71.0/pkg/util/net/conn.go)、[golib AEAD](https://github.com/fatedier/golib/blob/v0.8.2/crypto/aead_stream.go)。

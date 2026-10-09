@@ -55,7 +55,7 @@ idf.py -C examples/tcp_proxy -B /private/tmp/frp-esp32-build \
 | C3 | `0xd3c30`（867376 B） | `0xd54a0`（873632 B） | +6256 B | `0x2ab60` |
 | ESP32 | `0xc7640`（816704 B） | `0xc8f30`（823088 B） | +6384 B | `0x370d0` |
 
-当前两个非空 ELF 都包含 `efrp_idf_flash_store_bind` 与 `efrp_idf_flash_store_callbacks` 符号，`src/idf_flash_store.c.obj` 分别在双目标组件目录生成。C3 会话结构的 DWARF size 从旧路径 11280 B 到 15392 B，增加独立 4096 B Flash 窗口；这不是运行峰值。Base 的安全启动签名尾、双槽分区和 MQTT/OTA/Container 链接集合不同，必须在其精确产品输入上重新量测。
+当前两个非空 ELF 都包含 `efrp_idf_flash_store_bind` 与 `efrp_idf_flash_store_callbacks` 符号，`src/idf_flash_store.c.obj` 分别在双目标组件目录生成。C3 会话结构的 DWARF size 从旧路径 11280 B 到 15392 B，增加独立 4096 B Flash 窗口；这不是运行峰值。Base 的安全启动签名尾、双槽分区和 MQTT/OTA 与原生业务链接集合不同，必须在其精确产品输入上重新量测。
 
 ## 尚未验收
 

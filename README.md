@@ -131,7 +131,7 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_yamux.h` 提供单 owner、无 socket 的客户端核心。四流上限不变，但只在打开每条流时分别申请 1 KiB 接收 ring，`release` 或最终 `destroy` 清零释放；打开流的分配失败返回 `EFRP_NO_MEMORY`，不消耗流 ID 或控制队列。协议初始窗口保持 256 KiB，可增量接收大于 ring 的 DATA。调用方定期 tick，显式消费串流和输出；仅当完整 WindowUpdate 已交给 transport 才归还接收信用。慢流超时 RST、释放后数据有界排空、半关闭与 PING/GOAWAY 均有 host 回归。完整合同和限制见 [Yamux 核心](docs/design/yamux-core.md)。
 
-`esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生，并提供发送端；nonce 来自密码随机源，单方向限制 2^32 条记录。控制会话的唯一接收 reader 在 `esp_frp_flash_reader.h`：独占 4096 字节 RAM 窗口，小记录直接认证，大记录把密文写入独占 64 KiB scratch，完整验签并在每次窗口交付前复验。完整 GCM tag 验证前不暴露明文，失败或取消后清零窗口与 key。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)和[Flash 暂存合同](docs/design/flash-backed-aead.md)；[C3 分块审计](docs/operations/p6-frp-lazy-aead-memory-audit.md)及[ESP32 IRAM 实验](docs/operations/p6-frp-esp32-iram-aead.md)是旧 reader 的历史证据。
+`esp_frp_aead.h` 对原始 Hello payload 做 SHA-256 摘要与 HKDF-SHA256 双向密钥派生，并提供发送端；nonce 来自密码随机源，单方向限制 2^32 条记录。控制会话的唯一接收 reader 在 `esp_frp_flash_reader.h`：独占 4096 字节 RAM 窗口，小记录直接认证，大记录把密文写入独占 64 KiB scratch，完整验签并在每次窗口交付前复验。完整 GCM tag 验证前不暴露明文，失败或取消后清零窗口与 key。仅支持协商 `aes-256-gcm`；Hello 语义由握手层验证。详见 [AEAD 合同](docs/design/aead-records.md)和[Flash 暂存合同](docs/design/flash-backed-aead.md)。
 
 `esp_frp_idf_flash_store.h` 提供真实 IDF 分区 provider：调用方传入 label、type/subtype、精确 offset/size 和短持有的 storage owner 回调；bind 逐项核对实际分区，recover 擦除中断记录，write 回读校验，clear 只撤销 RAM lease。Base 可复用此 provider 并接自己的 owner，独立样例已绑定专用实验分区；它们仍需分别完成产品容量与实板验证。
 
@@ -141,7 +141,7 @@ ctest --test-dir build --output-on-failure
 [ESP32 会话 IRAM 放置检查点](docs/operations/p6-esp32-session-iram-placement.md)记录单核 8BIT IRAM 条件分配、签名 QEMU 的严格 TLS/FRPS 容量与正式 Base owner 尚未验证的边界。
 [ESP32 工作流 IRAM 放置检查点](docs/operations/p6-esp32-work-iram-placement.md)记录 300,001 字节官方 FRPS 双向工作流、普通堆低水与正式 Base 组合尚未验证的边界。
 
-`esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格认证的控制流上：TCP/TLS 使用 Yamux，QUIC 使用原生 bidi；不自行建立网络连接。UDP 明确协商 binary-v1，XTCP 候选只接受认证后服务端签发的当前控制身份。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。会话将握手输出区按阶段复用为接收区，消除独立 4 KiB 申请；[ESP32 Login 内存收据](docs/operations/p6-esp32-login-heap-reuse.md)记录当时固定 SDK 和 QEMU 对照边界。详见 [握手合同](docs/design/control-handshake.md)。
+`esp_frp_handshake.h` 生成 ClientHello/Login，验证 ServerHello/LoginResp 并移交方向密钥和 run ID。它必须运行在已完成严格认证的控制流上：TCP/TLS 使用 Yamux，QUIC 使用原生 bidi；不自行建立网络连接。UDP 明确协商 binary-v1，XTCP 候选只接受认证后服务端签发的当前控制身份。支持部分输出、10 秒绝对期限、4 KiB 握手 payload 上限和精确的加密尾数据保留；完整消费 LoginResp 后，余下字节交给 AEAD。会话将握手输出区按阶段复用为接收区，消除独立 4 KiB 申请。详见 [握手合同](docs/design/control-handshake.md)。
 
 可选上游 Yamux 互操作检查需要 POSIX 宿主和 Go >= 1.23，以 `-DEFRP_TEST_UPSTREAM_YAMUX=ON` 配置后运行 CTest。AEAD 官方交叉验证使用 Go >=1.25 与 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON`。两者各自固定公开 Go 依赖，不读取相邻仓或生产 FRPS；默认 host 检查不依赖 Go 或外网，POSIX 连接测试会使用回环 TCP。具体命令见[测试入口](tests/README.md)。
 

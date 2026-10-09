@@ -6,7 +6,7 @@
 
 候选从精确锁定 FRP `1dcb6d63d471ccc4cefb369637f853af7d98d77d` 的 Base 仓外副本覆盖本次五份源码，并非已更新 Component Manager 锁的产品镜像。固定 ESP-IDF `578cf89c`／lwIP `2758df4` 构建，ECDSA v1 签名 app `0x10fff4` B，SHA-256 `24ec316be97a44ac313530600a62619df972819e09c9e412da67d7e3b35405f6`；官方签名、分区解码和双槽尺寸检查通过，每槽余 65,548 B。QEMU 输入、Flash、FRPS 与串口日志在 `mac-work-1:/private/tmp/esp-base-p603-frp-work-iram-20260928/`，结果文件 `network-run-result.json` 报告回显校验成功。
 
-此探针直接创建 FRP client，绕过 Base 正式 Wi-Fi IP、SNTP 和 HMAC listener owner；它没有 MQTT、OTA 下载或 Container guest 同时在线，也未测两条活跃流及一条预备流的峰值。48 KiB 产品门、P6-03 和实体板验收均未因此完成。本次没有刷写设备。
+此探针直接创建 FRP client，绕过 Base 正式 Wi-Fi IP、SNTP 和 HMAC listener owner；它没有 MQTT 与 OTA 下载同时在线，也未测两条活跃流及一条预备流的峰值。48 KiB 产品门、P6-03 和实体板验收均未因此完成。本次没有刷写设备。
 
 同一源码的默认 AppleClang ASan/UBSan host 回归 **10/10**，完整 Mbed TLS 4.1.0／PSA、官方 FRPS 会话与工作流、Flash reader 的 ASan/UBSan 回归 **23/23**。host 使用普通分配路径；这些结果验证协议与清理回归，不代替设备侧容量测量。
 

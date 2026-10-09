@@ -6,4 +6,4 @@
 
 同一源码的 AppleClang ASan/UBSan 默认 host 测试 **10/10**，完整 Mbed TLS 4.1.0／PSA、官方 FRPS 会话与 Flash reader 测试 **19/19**；后者走普通 host 分配路径。ESP32-C3 签名 Base 仓外副本完成固定 SDK 构建、RSA v2 官方验签及候选双槽容量检查：app `0x111000` 字节，SHA-256 `94aca38b45501b470d2d266c0d0fc44c386aa4198c2c0c7a3b06ad49fe06b203`，每槽剩余 61,440 字节；C3 不走 IRAM 分支。C3 输入在 `mac-work-1:/private/tmp/esp-base-c3-frp-iram-policy-20260928/`。
 
-这是会话内存策略和独立网络探针的验证，不是 Base 正式 FRP owner 的联网运行。Base 的 Wi-Fi IP、SNTP 时间门、loopback HMAC listener、MQTT／OTA／Container 并发及两块实体板尚未覆盖；单核调度和 IRAM 8BIT 非对齐访问代价也尚未量测。当前 Base 正式 ESP32 配置未开启该能力，故此检查点不宣称 P6-03 的 48 KiB 产品资源门已通过，且未刷写设备。
+这是会话内存策略和独立网络探针的验证，不是 Base 正式 FRP owner 的联网运行。Base 的 Wi-Fi IP、SNTP 时间门、loopback HMAC listener、MQTT／OTA 并发及两块实体板尚未覆盖；单核调度和 IRAM 8BIT 非对齐访问代价也尚未量测。当前 Base 正式 ESP32 配置未开启该能力，故此检查点不宣称 P6-03 的 48 KiB 产品资源门已通过，且未刷写设备。

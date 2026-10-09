@@ -21,4 +21,4 @@ AppleClang arm64 的结构布局检查在相同头文件与编译器下对基线
 - `session_idf_flash_upstream` **1/1 通过**。正式 session、reader 和 IDF provider 经测试分区 shim 同路执行，覆盖满长正确／错误 tag、owner／lease 收敛与小记录不访问 scratch。
 - `handshake`、`aead_flash`、`idf_flash_store` 的 ASan/UBSan 定向回归均通过，分别检查握手移交、reader `close` 失败重试和 provider lease 隔离。
 
-以上仅证明 host 软件路径。没有修改或刷写实体设备、Base 锁、产品分区、凭据或根计划；没有重新测量固定 SDK 双目标镜像、QEMU 或 Base/MQTT/OTA/Container 并发峰值。P6-03 产品容量与实板验收仍以各自独立证据为准。
+以上仅证明 host 软件路径。没有修改或刷写实体设备、Base 锁、产品分区、凭据或根计划；没有重新测量固定 SDK 双目标镜像、QEMU 或 Base/MQTT/OTA 与原生业务并发峰值。P6-03 产品容量与实板验收仍以各自独立证据为准。

@@ -45,4 +45,4 @@ FRP 的 control/work stream 均由客户端发起；服务端发起的偶数 SYN
 
 Host ASan/UBSan 覆盖逐字节与粘帧、256 KiB DATA、小 ring 背压、部分输出、延后信用回补、FIN/RST、四流容量、队列满恢复、迟到数据、窗口溢出、ID 耗尽、绝对期限、1000 次流槽复用及持续收发下双流信用和 DATA 公平性。可选上游测试在真实回环 TCP 上重建 100 个会话，每次两条流各执行 300001 字节的双向比较、PING 和双向 FIN；不把回环测试计为 C3 或 TLS 验收。
 
-ESP-IDF v6.1 / ESP32-C3 的独立组件编译已通过。[同输入 C3 QEMU 容量复测](../operations/c3-yamux-stream-ring-capacity.md)已在 Base READY 和 64 KiB guest 存活时越过旧 mux 分配失败，真实 client 到达认证阶段；随后 OpenETH RX buffer 分配失败，尚未完成 Login/注册/Pong。完整 C3/FRPS 资源原型已组合 TLS、64 KiB AEAD 工作区、控制解析和本地 socket，仍须按当前存储版本完成业务并发、故障与资源验收；本核心的静态大小不等于完整客户端峰值，也不证明 100 次实板连接释放。
+ESP-IDF v6.1 / ESP32-C3 的独立组件编译已通过。完整 C3/FRPS 资源原型组合 TLS、当前 Flash AEAD reader、控制解析和本地 socket，仍须完成业务并发、故障与资源验收；本核心的静态大小不等于完整客户端峰值，也不证明 100 次实板连接释放。

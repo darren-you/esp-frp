@@ -128,7 +128,7 @@ ctest --test-dir build-tls --output-on-failure
 
 同一模式的 `work_upstream` 用实际 FRPS 验证 100 轮双业务流，共 200 条本地连接，每流双向各 300001 字节；总期限 240 秒。`work_faults_upstream` 总期限 180 秒，包含四个真实 FRPS 拒绝/取消场景和 13 个官方 API 半关闭、尾数据、解析、期限与慢流场景。连接目标是独立回环业务 listener；正常结束与取消均检查 fd 基线，详情见 [工作流](../docs/design/work-streams.md)。
 
-`work_allocation` 对三个工作槽的首次分配失败、待办请求保留、取消清零释放及重复取消做定向检查；完整 Mbed TLS 模式的 `work_upstream` 和 `work_faults_upstream` 覆盖实际 FRPS 工作流与背压。固定 C3/ESP32 QEMU 同输入容量边界见[工作槽惰性分配收据](../docs/operations/p6-frp-lazy-work-stream-capacity.md)。
+`work_allocation` 对三个工作槽的首次分配失败、待办请求保留、取消清零释放及重复取消做定向检查；完整 Mbed TLS 模式的 `work_upstream` 和 `work_faults_upstream` 覆盖实际 FRPS 工作流与背压。设备容量由当前固件、完整业务并发和双目标实测核对。
 
 同一候选源码下的完整 host/local 压力与工作流矩阵结果、精确复现命令和实板边界见 [P4-04 主机工作流矩阵](../docs/operations/p4-host-workflow-matrix.md)。
 
@@ -146,9 +146,7 @@ Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回�
 
 可以把完整 Mbed TLS 命令中的 `-fsanitize=address,undefined` 替换为 `-fsanitize=thread`，在独立构建目录运行 `ctest --test-dir <目录> -R '^client_' --output-on-failure`，检查 worker、外部 API、状态副本与迟到测试 DNS 的竞争。不可同时开启 TSan 和 ASan。停止和线程退出检查见[客户端生命周期](../docs/design/client-lifecycle.md)。
 
-`session_peer` 将实际 `session.c` 的对象分配单独替换为测试计数器；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手结束后，Flash reader 的 4096 字节窗口复用握手所占联合区，并与控制 wire parser 的 `json_rx` 同时保持独立。正常/失败/取消会话销毁均检查持有对象已清零且无残留，clear 失败时保留 session handle 后重试。`aead_flash` 覆盖记录边界、满长坏 tag 和 lease 争用；[P6 连续内存检查点](../docs/operations/p6-frp-chunked-aead.md)与[逐块分配审计](../docs/operations/p6-frp-lazy-aead-memory-audit.md)仅记录旧 RAM reader 的历史容量，不代表当前产品。
-
-ESP32 32BIT-only IRAM 接收实验已退出当前运行路径。其固定 QEMU 输入和历史结果保留在 [esp32-iram-aead](esp32-iram-aead/README.md)，需要按该页锁定的旧提交重放；当前 `session.c` 与 `aead_upstream` 只使用 Flash reader。
+`session_peer` 将实际 `session.c` 的对象分配单独替换为测试计数器；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手结束后，Flash reader 的 4096 字节窗口复用握手所占联合区，并与控制 wire parser 的 `json_rx` 同时保持独立。正常/失败/取消会话销毁均检查持有对象已清零且无残留，clear 失败时保留 session handle 后重试。`aead_flash` 覆盖记录边界、满长坏 tag 和 lease 争用。
 
 ## 协议扩展软件测试
 

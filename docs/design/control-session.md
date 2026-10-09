@@ -32,8 +32,8 @@ XTCP 双角色从当前 LoginResp 取得 32 字节 control ID；type 22 响应�
 
 候选的 `xtcp_client_upstream` 已让公共 C provider/visitor 经真实维护 FRPS 控制身份、双本地 STUN、认证 SID、peer 双方 CertificateVerify 与 reserved proof 完成双流业务、同实例停止/重启、时钟撤销和 fd/DNS 基线；它不等于原样官方 XTCP 支持或异网/实板验收。正式入口和当前矩阵见[测试说明](../../tests/README.md)。
 
-历史 RAM reader 的会话对象、QEMU 与容量结果见[容量复测](../operations/p6-frp-lazy-work-stream-capacity.md)及[逐块分配审计](../operations/p6-frp-lazy-aead-memory-audit.md)，不能移作当前 Flash 路径的容量结论。当前 reader 对象约 248 字节，另在会话内独占 4096 字节窗口；大记录占 64 KiB ciphertext scratch 而不分配 64 KiB 明文块。会话还保留 1056 字节 AEAD 发送区和阶段复用的握手/控制区；TLS 对象、SDK 内部内存、cJSON 临时分配和工作连接对象仍须计入设备峰值。C3/ESP32 双板满长记录、Base 产品镜像和 OTA 并发期限尚未验收。
+当前 reader 对象约 248 字节，另在会话内独占 4096 字节窗口；大记录占 64 KiB ciphertext scratch 而不分配 64 KiB 明文块。会话还保留 1056 字节 AEAD 发送区和阶段复用的握手/控制区；TLS 对象、SDK 内部内存、cJSON 临时分配和工作连接对象仍须计入设备峰值。C3/ESP32 双板满长记录、Base 产品镜像和 OTA 并发期限尚未验收。
 
 登录握手和认证后的控制区在会话内复用同一存储：只有 `take_result` 复制密钥/run_id、销毁握手并释放借用后，才建立控制 writer 与 JSON parser。清理按实际初始化阶段执行，不能将控制字节解释为握手对象。控制明文输出最多 1024 字节，AEAD 发送区为 1056 字节；对端仍可发送完整 65552 字节密文加 tag 记录及 4 KiB JSON 边界，不把本地发送大小当成对端 record 上限。
 
-ESP32 纯 IRAM 字宽 reader 属于历史实验；当前公开会话只有 Flash reader，不再编译该实验模式。host 官方 FRPS 矩阵验证当前路径的双流、背压、取消、清理失败重试及 64 KiB 控制记录；实际设备组合峰值仍需另测。
+当前公开会话只有 Flash reader。host 官方 FRPS 矩阵验证当前路径的双流、背压、取消、清理失败重试及 64 KiB 控制记录；实际设备组合峰值仍需另测。

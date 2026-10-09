@@ -2,7 +2,7 @@
 
 更新时间：2026-10-04。
 
-扩展基线已由三机源码同步保存为 `5c50e71acdc4e1da45cf3730682d4323c9f6e618`。角色、撤销、QUIC 调度与确定性夹具已本地保存为 `00b36c3bc21bdf3a26718ddca4796ae37e59bb87`。后继 v6 再修接收信用分配错误；它们仍属于 0.3.0 软件候选，不构成正式发布、设备或 Base 五能力组合验收。
+扩展基线已由三机源码同步保存为 `5c50e71acdc4e1da45cf3730682d4323c9f6e618`。角色、撤销、QUIC 调度与确定性夹具已本地保存为 `00b36c3bc21bdf3a26718ddca4796ae37e59bb87`。后继 v6 再修接收信用分配错误；它们仍属于 0.3.0 软件候选，不构成正式发布、设备或 Base 原生业务组合验收。
 
 ## 已落实的修正
 
@@ -44,4 +44,4 @@ v4 的三个失败为 QUIC 长载荷夹具没有必然触发背压、XTCP direct
 
 受限原始日志和完整清单保留在本机证据区。v6 源清单 `ad89aeebaf8eee5c852241d61f01641e584cc742eed3a6a748f1489206f39e7d`；native 故障回归收据 `764385210e38ac216e26c26f2f803805556ed1cf4746ba553e4f03faa7882348`；sanitizer 收据 `deecd1550e20ec1b201b5bdd1f2ecc1139f80847ea00098c4d8e96bb5e4915af`；v6 完整 C 日志 `c5222aafb06289fc6adf6b61975696f4f2924c0ea45190d7707a21183a8ed41b`；v6 双目标 SDK 收据 `1f5061b510184b315bd2d7cc89d81ddb33f723cae46b1b692db4c9ed79a7440e`、完整清单 `d8f9348457ed719fd510aa2302a633f6360d938a030fd71ad984696155fabae9`、独立来源核对 `71f7f48e9ff112a0a738c863a72ccd6dd436ec78ad1269b7ad628829a04a0c14`。公开记录仅给出定位摘要：v4 源 `8f8269766a907adb0849e6b736b2c7300cbd1bbedfa5cdbc73f25ace942a336a`；v4 C 红日志 `54a247d7fca2fa3e4f866c31d65316a1fe5da853ba3e3654eff495b2cafc54e5`；v4 SDK 收据 `bbeb05f6a1e113e2b0a5867461512c2c58b5892d1fc987d2e3046bb98dede35d`；v5 源 `e2933d85d449e59bd2750a9905f7377a156333c9b55f6ca7fc75d766fa522302`；v5 C 红日志 `d68351f95c7275dab6be5c6afee8c6571c2d6639eba7dc3bfa82a3aef288aded`。原 v2 失败、纯诊断、针对修正与后继完整矩阵分别保存，不改写原结果。
 
-历史 [扩展软件检查点](xtcp-candidate-software-20261003.md) 的 52 项结果仍绑定历史输入，不能直接继承为当前组合资格。P9 各项仍由[五仓计划](https://github.com/darren-you/darren-space/blob/master/harness/docs/design/darren-space/global/esp-base-frp-mqtt-ota-container-development-plan.md)逐项裁决：异网 NAT、两目标实板、Base/MQTT/OTA/Container 组合资源、完整 native 生命周期与性能、48 KiB 门、Flash 成本与寿命、断电／72 小时、正式交付均继续开放。
+历史 [扩展软件检查点](xtcp-candidate-software-20261003.md) 的 52 项结果仍绑定历史输入，不能直接继承为当前组合资格。后续设备验收仍以[Base 原生业务与固件 OTA 计划](https://github.com/esp-space/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)的首版前置为准：异网 NAT、两目标实板、Base/MQTT/OTA 与原生业务组合资源、完整 native 生命周期与性能、Flash 成本与寿命、断电／72 小时及正式交付均未闭环。当前原生产品的内部堆／最大连续块／任务栈门分别为 16,384／24,576／1,024 B；本软件候选未取得这些实板资格。

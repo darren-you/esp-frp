@@ -1,6 +1,6 @@
 # FRP 协议扩展软件合同
 
-本页描述 0.3.0 开发候选。维护者于 2026-10-02 允许扩展软件提前并行；两目标实板、Base/MQTT 组合和最终验收仍以五仓首版闭环为前置。完整 C QUIC TCP/UDP/STCP visitor、真实 FRPS 重启与取消，以及 XTCP 公共客户端双角色全链路软件互测均通过；这些结果不计作已验收的设备能力。冻结输入、测试及双目标构建见[软件检查点](../verification/xtcp-candidate-software-20261003.md)。
+本页描述 0.3.0 开发候选。维护者于 2026-10-02 允许扩展软件提前并行；两目标实板、Base/MQTT 组合和最终验收仍以[Base 原生业务与固件 OTA 首版](https://github.com/esp-space/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)闭环为前置。完整 C QUIC TCP/UDP/STCP visitor、真实 FRPS 重启与取消，以及 XTCP 公共客户端双角色全链路软件互测均通过；这些结果不计作已验收的设备能力。冻结输入、测试及双目标构建见[软件检查点](../verification/xtcp-candidate-software-20261003.md)。
 
 ## 角色与注册
 

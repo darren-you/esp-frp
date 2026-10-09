@@ -2,9 +2,9 @@
 
 本次完成了协议扩展的软件验证，以及 ESP32-C3／ESP32 的完整 ESP-IDF 编译、链接和原 1 MiB factory 分区容量检查。正式 Mbed TLS 单次完整 CTest 矩阵 **52/52 通过，包含 XTCP 全链路和两项新增关闭回归**；OpenSSL 矩阵 **21 项通过**。两个目标最终镜像都保留 XTCP 控制器、NAT、peer QUIC、证书生成，以及普通 TCP/TLS/Yamux 的实际链接。
 
-这些证据属于 0.3.0 开发候选，不构成设备验收。没有连接、刷写或操作设备；未触达 `mac-ci-2`。两目标实板、Base/MQTT 组合、异网验证及五仓首版闭环仍是后续验收前置。
+这些证据属于 0.3.0 开发候选，不构成设备验收。没有连接、刷写或操作设备；未触达 `mac-ci-2`。两目标实板、Base/MQTT 组合、异网验证及[Base 原生业务与固件 OTA 首版](https://github.com/esp-space/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)闭环仍是后续验收前置。
 
-[同名机器摘要](xtcp-candidate-software-20261003.json) 保存最终 99 项快照清单、公开编译输入全文、依赖身份、配置差异、实际 sdkconfig／制品 SHA-256、59 个必要链接符号和各轮结果。大型 ELF、map、原始日志保留在本轮仓外目录，不写入 Git。协议边界见[协议扩展合同](../design/protocol-extensions.md)与[流传输合同](../design/stream-transport.md)。
+[同名机器摘要](xtcp-candidate-software-20261003.json) 保存最终 99 项快照清单、公开编译输入全文、依赖身份、配置差异、实际 sdkconfig／制品 SHA-256、59 个必要链接符号和各轮结果。大型 ELF、map、原始日志保留在本轮仓外目录，不写入 Git。机器摘要中的阶段前置仅保存当轮原事实，不作为现役实施合同；当前设备前置采用上文原生业务与固件 OTA 计划。协议边界见[协议扩展合同](../design/protocol-extensions.md)与[流传输合同](../design/stream-transport.md)。
 
 ## 软件互测证据
 
@@ -166,4 +166,4 @@ done
 
 C3 容量只余 15520 字节，已通过本轮完整镜像的原门禁，但不是未来新增功能的容量保证。官方选项的性能代价尚无实板测量，不能从代码尺寸推导 CPU 时序、worker 堆栈、最低 heap、QUIC 长期运行或 Flash 停用窗口的资源余量。
 
-回环 STUN／peer 正例证明实际软件入口和身份／所有权／清理链路，不证明跨运营商、真实 NAT 路由器或异网可用性。两目标硬件、异网矩阵、Base/MQTT 组合及五仓首版前置仍未闭环；本检查点不放行设备验收或发布。后续按当前 typed API 与固定依赖实施，不增加自动协议回退。
+回环 STUN／peer 正例证明实际软件入口和身份／所有权／清理链路，不证明跨运营商、真实 NAT 路由器或异网可用性。两目标硬件、异网矩阵、Base/MQTT 组合及原生业务首版前置仍未闭环；本检查点不放行设备验收或发布。后续按当前 typed API 与固定依赖实施，不增加自动协议回退。

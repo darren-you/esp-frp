@@ -16,7 +16,7 @@
 
 `src/session.c` 的当前唯一控制接收路径依次调用 `efrp_aead_flash_reader_init`、`efrp_aead_flash_feed`、`efrp_aead_flash_plaintext`、`efrp_aead_flash_consume_plaintext` 和 `efrp_aead_flash_reader_close`。本探针直接调用**同一个** `src/aead_flash.c` reader 与 `src/idf_flash_store.c` provider，ELF 中核对到 `efrp_aead_flash_feed`、`efrp_idf_flash_store_bind` 和 `efrp_crypto_gcm_decrypt_store` 符号。探针没有调用 `efrp_session_step`；此关系仅说明测试到的 reader 是正式 session 所用实现，不代表完整 session 已在 QEMU 运行。
 
-实验 `frp_scratch@0x110000` 沿用独立样例专用布局，**不是 Base 候选 `frp_scratch@0x3e6000`**；本轮没有改 Base 正式分区、签名制品、Flash owner 或生产代码。`with_owner` 是探针单 owner 原子回调，没有模拟 Base 的 OTA/Container 并发。
+实验 `frp_scratch@0x110000` 沿用独立样例专用布局，**不是 Base 候选 `frp_scratch@0x3e6000`**；本轮没有改 Base 正式分区、签名制品、Flash owner 或生产代码。`with_owner` 是探针单 owner 原子回调，没有模拟 Base 的 OTA 与原生业务并发。
 
 ## 真实执行与测量
 
@@ -33,7 +33,7 @@
 | `MALLOC_CAP_8BIT` 空闲基线 / 最低 / 最终 | 328,948 / **327,740** / 327,740 B | — / **328,948** / 328,948 B |
 | `MALLOC_CAP_8BIT` 最大连续块最低 | **188,416 B** | **188,416 B** |
 
-这些时间来自 QEMU 的 `esp_timer_get_time`，`flash_operation_us` 在探针 `with_owner` 内围住正式 provider 发起的擦写、分块写回读和读取；feed/窗口总时间还包括 PSA 运算和逐字节比对。`MALLOC_CAP_8BIT` 只在探针运行的若干采样点读取，不是全生命周期追踪；输入密文静态嵌入 app Flash，4 KiB 窗口静态分配。第一次最终空闲值比 recover 后基线少 1,208 字节，本轮不据此判断泄漏原因或产品容量。它们都不是物理 SPI Flash 延迟，也不包含 TLS、lwIP、Wi-Fi、FRPS session、Base/MQTT/OTA/Container 的内存峰值。
+这些时间来自 QEMU 的 `esp_timer_get_time`，`flash_operation_us` 在探针 `with_owner` 内围住正式 provider 发起的擦写、分块写回读和读取；feed/窗口总时间还包括 PSA 运算和逐字节比对。`MALLOC_CAP_8BIT` 只在探针运行的若干采样点读取，不是全生命周期追踪；输入密文静态嵌入 app Flash，4 KiB 窗口静态分配。第一次最终空闲值比 recover 后基线少 1,208 字节，本轮不据此判断泄漏原因或产品容量。它们都不是物理 SPI Flash 延迟，也不包含 TLS、lwIP、Wi-Fi、FRPS session、Base/MQTT/OTA 与原生业务的内存峰值。
 
 runner 在第一次 QEMU 退出后直接按主机文件字节检查 MTD 的 scratch 恰为 fixture 密文，并保存完整 `phase-1-flash.bin`。第二次启动复用该镜像，新的静态 provider 首先读到跨启动保留的 **65,536** 个密文字节，再调用正式 boot `recover`，最后完整读回 **65,536** 个 `0xff`。主机侧也核对最终镜像 scratch 全 `0xff`。第一次镜像 SHA-256 `80e2e3647451d7528b2b1b13cb90e6ab63bd9b96a52d1460df9619730b17d2d6`；最终镜像与初始镜像同为 `c6dfcf7e80be5ee9e7f2d31d938f3cdcc6a0ac6961491046f71a5c0af7f607d0`。第一次 scratch SHA-256 `f608a64bc134caaadcee9c6344cd365a21bc63be9be5ff3b1822506aaa6a893b`，最终全擦为 `71189f7fb6aed638640078fba3a35fda6c39c8962e74dcc75935aac948da9063`。
 
