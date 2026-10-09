@@ -1,228 +1,177 @@
-"""用真实 Git 仓验证 SDK 身份、gitlink 和脏工作树拒绝。"""
+"""用真实 checkout 核对 host 来源检查独立验证发布归档。"""
+import contextlib
+import hashlib
 import importlib.util
+import io
+import json
+import os
 from pathlib import Path
 import subprocess
-import os
 import shutil
-from unittest.mock import patch
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
-SPEC = importlib.util.spec_from_file_location("sdk", Path(__file__).parents[1] / "sdk.py")
-SDK = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(SDK)
+SPEC = importlib.util.spec_from_file_location("quic_sources", Path(__file__).parents[1] / "quic_sources.py")
+SOURCES = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(SOURCES)
 
 
-class SDKContractTest(unittest.TestCase):
+class HostSourceContractTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
-        self.source = self.root / "lwip"
-        self.sdk = self.root / "sdk"
-        for path in (self.source, self.sdk):
-            path.mkdir()
-            self.run_git(path, "init", "-q", "-b", "master")
-            self.run_git(path, "config", "user.name", "SDK fixture")
-            self.run_git(path, "config", "user.email", "sdk@example.invalid")
-        (self.source / "tcp.c").write_text("upstream\n")
-        self.commit(self.source)
-        self.original = self.run_git(self.source, "rev-parse", "HEAD")
-        self.run_git(self.sdk, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
-                     str(self.source), "components/lwip/lwip")
-        (self.sdk / "sdk.c").write_text("sdk\n")
-        self.commit(self.sdk)
-        sdk_revision = self.run_git(self.sdk, "rev-parse", "HEAD")
-        (self.source / "tcp.c").write_text("corrected\n")
-        self.commit(self.source)
-        fixed = self.run_git(self.source, "rev-parse", "HEAD")
-        self.lwip = self.sdk / "components/lwip/lwip"
-        self.run_git(self.lwip, "fetch", "-q", "origin")
-        self.run_git(self.lwip, "checkout", "-q", "--detach", fixed)
-        self.lock = {"idf": {"revision": sdk_revision},
-                     "lwip": {"revision": fixed, "path": "components/lwip/lwip"}}
+        self.source = self.root / "source"
+        (self.source / "tools").mkdir(parents=True)
+        self.git(self.source, "init", "-q", "-b", "master")
+        self.git(self.source, "config", "user.name", "host source fixture")
+        self.git(self.source, "config", "user.email", "host@example.invalid")
+        self.content = b"complete generated source fixture\n"
+        (self.source / "source.c").write_bytes(self.content)
+        (self.source / "tools/package_source_archive.py").write_text(
+            "import argparse\nfrom pathlib import Path\n"
+            "p=argparse.ArgumentParser(); p.add_argument('--output',type=Path)\n"
+            "p.parse_args().output.write_bytes((Path(__file__).parents[1]/'source.c').read_bytes())\n"
+        )
+        self.git(self.source, "add", ".")
+        self.git(self.source, "commit", "-qm", "fixture")
+        self.entry = {
+            "repository": "https://github.com/example/host-source.git",
+            "revision": self.git(self.source, "rev-parse", "HEAD"),
+            "version": "4.1.0",
+            "archive_url": "https://github.com/example/host-source/releases/download/v4.1.0/mbedtls-4.1.0-actions-exit.tar.bz2",
+            "archive_sha256": hashlib.sha256(self.content).hexdigest(),
+        }
+        self.lock = self.root / "lock.json"
+        self.write_lock()
 
-    def tearDown(self):
-        self.temp.cleanup()
+    @staticmethod
+    def git(path, *args):
+        return subprocess.run(["git", "-C", str(path), *args], check=True,
+                              capture_output=True, text=True).stdout.strip()
 
-    def run_git(self, path, *args):
-        result = subprocess.run(["git", "-C", str(path), *args], text=True, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout.strip()
+    def write_lock(self):
+        self.lock.write_text(json.dumps({"schema_version": 1, "host_mbedtls": self.entry}))
 
-    def commit(self, path):
-        self.run_git(path, "add", ".")
-        self.run_git(path, "commit", "-q", "-m", "测试快照")
+    def run_entry(self, action, source):
+        with patch.object(SOURCES, "LOCK_PATH", self.lock), patch.object(
+                sys, "argv", ["quic_sources.py", action, "--host-mbedtls-path", str(source), "--quiet"]), \
+                contextlib.redirect_stderr(io.StringIO()) as error:
+            result = SOURCES.main()
+        return result, error.getvalue()
 
-    def test_accepts_only_locked_gitlink(self):
-        SDK.verify(self.sdk, self.lock)
+    def test_check_rebuilds_archive_without_network(self):
+        with patch.object(SOURCES.urllib.request, "urlopen", side_effect=AssertionError("check must be offline")):
+            result, error = self.run_entry("check", self.source)
+        self.assertEqual((result, error), (0, ""))
 
-    def test_rejects_original_lwip(self):
-        self.run_git(self.lwip, "checkout", "-q", "--detach", self.original)
-        with self.assertRaisesRegex(ValueError, "零窗口修正"):
-            SDK.verify(self.sdk, self.lock)
+    def test_check_rejects_lock_digest_not_matching_git_source(self):
+        self.entry["archive_sha256"] = "0" * 64
+        self.write_lock()
+        result, error = self.run_entry("check", self.source)
+        self.assertEqual(result, 1)
+        self.assertIn("发布归档内容不一致", error)
 
-    def test_rejects_dirty_lwip(self):
-        (self.lwip / "tcp.c").write_text("unverified\n")
-        with self.assertRaisesRegex(ValueError, "未提交"):
-            SDK.verify(self.sdk, self.lock)
+    def test_failed_prepare_cannot_make_later_check_bypass_archive(self):
+        self.entry["archive_sha256"] = "0" * 64
+        self.write_lock()
+        destination = self.root / "prepared"
 
-    def test_rejects_extra_sdk_change(self):
-        (self.sdk / "sdk.c").write_text("unverified\n")
-        with self.assertRaisesRegex(ValueError, "其他修改"):
-            SDK.verify(self.sdk, self.lock)
+        def prepare_from_local(path, entry):
+            self.git(self.root, "clone", "-q", str(self.source), str(path))
+            SOURCES.verify(path, entry)
 
-    def test_rejects_staged_sdk_change(self):
-        self.run_git(self.sdk, "add", "components/lwip/lwip")
-        with self.assertRaisesRegex(ValueError, "索引"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_untracked_sdk_content(self):
-        (self.sdk / "other.c").write_text("unverified\n")
-        with self.assertRaisesRegex(ValueError, "其他修改"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_wrong_sdk_revision(self):
-        self.lock["idf"]["revision"] = "0" * 40
-        with self.assertRaisesRegex(ValueError, "ESP-IDF 提交"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_shallow_nested_source(self):
-        self.run_git(self.lwip, "fetch", "-q", "--depth=1",
-                     self.source.as_uri(), self.lock["lwip"]["revision"])
-        self.assertEqual(self.run_git(self.lwip, "rev-parse", "--is-shallow-repository"), "true")
-        with self.assertRaisesRegex(ValueError, "shallow"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_partial_nested_source(self):
-        self.run_git(self.lwip, "config", "remote.origin.promisor", "true")
-        with self.assertRaisesRegex(ValueError, "partial"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_sparse_nested_source(self):
-        self.run_git(self.lwip, "config", "core.sparseCheckout", "true")
-        with self.assertRaisesRegex(ValueError, "sparse"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_sparse_worktree_configuration(self):
-        self.run_git(self.lwip, "config", "extensions.worktreeConfig", "true")
-        self.run_git(self.lwip, "config", "--worktree", "core.sparseCheckout", "true")
-        with self.assertRaisesRegex(ValueError, "sparse"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_missing_history_object(self):
-        relative = "objects/" + self.original[:2] + "/" + self.original[2:]
-        object_path = Path(self.run_git(self.lwip, "rev-parse", "--git-path", relative))
-        if not object_path.is_absolute():
-            object_path = self.lwip / object_path
-        object_path.unlink()
-        with self.assertRaisesRegex(ValueError, "对象不完整"):
-            SDK.verify_complete_repository(self.lwip, source_root=self.sdk)
-
-    def test_rejects_shared_nested_source_even_when_fsck_passes(self):
-        shutil.rmtree(self.lwip)
-        self.run_git(self.root, "clone", "-q", "--shared", str(self.source), str(self.lwip))
-        self.run_git(self.lwip, "fsck", "--connectivity-only", "--no-dangling")
-        with self.assertRaisesRegex(ValueError, "alternates"):
-            SDK.verify(self.sdk, self.lock)
+        with patch.object(SOURCES, "prepare", side_effect=prepare_from_local), patch.object(
+                SOURCES.urllib.request, "urlopen", return_value=io.BytesIO(b"invalid downloaded archive")):
+            result, error = self.run_entry("prepare", destination)
+        self.assertEqual(result, 1)
+        self.assertIn("归档摘要", error)
+        self.assertTrue(destination.is_dir())
+        SOURCES.verify(destination, self.entry)
+        result, error = self.run_entry("check", destination)
+        self.assertEqual(result, 1)
+        self.assertIn("发布归档内容不一致", error)
 
     def test_rejects_symlinked_git_directory_even_when_fsck_passes(self):
         alias = self.root / "symlinked-git-directory"
         shutil.copytree(self.source, alias, ignore=shutil.ignore_patterns(".git"))
         (alias / ".git").symlink_to(self.source / ".git", target_is_directory=True)
-        self.run_git(alias, "fsck", "--connectivity-only", "--no-dangling")
+        self.git(alias, "fsck", "--connectivity-only", "--no-dangling")
         with self.assertRaisesRegex(ValueError, "Git 元数据"):
-            SDK.verify_complete_repository(alias)
+            SOURCES.verify(alias, self.entry)
 
     def test_rejects_unbound_gitfile_even_when_fsck_passes(self):
         alias = self.root / "unbound-gitfile"
         shutil.copytree(self.source, alias, ignore=shutil.ignore_patterns(".git"))
         (alias / ".git").write_text("gitdir: " + str(self.source / ".git") + "\n")
-        self.run_git(alias, "fsck", "--connectivity-only", "--no-dangling")
+        self.git(alias, "fsck", "--connectivity-only", "--no-dangling")
         with self.assertRaisesRegex(ValueError, "Git 元数据"):
-            SDK.verify_complete_repository(alias)
+            SOURCES.verify(alias, self.entry)
 
     def test_rejects_linked_worktree_even_when_fsck_passes(self):
         linked = self.root / "linked"
-        self.run_git(self.source, "worktree", "add", "-q", "--detach", str(linked), "HEAD")
+        self.git(self.source, "worktree", "add", "-q", "--detach", str(linked), "HEAD")
         try:
-            self.run_git(linked, "fsck", "--connectivity-only", "--no-dangling")
+            self.git(linked, "fsck", "--connectivity-only", "--no-dangling")
             with self.assertRaisesRegex(ValueError, "linked"):
-                SDK.verify_complete_repository(linked)
+                SOURCES.verify(linked, self.entry)
         finally:
-            self.run_git(self.source, "worktree", "remove", str(linked))
+            self.git(self.source, "worktree", "remove", str(linked))
 
     def test_rejects_symlinked_object_storage_even_when_fsck_passes(self):
         objects = self.source / ".git/objects"
         outside = self.root / "outside-objects"
         objects.rename(outside)
         objects.symlink_to(outside, target_is_directory=True)
-        self.run_git(self.source, "fsck", "--connectivity-only", "--no-dangling")
+        self.git(self.source, "fsck", "--connectivity-only", "--no-dangling")
         with self.assertRaisesRegex(ValueError, "对象库"):
-            SDK.verify_complete_repository(self.source)
+            SOURCES.verify(self.source, self.entry)
 
-    def test_rejects_ignored_dirty_recursive_submodule(self):
-        sdk = self.root / "recursive-sdk"
+    def test_absorbed_recursive_sources_are_checked_even_when_ignored(self):
         framework = self.root / "framework"
-        for path in (sdk, framework):
-            path.mkdir()
-            self.run_git(path, "init", "-q", "-b", "master")
-            self.run_git(path, "config", "user.name", "SDK fixture")
-            self.run_git(path, "config", "user.email", "sdk@example.invalid")
-        self.run_git(framework, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+        framework.mkdir()
+        self.git(framework, "init", "-q", "-b", "master")
+        self.git(framework, "config", "user.name", "host source fixture")
+        self.git(framework, "config", "user.email", "host@example.invalid")
+        self.git(framework, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
                  str(self.source), "leaf")
-        self.run_git(framework, "add", ".")
-        self.run_git(framework, "commit", "-qm", "nested framework")
-        for source, relative in ((self.source, "components/lwip/lwip"), (framework, "framework")):
-            self.run_git(sdk, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
-                     str(source), relative)
-        self.run_git(sdk, "add", ".")
-        self.run_git(sdk, "commit", "-qm", "SDK fixture")
-        sdk_revision = self.run_git(sdk, "rev-parse", "HEAD")
-        (self.source / "tcp.c").write_text("corrected source\n")
-        self.run_git(self.source, "add", ".")
-        self.run_git(self.source, "commit", "-qm", "lwIP correction")
-        corrected = self.run_git(self.source, "rev-parse", "HEAD")
-        lwip = sdk / "components/lwip/lwip"
-        self.run_git(lwip, "fetch", "-q", "origin")
-        self.run_git(lwip, "checkout", "-q", "--detach", corrected)
-        self.run_git(sdk, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive")
-        # submodule update resets lwIP; restore the single intentional override.
-        self.run_git(lwip, "checkout", "-q", "--detach", corrected)
-        lock = {"idf": {"revision": sdk_revision},
-                "lwip": {"path": "components/lwip/lwip", "revision": corrected}}
-        SDK.verify(sdk, lock)
-        self.run_git(sdk, "config", "submodule.framework.ignore", "all")
-        self.run_git(sdk / "framework", "config", "submodule.leaf.ignore", "all")
-        (sdk / "framework/leaf/tcp.c").write_text("unverified source\n")
+        self.git(framework, "add", ".")
+        self.git(framework, "commit", "-qm", "nested source fixture")
+        self.git(self.source, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+                 str(framework), "framework")
+        self.git(self.source, "add", ".")
+        self.git(self.source, "commit", "-qm", "host source with framework")
+        self.git(self.source, "-c", "protocol.file.allow=always", "submodule", "update",
+                 "--init", "--recursive")
+        self.entry["revision"] = self.git(self.source, "rev-parse", "HEAD")
+        self.assertTrue((self.source / "framework/leaf/.git").is_file())
+        SOURCES.verify(self.source, self.entry)
+        self.git(self.source, "config", "submodule.framework.ignore", "all")
+        self.git(self.source / "framework", "config", "submodule.leaf.ignore", "all")
+        (self.source / "framework/leaf/source.c").write_text("unverified source\n")
         with self.assertRaises(ValueError):
-            SDK.verify(sdk, lock)
+            SOURCES.verify(self.source, self.entry)
 
-    def test_rejects_environment_alternate_objects(self):
-        with patch.dict(os.environ, {"GIT_ALTERNATE_OBJECT_DIRECTORIES": str(self.source / '.git/objects')}):
-            with self.assertRaisesRegex(ValueError, "alternate"):
-                SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_environment_object_directory(self):
-        with patch.dict(os.environ, {"GIT_OBJECT_DIRECTORY": str(self.source / '.git/objects')}):
-            with self.assertRaisesRegex(ValueError, "alternate"):
-                SDK.verify_complete_repository(self.sdk)
-
-    def test_prepare_never_overwrites_existing_path(self):
-        before = (self.sdk / "sdk.c").read_bytes()
-        with self.assertRaisesRegex(ValueError, "输出路径已存在"):
-            SDK.prepare(self.sdk, self.lock)
-        self.assertEqual((self.sdk / "sdk.c").read_bytes(), before)
+    def test_check_rejects_shared_clone_even_when_fsck_passes(self):
+        shared = self.root / "shared"
+        self.git(self.root, "clone", "-q", "--shared", str(self.source), str(shared))
+        self.git(shared, "fsck", "--connectivity-only", "--no-dangling")
+        result, error = self.run_entry("check", shared)
+        self.assertEqual(result, 1)
+        self.assertIn("alternates", error)
 
     def test_rejects_external_separate_git_directory_with_worktree_binding(self):
         separate = self.root / "separate"
         outside = self.root / "separate.git"
-        self.run_git(self.root, "clone", "-q", "--separate-git-dir=" + str(outside),
+        self.git(self.root, "clone", "-q", "--separate-git-dir=" + str(outside),
                  str(self.source), str(separate))
-        self.run_git(separate, "config", "core.worktree", str(separate))
-        self.assertEqual(self.run_git(separate, "status", "--porcelain"), "")
-        self.run_git(separate, "fsck", "--connectivity-only", "--no-dangling")
+        self.git(separate, "config", "core.worktree", str(separate))
+        self.assertEqual(self.git(separate, "status", "--porcelain"), "")
+        self.git(separate, "fsck", "--connectivity-only", "--no-dangling")
         with self.assertRaisesRegex(ValueError, "Git 元数据"):
-            SDK.verify_complete_repository(separate)
+            SOURCES.verify(separate, self.entry)
 
     def test_rejects_git_environment_redirecting_metadata_and_worktree(self):
         alias = self.root / "environment-redirect"
@@ -230,65 +179,50 @@ class SDKContractTest(unittest.TestCase):
         with patch.dict(os.environ, {"GIT_DIR": str(self.source / ".git"),
                                     "GIT_WORK_TREE": str(alias)}):
             with self.assertRaisesRegex(ValueError, "Git 环境"):
-                SDK.verify_complete_repository(alias)
+                SOURCES.verify(alias, self.entry)
 
     def test_rejects_replace_ref_even_when_head_and_status_match(self):
-        original = self.run_git(self.source, "rev-parse", "HEAD")
-        filename = self.source / "tcp.c"
+        original = self.git(self.source, "rev-parse", "HEAD")
+        filename = self.source / "source.c"
         original_bytes = filename.read_bytes()
         filename.write_text("int substituted_business;\n")
-        self.run_git(self.source, "add", filename.name)
-        self.run_git(self.source, "commit", "-qm", "different source fixture")
-        replacement = self.run_git(self.source, "rev-parse", "HEAD")
-        self.run_git(self.source, "replace", original, replacement)
-        self.run_git(self.source, "checkout", "-q", "--detach", original)
-        self.assertEqual(self.run_git(self.source, "rev-parse", "HEAD"), original)
-        self.assertEqual(self.run_git(self.source, "status", "--porcelain"), "")
+        self.git(self.source, "add", filename.name)
+        self.git(self.source, "commit", "-qm", "different source fixture")
+        replacement = self.git(self.source, "rev-parse", "HEAD")
+        self.git(self.source, "replace", original, replacement)
+        self.git(self.source, "checkout", "-q", "--detach", original)
+        self.assertEqual(self.git(self.source, "rev-parse", "HEAD"), original)
+        self.assertEqual(self.git(self.source, "status", "--porcelain"), "")
         self.assertEqual(filename.read_text(), "int substituted_business;\n")
         # The verifier's ordinary Git reads ignore replacement refs even before rejection.
-        self.assertEqual(SDK.git(self.source, "show", "HEAD:" + filename.name).encode(),
+        self.assertEqual(SOURCES.git(self.source, "show", "HEAD:" + filename.name).encode(),
                          original_bytes.rstrip(b"\n"))
-        with self.assertRaisesRegex(ValueError, "replace"):
-            SDK.verify_complete_repository(self.source)
+        with self.assertRaises(ValueError):
+            SOURCES.verify(self.source, self.entry)
 
     def test_rejects_grafts_even_when_fsck_passes(self):
-        head = self.run_git(self.source, "rev-parse", "HEAD")
+        head = self.git(self.source, "rev-parse", "HEAD")
         (self.source / ".git/info/grafts").write_text(head + "\n")
-        self.run_git(self.source, "fsck", "--connectivity-only", "--no-dangling")
+        self.git(self.source, "fsck", "--connectivity-only", "--no-dangling")
         with self.assertRaisesRegex(ValueError, "grafts"):
-            SDK.verify_complete_repository(self.source)
+            SOURCES.verify(self.source, self.entry)
 
-    def test_rejects_absorbed_submodule_metadata_outside_sdk_modules(self):
-        directory = Path(self.run_git(self.lwip, "rev-parse", "--absolute-git-dir"))
-        outside = self.root / "outside-lwip.git"
+    def test_rejects_absorbed_metadata_outside_host_modules(self):
+        self.git(self.source, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+                 str(self.source), "dependency")
+        self.git(self.source, "add", ".")
+        self.git(self.source, "commit", "-qm", "host nested fixture")
+        self.entry["revision"] = self.git(self.source, "rev-parse", "HEAD")
+        dependency = self.source / "dependency"
+        SOURCES.verify(self.source, self.entry)
+        directory = Path(self.git(dependency, "rev-parse", "--absolute-git-dir"))
+        outside = self.root / "outside-dependency.git"
         directory.rename(outside)
-        (self.lwip / ".git").write_text("gitdir: " + str(outside) + "\n")
-        self.run_git(self.root, "config", "--file", str(outside / "config"), "core.worktree", str(self.lwip))
-        self.run_git(self.lwip, "fsck", "--connectivity-only", "--no-dangling")
+        (dependency / ".git").write_text("gitdir: " + str(outside) + "\n")
+        self.git(self.root, "config", "--file", str(outside / "config"), "core.worktree", str(dependency))
+        self.git(dependency, "fsck", "--connectivity-only", "--no-dangling")
         with self.assertRaisesRegex(ValueError, "Git 元数据"):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_rejects_replace_ref_in_actual_sdk_verification(self):
-        original = self.run_git(self.sdk, "rev-parse", "HEAD")
-        (self.sdk / "sdk.c").write_text("substituted SDK implementation\n")
-        self.run_git(self.sdk, "add", "sdk.c")
-        self.run_git(self.sdk, "commit", "-qm", "different SDK fixture")
-        replacement = self.run_git(self.sdk, "rev-parse", "HEAD")
-        self.run_git(self.sdk, "replace", original, replacement)
-        self.run_git(self.sdk, "checkout", "-q", "--detach", original)
-        self.assertEqual(self.run_git(self.sdk, "rev-parse", "HEAD"), original)
-        self.assertEqual(self.run_git(self.sdk, "status", "--porcelain"),
-                         "M components/lwip/lwip")
-        self.assertEqual((self.sdk / "sdk.c").read_text(), "substituted SDK implementation\n")
-        with self.assertRaises(ValueError):
-            SDK.verify(self.sdk, self.lock)
-
-    def test_accepts_direct_submodule_with_complete_self_owned_metadata(self):
-        shutil.rmtree(self.lwip)
-        self.run_git(self.root, "clone", "-q", str(self.source), str(self.lwip))
-        self.run_git(self.lwip, "checkout", "-q", "--detach", self.lock["lwip"]["revision"])
-        self.assertTrue((self.lwip / ".git").is_dir())
-        SDK.verify(self.sdk, self.lock)
+            SOURCES.verify(self.source, self.entry)
 
 
 
@@ -331,7 +265,7 @@ class SourceIntegrityTest(unittest.TestCase):
         self.head = self._git("rev-parse", "HEAD")
 
     def _verify(self):
-        SDK.verify_complete_repository(self.source)
+        SOURCES.verify(self.source, {"revision": self.head})
 
     def _assert_rejected(self, *, metadata=False):
         if metadata:
@@ -513,7 +447,7 @@ class SourceObjectIntegrityTest(unittest.TestCase):
         return self._run_git(*args).stdout.decode().strip()
 
     def _verify(self):
-        SDK.verify_complete_repository(self.source)
+        SOURCES.verify(self.source, {"revision": self.head})
 
     def _corrupt_blob_preserving_storage_oid(self, blob):
         path = self.source / ".git/objects" / blob[:2] / blob[2:]
@@ -545,134 +479,6 @@ class SourceObjectIntegrityTest(unittest.TestCase):
         self.assertEqual(self._run_git("cat-file", "blob", blob).stdout, payload)
         self._verify()
         self._corrupt_blob_preserving_storage_oid(blob)
-
-
-
-
-import contextlib
-import io
-from unittest.mock import patch
-
-
-class SDKMainRecursiveSourceTest(unittest.TestCase):
-    """实际 SDK CLI 必须核对锁定递归树，同时允许唯一 lwIP 覆盖。"""
-
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name).resolve()
-        self.sdk = self.root / "sdk"
-        lwip_upstream = self.root / "lwip-upstream"
-        leaf_upstream = self.root / "leaf-upstream"
-        framework_upstream = self.root / "framework-upstream"
-        for repository in (self.sdk, lwip_upstream, leaf_upstream, framework_upstream):
-            repository.mkdir()
-            self._git(repository, "init", "-q", "-b", "master")
-            self._git(repository, "config", "user.name", "递归 SDK fixture")
-            self._git(repository, "config", "user.email", "sdk-graph@example.invalid")
-        self.good = b"int dependency_good;\n"
-        self.evil = b"int dependency_evil;\n"
-        (lwip_upstream / "tcp.c").write_bytes(b"int original_lwip;\n")
-        self.lwip_original = self._commit(lwip_upstream)
-        (leaf_upstream / "source.c").write_bytes(self.good)
-        self.leaf_original = self._commit(leaf_upstream)
-        self._git(framework_upstream, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
-                  str(leaf_upstream), "leaf")
-        self.framework_original = self._commit(framework_upstream)
-        for upstream, relative in ((lwip_upstream, "components/lwip/lwip"),
-                                   (framework_upstream, "framework")):
-            self._git(self.sdk, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
-                      str(upstream), relative)
-        (self.sdk / "sdk.c").write_bytes(b"int sdk_good;\n")
-        self.sdk_original = self._commit(self.sdk)
-        self._git(self.sdk, "-c", "protocol.file.allow=always", "submodule", "update", "--init",
-                  "--recursive", "--checkout")
-        self.lwip = self.sdk / "components/lwip/lwip"
-        self.framework = self.sdk / "framework"
-        self.leaf = self.framework / "leaf"
-        (lwip_upstream / "tcp.c").write_bytes(b"int corrected_lwip;\n")
-        self.lwip_fixed = self._commit(lwip_upstream)
-        self._git(self.lwip, "fetch", "-q", "origin")
-        self._git(self.lwip, "checkout", "-q", "--detach", self.lwip_fixed)
-        self.lock = {"schema_version": 1,
-                     "idf": {"revision": self.sdk_original},
-                     "lwip": {"revision": self.lwip_fixed, "path": "components/lwip/lwip"}}
-        self.assertTrue((self.sdk / ".git").is_dir())
-        self.assertTrue((self.leaf / ".git").is_file())
-        leaf_metadata = Path(self._git(self.leaf, "rev-parse", "--absolute-git-dir")).resolve()
-        self.assertTrue(leaf_metadata.is_relative_to(self.sdk / ".git/modules"))
-
-    def _run_git(self, repository, *args):
-        return subprocess.run(["git", "-C", str(repository), *args], check=True,
-                              capture_output=True, env={**os.environ, "GIT_NO_REPLACE_OBJECTS": "1"})
-
-    def _git(self, repository, *args):
-        return self._run_git(repository, *args).stdout.decode().strip()
-
-    def _commit(self, repository):
-        self._git(repository, "add", ".")
-        self._git(repository, "commit", "-qm", "完整 SDK fixture")
-        return self._git(repository, "rev-parse", "HEAD")
-
-    def _assert_main(self, accepted, error=None):
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        injection = patch.object(SDK, "read_lock", return_value=self.lock)
-        argv = ["source-fixture", "check", "--path", str(self.sdk), "--quiet"]
-        with injection, patch.object(sys, "argv", argv), contextlib.redirect_stdout(stdout), \
-                contextlib.redirect_stderr(stderr):
-            try:
-                result = SDK.main()
-            except SystemExit as failure:
-                result = failure.code
-        self.assertEqual(result == 0, accepted, stdout.getvalue() + stderr.getvalue())
-        if error:
-            self.assertIn(error, stderr.getvalue())
-
-    def _hide_child_status(self):
-        self._git(self.sdk, "config", "submodule.framework.ignore", "all")
-        self._git(self.framework, "config", "submodule.leaf.ignore", "all")
-        self._git(self.sdk, "update-index", "--skip-worktree", "framework")
-        self._git(self.leaf, "update-index", "--skip-worktree", "source.c")
-
-    def test_main_accepts_complete_absorbed_graph_with_only_lwip_override(self):
-        self.assertEqual(self._git(self.sdk, "rev-parse", "HEAD"), self.sdk_original)
-        self.assertEqual(self._git(self.sdk, "rev-parse", "HEAD:components/lwip/lwip"), self.lwip_original)
-        self.assertEqual(self._git(self.lwip, "rev-parse", "HEAD"), self.lwip_fixed)
-        self.assertEqual(self._git(self.sdk, "status", "--porcelain", "--ignore-submodules=none"),
-                         "M components/lwip/lwip")
-        self._assert_main(True)
-        self._hide_child_status()
-        self._assert_main(True)
-
-    def test_main_rejects_hidden_child_raw_bytes_with_unchanged_index(self):
-        self._hide_child_status()
-        (self.leaf / "source.c").write_bytes(self.evil)
-        self.assertEqual(self._git(self.leaf, "status", "--porcelain"), "")
-        self.assertEqual(self._git(self.framework, "status", "--porcelain"), "")
-        self.assertEqual(self._git(self.sdk, "rev-parse", "HEAD"), self.sdk_original)
-        self.assertEqual(self._run_git(self.leaf, "cat-file", "blob", "HEAD:source.c").stdout, self.good)
-        self.assertEqual((self.leaf / "source.c").read_bytes(), self.evil)
-        self.assertEqual(self._git(self.sdk, "ls-files", "--stage", "--", "framework"),
-                         "160000 " + self.framework_original + " 0\tframework")
-        self.assertEqual(self._git(self.leaf, "ls-files", "--stage", "--", "source.c").split()[1],
-                         self._git(self.leaf, "rev-parse", "HEAD:source.c"))
-        self._assert_main(False, "原始字节")
-
-    def test_main_rejects_hidden_staged_gitlink_removal_with_all_source_bytes_unchanged(self):
-        self._hide_child_status()
-        self._git(self.sdk, "update-index", "--no-skip-worktree", "framework")
-        self._git(self.sdk, "update-index", "--force-remove", "framework")
-        (self.sdk / ".git/info/exclude").write_text("/framework\n")
-        self.assertEqual(self._git(self.sdk, "diff", "--cached", "--name-only"), "")
-        self.assertNotIn(" framework", self._git(self.sdk, "submodule", "status", "--recursive"))
-        self.assertEqual(self._git(self.sdk, "ls-files", "--stage", "--", "framework"), "")
-        self.assertTrue(self._git(self.sdk, "ls-tree", self.sdk_original, "--", "framework")
-                        .startswith("160000 "))
-        self.assertEqual(self._run_git(self.leaf, "cat-file", "blob", "HEAD:source.c").stdout, self.good)
-        self.assertEqual((self.leaf / "source.c").read_bytes(), self.good)
-        self.assertEqual(self._git(self.leaf, "rev-parse", "HEAD"), self.leaf_original)
-        self._assert_main(False, "索引")
 
 
 
@@ -710,7 +516,7 @@ class SparseConfigurationTest(unittest.TestCase):
         self._git("config", *scope, key, value)
 
     def _verify(self):
-        SDK.verify_complete_repository(self.source)
+        SOURCES.verify_complete_repository(self.source)
 
     def _effective_sparse(self):
         result = self._git("config", "--bool", "--get", "core.sparseCheckout", check=False)

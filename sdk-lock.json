@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "idf": {
-    "repository": "https://github.com/darren-you/esp-idf.git",
-    "revision": "578cf89c343e388db43ba1f4ddcd602fedcb763c"
+    "repository": "https://github.com/darren-you/reference-esp-idf.git",
+    "revision": "fb53f8a76df5ea913715658f5ac602e91a094e72"
   },
   "lwip": {
     "repository": "https://github.com/darren-you/esp-lwip.git",
-    "revision": "2758df4cd3666b3b2a5b53830148379326425c0d",
+    "revision": "f6e98c34ad65d31419b3fbb1fe27015e46060a6a",
     "path": "components/lwip/lwip"
   }
 }
