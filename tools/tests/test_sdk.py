@@ -83,6 +83,38 @@ class SDKContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ESP-IDF 提交"):
             SDK.verify(self.sdk, self.lock)
 
+    def test_rejects_shallow_nested_source(self):
+        self.run_git(self.lwip, "fetch", "-q", "--depth=1",
+                     self.source.as_uri(), self.lock["lwip"]["revision"])
+        self.assertEqual(self.run_git(self.lwip, "rev-parse", "--is-shallow-repository"), "true")
+        with self.assertRaisesRegex(ValueError, "shallow"):
+            SDK.verify(self.sdk, self.lock)
+
+    def test_rejects_partial_nested_source(self):
+        self.run_git(self.lwip, "config", "remote.origin.promisor", "true")
+        with self.assertRaisesRegex(ValueError, "partial"):
+            SDK.verify(self.sdk, self.lock)
+
+    def test_rejects_sparse_nested_source(self):
+        self.run_git(self.lwip, "config", "core.sparseCheckout", "true")
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            SDK.verify(self.sdk, self.lock)
+
+    def test_rejects_sparse_worktree_configuration(self):
+        self.run_git(self.lwip, "config", "extensions.worktreeConfig", "true")
+        self.run_git(self.lwip, "config", "--worktree", "core.sparseCheckout", "true")
+        with self.assertRaisesRegex(ValueError, "sparse"):
+            SDK.verify(self.sdk, self.lock)
+
+    def test_rejects_missing_history_object(self):
+        relative = "objects/" + self.original[:2] + "/" + self.original[2:]
+        object_path = Path(self.run_git(self.lwip, "rev-parse", "--git-path", relative))
+        if not object_path.is_absolute():
+            object_path = self.lwip / object_path
+        object_path.unlink()
+        with self.assertRaisesRegex(ValueError, "对象不完整"):
+            SDK.verify_complete_repository(self.lwip)
+
     def test_prepare_never_overwrites_existing_path(self):
         before = (self.sdk / "sdk.c").read_bytes()
         with self.assertRaisesRegex(ValueError, "输出路径已存在"):

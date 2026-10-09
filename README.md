@@ -105,7 +105,7 @@ flowchart LR
 
 `esp_frp.h` 是应用入口：create 复制配置字节、字符串和回调表并创建一个空闲 worker，上下文借用到 destroy 成功；start 只表示命令入队。provider 的 READY 需完成注册和首次认证 Pong，visitor 还须绑定其本地 listener；XTCP 的 peer 直连状态由 `status.xtcp` 单独报告。stop 等待连接、迟到 DNS 和回调收敛；超时保留句柄和停止请求，destroy 成功后任务及配置均已释放。网络中断使用单个退避截止时刻，证书、认证和协议错误进入 failed。详见[客户端生命周期](docs/design/client-lifecycle.md)。
 
-ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公开维护 fork `fb53f8a76df5ea913715658f5ac602e91a094e72` 与公开 ESP lwIP 修正提交；fork 从官方 `fff9895c82d744c7237be8847347bdd1b07c6643` 派生，依次修复 `esp_ota_begin` 擦除失败后的句柄泄漏和 HTTP 客户端初始化失败时的传输句柄泄漏；准备及验证见 [SDK 工具](tools/README.md)。原 SDK 存在已实板复现的双向零窗口 ACK 循环，构建会拒绝原始 lwIP、版本漂移或外部组件替换。修正不改变 FRP/TLS 容量；最新独立样例双流压力测试的最低 heap 已超过 48 KiB，但 Base/MQTT 组合预算和完整实板矩阵仍待验收，详见 [C3 问题记录](docs/issues/c3-loopback-memory-pressure.md)。
+ESP 构建必须使用 [sdk-lock.json](sdk-lock.json) 锁定的 ESP-IDF v6.1 公开受控来源 `fb53f8a76df5ea913715658f5ac602e91a094e72` 与公开 ESP lwIP 修正提交；原业务基线从官方 `fff9895c82d744c7237be8847347bdd1b07c6643` 派生，依次修复 `esp_ota_begin` 擦除失败后的句柄泄漏和 HTTP 客户端初始化失败时的传输句柄泄漏；准备及验证见 [SDK 工具](tools/README.md)。原 SDK 存在已实板复现的双向零窗口 ACK 循环，构建会拒绝原始 lwIP、版本漂移或外部组件替换。修正不改变 FRP/TLS 容量；最新独立样例双流压力测试的最低 heap 已超过 48 KiB，但 Base/MQTT 组合预算和完整实板矩阵仍待验收，详见 [C3 问题记录](docs/issues/c3-loopback-memory-pressure.md)。
 
 ## 独立开发
 

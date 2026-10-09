@@ -1,0 +1,18 @@
+if(EFRP_MBEDTLS_SOURCE_DIR)
+    get_filename_component(host_source_dir "${EFRP_MBEDTLS_SOURCE_DIR}" REALPATH)
+elseif(EFRP_PSA_SOURCE_DIR)
+    get_filename_component(psa_source_dir "${EFRP_PSA_SOURCE_DIR}" REALPATH)
+    get_filename_component(host_source_dir "${psa_source_dir}/.." REALPATH)
+    if(NOT psa_source_dir STREQUAL "${host_source_dir}/tf-psa-crypto")
+        message(FATAL_ERROR "PSA host source must be the exact tf-psa-crypto subtree of prepared complete host source")
+    endif()
+else()
+    message(FATAL_ERROR "Explicit exact complete host source required")
+endif()
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/quic_sources.py"
+    check --quiet --host-mbedtls-path "${host_source_dir}"
+    RESULT_VARIABLE host_source_status ERROR_VARIABLE host_source_error)
+if(NOT host_source_status EQUAL 0)
+    message(FATAL_ERROR "Exact complete host source required: ${host_source_error}")
+endif()

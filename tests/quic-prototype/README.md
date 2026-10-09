@@ -43,7 +43,7 @@ python3 tools/quic_sources.py prepare \
   --picotls-path /tmp/esp-frp-quic-picotls
 ```
 
-host Mbed TLS 使用 `https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-4.1.0/mbedtls-4.1.0.tar.bz2` 官方完整发布包，下载后核验锁文件中的 SHA-256 再解压到仓外。普通 Git 归档不含完整 TF-PSA 依赖，不能替代该发布包。配置指定经过核验的源码目录：
+host Mbed TLS 使用根 `quic-lock.json` 的受控 4.1.0 完整生成源码。通过 [普通 prepare](../../tools/README.md#quic-精确源码)的 `--host-mbedtls-path` 完整物化精确 Git 与全部子源，实际核正式 Release 归档与重建摘要。官方生成文件和 TF-PSA 依赖保留，普通未生成 Git 归档不能替代；配置只接受该固定完整来源：
 
 ```sh
 cmake -S tests/quic-prototype -B /tmp/esp-frp-quic-host \

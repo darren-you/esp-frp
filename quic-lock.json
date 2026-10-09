@@ -11,6 +11,9 @@
   },
   "host_mbedtls": {
     "version": "4.1.0",
-    "archive_sha256": "377a09cf8eb81b5fb2707045e5522d5489d3309fed5006c9874e60558fc81d10"
+    "archive_sha256": "91773900004719afbae4821f1671a9a3cb04c674208be1d3e7598c53ce199668",
+    "repository": "https://github.com/darren-you/reference-sdk-mbedtls.git",
+    "revision": "af466c0f84eef750e66026b370903a68b4473c18",
+    "archive_url": "https://github.com/darren-you/reference-sdk-mbedtls/releases/download/v4.1.0/mbedtls-4.1.0-actions-exit.tar.bz2"
   }
 }

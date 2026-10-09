@@ -35,6 +35,26 @@ def read_lock() -> dict:
     return lock
 
 
+def verify_complete_repository(path: Path) -> None:
+    if git(path, "rev-parse", "--show-toplevel") != str(path.resolve()):
+        raise ValueError(f"SDK 来源未独立初始化：{path}")
+    if git(path, "rev-parse", "--is-shallow-repository") != "false":
+        raise ValueError(f"SDK 来源必须保有完整历史，不能使用 shallow clone：{path}")
+    for line in git(path, "config", "--list").splitlines():
+        key, _, value = line.partition("=")
+        if key == "extensions.partialclone" or (
+                key.startswith("remote.") and key.endswith((".promisor", ".partialclonefilter"))):
+            raise ValueError(f"SDK 来源不能使用 partial clone：{path}")
+        if key in ("core.sparsecheckout", "core.sparsecheckoutcone") and value.lower() in (
+                "true", "yes", "on", "1"):
+            raise ValueError(f"SDK 来源不能使用 sparse checkout：{path}")
+    result = subprocess.run(["git", "-C", str(path), "fsck", "--connectivity-only",
+                             "--no-dangling"], text=True, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE)
+    if result.returncode:
+        raise ValueError(f"SDK 来源对象不完整：{path}\n{result.stderr.strip()}")
+
+
 def verify(sdk: Path, lock: dict) -> None:
     sdk = sdk.resolve(strict=True)
     lwip_path = lock["lwip"]["path"]
@@ -53,6 +73,7 @@ def verify(sdk: Path, lock: dict) -> None:
     # The locked lwIP commit is the sole intentional deviation from IDF's gitlink.
     if changes != "M " + lwip_path:
         raise ValueError("SDK 必须仅包含锁定 lwIP gitlink 差异，不能有其他修改")
+    verify_complete_repository(sdk)
     for line in git(sdk, "submodule", "status", "--recursive").splitlines():
         # git() strips the first leading space; normal lines may begin at SHA.
         normalized = line.strip()
@@ -64,6 +85,7 @@ def verify(sdk: Path, lock: dict) -> None:
             raise ValueError(f"SDK 子模块未就绪：{path}")
         if revision.startswith("+") and (path != lwip_path or revision[1:] != lock["lwip"]["revision"]):
             raise ValueError(f"SDK 子模块版本漂移：{path}")
+        verify_complete_repository(sdk / path)
 
 
 def prepare(output: Path, lock: dict) -> None:
@@ -74,12 +96,13 @@ def prepare(output: Path, lock: dict) -> None:
     output.mkdir()  # Reserve ownership; no overwrite or implicit repair.
     git(output, "init", "-q")
     git(output, "remote", "add", "origin", lock["idf"]["repository"])
-    git(output, "fetch", "--depth=1", "origin", lock["idf"]["revision"])
+    git(output, "fetch", "origin", lock["idf"]["revision"])
     git(output, "checkout", "--detach", "FETCH_HEAD")
-    git(output, "submodule", "update", "--init", "--recursive", "--depth=1", "--jobs=8")
+    git(output, "submodule", "update", "--init", "--recursive", "--checkout",
+        "--no-recommend-shallow", "--jobs=8")
     lwip = output / lock["lwip"]["path"]
     git(lwip, "remote", "set-url", "origin", lock["lwip"]["repository"])
-    git(lwip, "fetch", "--depth=1", "origin", lock["lwip"]["revision"])
+    git(lwip, "fetch", "origin", lock["lwip"]["revision"])
     git(lwip, "checkout", "--detach", "FETCH_HEAD")
     verify(output, lock)
 
