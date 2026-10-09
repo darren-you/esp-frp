@@ -75,4 +75,4 @@ Wi-Fi 使用 `nvs_enable=false` 和 RAM storage，PHY 校准持久化必须关�
 
 串口输出和诊断本身消耗资源，实验配置使用 4 KiB main 栈，FRP worker 使用 6 KiB；两者根据 C3 高水位采样从较大的初始预算收敛。当前 6 KiB worker 的同板十轮双流压力采样中，最低栈余量为 3104 字节；ESP32 的栈、heap 和双流资源必须另测，不能沿用 C3 数值。完整样例包含 Wi-Fi、TLS、AEAD、四条 Yamux 流、两条 work socket 及回环对端，不能仅以静态对象大小或 host 数据推断内存安全。
 
-真实验收须覆盖 DNS/TLS/FRPS、双流大载荷和背压、拒绝/错误认证、服务重启、百次完整客户端释放及资源峰值。维护者已于 2026-09-24 确认具备人工断电拔插测试条件，后续按[Base 原生业务与固件 OTA 计划](https://github.com/esp-space/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)当前决定和对应实板前置执行；设备、分区与完整 Flash 恢复基线仍须逐轮核对，未执行项保持未验收。软重启、station 停启或软件注入不能替代断电。
+真实验收须覆盖 DNS/TLS/FRPS、双流大载荷和背压、拒绝/错误认证、服务重启、百次完整客户端释放及资源峰值。维护者已于 2026-09-24 确认具备人工断电拔插测试条件，后续按[Base 原生业务与固件 OTA 计划](https://github.com/darren-you/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)当前决定和对应实板前置执行；设备、分区与完整 Flash 恢复基线仍须逐轮核对，未执行项保持未验收。软重启、station 停启或软件注入不能替代断电。

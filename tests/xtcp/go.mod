@@ -1,4 +1,4 @@
-module github.com/esp-space/esp-frp/tests/xtcp
+module github.com/darren-you/esp-frp/tests/xtcp
 
 go 1.25.0
 
