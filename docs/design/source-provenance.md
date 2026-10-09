@@ -26,3 +26,5 @@
 `peer/frp/upstream-source.json` 的 `preserved_files` 只声明从上述精确官方提交原样保留、且需识别第三方合同的文件。AGENTS／CLAUDE 与原样 Dashboard 的两份 HTTP decoder 按相对路径、文件类型、Git mode 和 SHA-256 逐项核对；源文件内容、类型或执行位改变后不再适用原样范围，新增文件也不借用相邻目录的来源。工作区 AGENTS 与客户端响应检查共同读取这份来源事实，不改写上游规则文件或 FRPS／FRPC 原生响应，也不排除本仓修改及新增的实现。该范围只证明这些字节原样保留，不授予构建、业务测试或生产发布资格。
 
 wire 常量必须与协议一致。普通 wire/Yamux/AEAD/控制核心按协议独立编写；QUIC helper 与完整维护 Go peer 的取用范围见上表，不能概括为没有片段移植或 vendoring。默认 host 测试依赖本仓 C API 和 OpenSSL，显式 PSA/Mbed TLS 测试使用官方完整源码包；QUIC 依赖必须与 quic-lock.json 一致，由 tools/quic_sources.py 和构建守卫核对精确提交及未修改状态。可选官方互操作与维护 peer 分别使用各自 go.mod/go.sum 的精确公开依赖，不替换原官方模块。两个 GPL 参考用于历史研究，不导入源码、机械翻译或换名副本。以后新增来源逐项登记原 URL、SHA、路径、保留范围、版权与修改。
+
+`peer/frp` 保留协议实现、普通开发／对端回归入口和非 Actions 的 `.github` 配置；上游 workflow、GoReleaser 专属配置及活动发布说明从当前维护副本删除。此副本不发行上游产品，实际对端验证由本仓 host 与 interop 入口承担。
