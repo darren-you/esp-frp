@@ -125,6 +125,62 @@ class SDKContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "alternates"):
             SDK.verify(self.sdk, self.lock)
 
+    def test_rejects_linked_worktree_even_when_fsck_passes(self):
+        linked = self.root / "linked"
+        self.run_git(self.source, "worktree", "add", "-q", "--detach", str(linked), "HEAD")
+        try:
+            self.run_git(linked, "fsck", "--connectivity-only", "--no-dangling")
+            with self.assertRaisesRegex(ValueError, "linked"):
+                SDK.verify_complete_repository(linked)
+        finally:
+            self.run_git(self.source, "worktree", "remove", str(linked))
+
+    def test_rejects_symlinked_object_storage_even_when_fsck_passes(self):
+        objects = self.source / ".git/objects"
+        outside = self.root / "outside-objects"
+        objects.rename(outside)
+        objects.symlink_to(outside, target_is_directory=True)
+        self.run_git(self.source, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "对象库"):
+            SDK.verify_complete_repository(self.source)
+
+    def test_rejects_ignored_dirty_recursive_submodule(self):
+        sdk = self.root / "recursive-sdk"
+        framework = self.root / "framework"
+        for path in (sdk, framework):
+            path.mkdir()
+            self.run_git(path, "init", "-q", "-b", "master")
+            self.run_git(path, "config", "user.name", "SDK fixture")
+            self.run_git(path, "config", "user.email", "sdk@example.invalid")
+        self.run_git(framework, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+                 str(self.source), "leaf")
+        self.run_git(framework, "add", ".")
+        self.run_git(framework, "commit", "-qm", "nested framework")
+        for source, relative in ((self.source, "components/lwip/lwip"), (framework, "framework")):
+            self.run_git(sdk, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+                     str(source), relative)
+        self.run_git(sdk, "add", ".")
+        self.run_git(sdk, "commit", "-qm", "SDK fixture")
+        sdk_revision = self.run_git(sdk, "rev-parse", "HEAD")
+        (self.source / "tcp.c").write_text("corrected source\n")
+        self.run_git(self.source, "add", ".")
+        self.run_git(self.source, "commit", "-qm", "lwIP correction")
+        corrected = self.run_git(self.source, "rev-parse", "HEAD")
+        lwip = sdk / "components/lwip/lwip"
+        self.run_git(lwip, "fetch", "-q", "origin")
+        self.run_git(lwip, "checkout", "-q", "--detach", corrected)
+        self.run_git(sdk, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive")
+        # submodule update resets lwIP; restore the single intentional override.
+        self.run_git(lwip, "checkout", "-q", "--detach", corrected)
+        lock = {"idf": {"revision": sdk_revision},
+                "lwip": {"path": "components/lwip/lwip", "revision": corrected}}
+        SDK.verify(sdk, lock)
+        self.run_git(sdk, "config", "submodule.framework.ignore", "all")
+        self.run_git(sdk / "framework", "config", "submodule.leaf.ignore", "all")
+        (sdk / "framework/leaf/tcp.c").write_text("unverified source\n")
+        with self.assertRaises(ValueError):
+            SDK.verify(sdk, lock)
+
     def test_rejects_environment_alternate_objects(self):
         with patch.dict(os.environ, {"GIT_ALTERNATE_OBJECT_DIRECTORIES": str(self.source / '.git/objects')}):
             with self.assertRaisesRegex(ValueError, "alternate"):

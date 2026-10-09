@@ -28,7 +28,7 @@ def verify(path: Path, entry: dict) -> None:
         raise ValueError("依赖必须是独立 checkout")
     if git(path, "rev-parse", "HEAD") != entry["revision"]:
         raise ValueError(f"依赖未锁定完整提交 {entry['revision']}")
-    if git(path, "status", "--porcelain", "--untracked-files=normal"):
+    if git(path, "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"):
         raise ValueError("依赖 checkout 有未提交内容")
     sources = [path]
     for line in git(path, "submodule", "status", "--recursive").splitlines():
@@ -37,6 +37,19 @@ def verify(path: Path, entry: dict) -> None:
             raise ValueError("依赖子模块必须完整初始化并匹配精确 gitlink")
         sources.append(path / relative)
     for source in sources:
+        def git_path(*arguments: str) -> Path:
+            value = Path(git(source, *arguments))
+            return value if value.is_absolute() else source / value
+
+        git_directory = git_path("rev-parse", "--git-dir").resolve(strict=True)
+        common_directory = git_path("rev-parse", "--git-common-dir").resolve(strict=True)
+        if git_directory != common_directory:
+            raise ValueError(f"依赖来源不能使用借用主仓对象库的 linked worktree：{source}")
+        objects = git_path("rev-parse", "--git-path", "objects")
+        if (objects.is_symlink() or not objects.is_dir()
+                or objects.resolve() != git_directory / "objects"
+                or any(item.is_symlink() for item in objects.rglob("*"))):
+            raise ValueError(f"依赖来源对象库必须归属于该独立仓库，不能以符号链接借用对象：{source}")
         alternate = Path(git(source, "rev-parse", "--git-path", "objects/info/alternates"))
         if not alternate.is_absolute():
             alternate = source / alternate
@@ -54,6 +67,8 @@ def verify(path: Path, entry: dict) -> None:
             if key in ("core.sparsecheckout", "core.sparsecheckoutcone") and value.lower() in (
                     "true", "yes", "on", "1"):
                 raise ValueError("依赖不能使用 sparse checkout")
+        if git(source, "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"):
+            raise ValueError(f"依赖递归源码存在未提交内容：{source}")
         git(source, "fsck", "--connectivity-only", "--no-dangling")
 
 

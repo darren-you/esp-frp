@@ -92,6 +92,50 @@ class HostSourceContractTest(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("发布归档内容不一致", error)
 
+    def test_rejects_linked_worktree_even_when_fsck_passes(self):
+        linked = self.root / "linked"
+        self.git(self.source, "worktree", "add", "-q", "--detach", str(linked), "HEAD")
+        try:
+            self.git(linked, "fsck", "--connectivity-only", "--no-dangling")
+            with self.assertRaisesRegex(ValueError, "linked"):
+                SOURCES.verify(linked, self.entry)
+        finally:
+            self.git(self.source, "worktree", "remove", str(linked))
+
+    def test_rejects_symlinked_object_storage_even_when_fsck_passes(self):
+        objects = self.source / ".git/objects"
+        outside = self.root / "outside-objects"
+        objects.rename(outside)
+        objects.symlink_to(outside, target_is_directory=True)
+        self.git(self.source, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "对象库"):
+            SOURCES.verify(self.source, self.entry)
+
+    def test_absorbed_recursive_sources_are_checked_even_when_ignored(self):
+        framework = self.root / "framework"
+        framework.mkdir()
+        self.git(framework, "init", "-q", "-b", "master")
+        self.git(framework, "config", "user.name", "host source fixture")
+        self.git(framework, "config", "user.email", "host@example.invalid")
+        self.git(framework, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+                 str(self.source), "leaf")
+        self.git(framework, "add", ".")
+        self.git(framework, "commit", "-qm", "nested source fixture")
+        self.git(self.source, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+                 str(framework), "framework")
+        self.git(self.source, "add", ".")
+        self.git(self.source, "commit", "-qm", "host source with framework")
+        self.git(self.source, "-c", "protocol.file.allow=always", "submodule", "update",
+                 "--init", "--recursive")
+        self.entry["revision"] = self.git(self.source, "rev-parse", "HEAD")
+        self.assertTrue((self.source / "framework/leaf/.git").is_file())
+        SOURCES.verify(self.source, self.entry)
+        self.git(self.source, "config", "submodule.framework.ignore", "all")
+        self.git(self.source / "framework", "config", "submodule.leaf.ignore", "all")
+        (self.source / "framework/leaf/source.c").write_text("unverified source\n")
+        with self.assertRaises(ValueError):
+            SOURCES.verify(self.source, self.entry)
+
     def test_check_rejects_shared_clone_even_when_fsck_passes(self):
         shared = self.root / "shared"
         self.git(self.root, "clone", "-q", "--shared", str(self.source), str(shared))
