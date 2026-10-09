@@ -43,10 +43,25 @@ def verify_complete_repository(path: Path) -> None:
         value = Path(git(path, *arguments))
         return value if value.is_absolute() else path / value
 
-    git_directory = git_path("rev-parse", "--git-dir").resolve(strict=True)
+    git_metadata = path / ".git"
+    git_directory_path = git_path("rev-parse", "--git-dir")
+    if git_metadata.is_symlink() or git_directory_path.is_symlink():
+        raise ValueError(f"SDK Git 元数据不能以符号链接借用其他来源：{path}")
+    git_directory = git_directory_path.resolve(strict=True)
     common_directory = git_path("rev-parse", "--git-common-dir").resolve(strict=True)
     if git_directory != common_directory:
         raise ValueError(f"SDK 来源不能使用借用主仓对象库的 linked worktree：{path}")
+    if git_metadata.is_file():
+        binding = subprocess.run(
+            ["git", "-C", str(path), "config", "--local", "--path", "--get", "core.worktree"],
+            text=True, capture_output=True)
+        if binding.returncode or not binding.stdout.strip():
+            raise ValueError(f"SDK Git 元数据文件必须原生绑定当前来源：{path}")
+        worktree = Path(binding.stdout.rstrip("\n"))
+        if not worktree.is_absolute():
+            worktree = git_directory / worktree
+        if worktree.resolve() != path.resolve():
+            raise ValueError(f"SDK Git 元数据文件指向另一工作树：{path}")
     objects = git_path("rev-parse", "--git-path", "objects")
     if (objects.is_symlink() or not objects.is_dir()
             or objects.resolve() != git_directory / "objects"

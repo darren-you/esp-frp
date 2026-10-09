@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -91,6 +92,22 @@ class HostSourceContractTest(unittest.TestCase):
         result, error = self.run_entry("check", destination)
         self.assertEqual(result, 1)
         self.assertIn("发布归档内容不一致", error)
+
+    def test_rejects_symlinked_git_directory_even_when_fsck_passes(self):
+        alias = self.root / "symlinked-git-directory"
+        shutil.copytree(self.source, alias, ignore=shutil.ignore_patterns(".git"))
+        (alias / ".git").symlink_to(self.source / ".git", target_is_directory=True)
+        self.git(alias, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "Git 元数据"):
+            SOURCES.verify(alias, self.entry)
+
+    def test_rejects_unbound_gitfile_even_when_fsck_passes(self):
+        alias = self.root / "unbound-gitfile"
+        shutil.copytree(self.source, alias, ignore=shutil.ignore_patterns(".git"))
+        (alias / ".git").write_text("gitdir: " + str(self.source / ".git") + "\n")
+        self.git(alias, "fsck", "--connectivity-only", "--no-dangling")
+        with self.assertRaisesRegex(ValueError, "Git 元数据"):
+            SOURCES.verify(alias, self.entry)
 
     def test_rejects_linked_worktree_even_when_fsck_passes(self):
         linked = self.root / "linked"

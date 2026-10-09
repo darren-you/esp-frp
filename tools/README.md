@@ -22,7 +22,7 @@ python3 tools/sdk.py check --path "$IDF_PATH"
 idf.py -C examples/tcp-proxy build
 ```
 
-首次准备需要网络并下载官方子模块；失败时保留新目录供排障，后续不自动覆盖或修复已有路径。安装工具链与准备源码是独立动作，`prepare` 不刷写设备、创建 Secret 或发布制品。Git 可能把唯一锁定的 lwIP gitlink 显示为修改，这正是显式 SDK 装配合同；普通 `prepare` 显式忽略上游子模块的浅克隆建议，完整取得根与递归依赖；`check` 同时拒绝 shallow/partial/sparse 来源、缺失对象和文件或环境提供的外部对象库。来源 gitdir 与 common-dir 必须一致，对象目录及对象不能通过符号链接借用仓外存储；linked worktree 被拒绝，正常 absorbed submodule 的 `.git` 定位文件保留。每个递归来源显式检查工作树，不受 `submodule.*.ignore` 配置影响。其他修改、未初始化子模块或提交漂移一律拒绝。
+首次准备需要网络并下载官方子模块；失败时保留新目录供排障，后续不自动覆盖或修复已有路径。安装工具链与准备源码是独立动作，`prepare` 不刷写设备、创建 Secret 或发布制品。Git 可能把唯一锁定的 lwIP gitlink 显示为修改，这正是显式 SDK 装配合同；普通 `prepare` 显式忽略上游子模块的浅克隆建议，完整取得根与递归依赖；`check` 同时拒绝 shallow/partial/sparse 来源、缺失对象和文件或环境提供的外部对象库。Git 元数据不能通过符号链接或无绑定定位文件借用另一仓；正常 absorbed submodule 的原生 core.worktree 须绑定当前来源，来源 gitdir 与 common-dir 必须一致，对象目录及对象不能通过符号链接借用仓外存储；linked worktree 被拒绝，正常 absorbed submodule 的 `.git` 定位文件保留。每个递归来源显式检查工作树，不受 `submodule.*.ignore` 配置影响。其他修改、未初始化子模块或提交漂移一律拒绝。
 
 `check --quiet` 供构建调用；普通 host 协议测试不需要 ESP-IDF。准备检查的真实 Git fixture 回归：`python3 -m unittest discover -s tools/tests -p 'test_*.py'`。
 
