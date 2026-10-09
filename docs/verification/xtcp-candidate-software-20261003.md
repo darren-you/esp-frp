@@ -1,34 +1,6 @@
 # XTCP 开发候选软件检查点（2026-10-03）
 
-本次完成了协议扩展的软件验证，以及 ESP32-C3／ESP32 的完整 ESP-IDF 编译、链接和原 1 MiB factory 分区容量检查。正式 Mbed TLS 单次完整 CTest 矩阵 **52/52 通过，包含 XTCP 全链路和两项新增关闭回归**；OpenSSL 矩阵 **21 项通过**。两个目标最终镜像都保留 XTCP 控制器、NAT、peer QUIC、证书生成，以及普通 TCP/TLS/Yamux 的实际链接。
-
-这些证据属于 0.3.0 开发候选，不构成设备验收。没有连接、刷写或操作设备；未触达 `mac-ci-2`。两目标实板、Base/MQTT 组合、异网验证及[Base 原生业务与固件 OTA 首版](https://github.com/esp-space/esp-base/blob/master/docs/operations/ota-allocation-diagnostic-checkpoint.md)闭环仍是后续验收前置。
-
-[同名机器摘要](xtcp-candidate-software-20261003.json) 保存最终 99 项快照清单、公开编译输入全文、依赖身份、配置差异、实际 sdkconfig／制品 SHA-256、59 个必要链接符号和各轮结果。大型 ELF、map、原始日志保留在本轮仓外目录，不写入 Git。机器摘要中的阶段前置仅保存当轮原事实，不作为现役实施合同；当前设备前置采用上文原生业务与固件 OTA 计划。协议边界见[协议扩展合同](../design/protocol-extensions.md)与[流传输合同](../design/stream-transport.md)。
-
-## 软件互测证据
-
-| 入口 | 实际结果 | 原始证据 |
-| --- | --- | --- |
-| 最终正式 Mbed TLS／ASan／UBSan 单次完整 CTest | **52/52，通过；71.94 秒**；包含 `xtcp_client_upstream`（23.94 秒），无跳过 | `/tmp/esp-frp-r1-20261003-posix-close-ctest.log` |
-| 前一轮 Mbed TLS／ASan／UBSan CTest，排除 `xtcp_client_upstream` | 49/49，通过；71.65 秒 | `/tmp/esp-frp-r1-20261003-final-ctest.log` |
-| 前一轮单独 CTest `xtcp_client_upstream` | 1/1，通过；22.64 秒 | 已记录的工具 stdout，session `99837`；未另存原始日志文件 |
-| 前一轮 `TestCClientFullCandidate -race`，同一公共 C peer 的详细全链路 | 8 个子例通过；Go 总计 22.609 秒 | `/tmp/esp-frp-cxtcp-full.log` |
-| 正式 OpenSSL／ASan／UBSan CTest | 21/21，通过；5.37 秒 | `/tmp/esp-frp-extensions-openssl-final-ctest.log` |
-| C／C++ 公共头与 extern-C 审查 | 36 项语法检查、37 项声明检查通过 | `/tmp/esp-frp-public-headers-20261003.log` |
-| 外部父 scope C++ consumer，TRACE OFF／ON | 两组真实 configure、compile、C link 通过；未执行程序 | `/tmp/esp-frp-public-consumer-script-20261003.log` |
-
-前一轮 49 项与独立 1 项不是单次 `50/50` 执行；保留它们作为历史证据。修正 QUIC 关闭边界后，最后 fresh host 全目标构建退出 0，并实际执行单次完整 52 项，包括全链路 C 客户端；此次没有排除或跳过 XTCP。独立 CTest 的 `LastTest.log` 已被后续矩阵覆盖，不能把详细 Go 日志标成这次 quiet CTest 的原始日志。公开头／外部 consumer 回归另计，不加入最终 52／21 项数量。
-
-普通 FRPS QUIC TCP／UDP／STCP visitor 使用固定官方 FRP 的真实互测；XTCP 使用本仓维护的 [peer/frp 候选](../../peer/frp/candidate-development.md)，版本 `0.71.0-esp-frp-xtcp.1`，基于官方 v0.71.0、SHA `4a23aa181c1d7e28eecaa8216024ed753b9d27c8`。维护 Go 源码另以 359 项 `*.go` 及 `go.mod`／`go.sum` 的完整文件集合冻结，SHA-256 `7f6bace157e8d70876ee1954a09d65a219eff69faa1b84c4fafeebc1e5992984`；清单纳入同名机器摘要。该值使用按路径排序的 JSON 数组、对象键排序、紧凑 UTF-8 编码后 SHA-256，算法与 C 构建输入的行式清单不同。
-
-原样官方版本没有 `esp-frp-xtcp/1` 的控制身份及双方绑定合同，不能将候选结果写成未修改官方 XTCP 互操作。
-
-XTCP 全链路由 [Go 测试](../../peer/frp/test/xtcpbinding/c_client_test.go) 启动真实候选 FRPS 和两个回环 UDP STUN 服务，再调用 [C 公共客户端 peer](../../tests/xtcp_client_peer.c)。provider 与 visitor 两个正例均经过严格 FRPS TLS／Token、当前 control 身份、STUN 映射、nonce／HMAC 探测、同 fd peer QUIC、双方证书验证与 exporter 证明，之后才开放业务。每个正例检查两条同时活动业务流，各自完整往返 300001 字节，并检查停止 EOF、原 worker 上重启、时钟失信撤销和 fd 基线回收。
-
-另外六个实际入口负例分成两组：前三例为错误 Token、错误服务端 hostname、未可信时钟（`TIME_UNTRUSTED`），实测控制建立失败并同步停止、清理；这组三例没有 backend 计数 fixture。后三例为 visitor 的错误 secret／user／target，主 control 达到 READY，独立 XTCP 返回 `WORK_REJECTED`，实际 backend 连接计数保持零。主 READY 不等于 peer 已打通。host Flash fixture 和 worker 验证不能代表实板 Flash 或 FreeRTOS 资源。
-
-NAT 接受上游原生合法模式 `0..4`。本轮修正此前错误拒绝 mode `0` 的条件，保留 `>4` 拒绝；不是协议回退。单测用真实双 UDP socket 交换完整 SID／nonce／HMAC，双向 PUNCHED 后保留原 fd，并检查错误 nonce 不续期、超时清理及 mode `5` 拒绝。fixture 以真实单调时钟推进有界收发，独立 ASan／UBSan 重复 30/30 次通过；日志 `/tmp/esp-frp-xtcp-nat-mode-zero-repeat.log`。`ListenRandomPorts` 要求额外监听 socket 的情形仍明确拒绝，不能借此声称所有 NAT 类型可用。
+本文维护稳定技术合同、设计理由与固定验证方法。任务目标、动态清单、当前结论和阶段证据统一维护在根仓 Issue：[ESP FRP 后续协议扩展](https://github.com/darren-you/darren-space/issues/49)。原执行记录按该 Issue 的迁移快照链接追溯，不在本文维护第二份进度。
 
 ## 冻结输入与工具链
 
@@ -83,36 +55,6 @@ C3 的隔离实验复制第二轮源码与实际 sdkconfig 到新目录，只改
 
 新增 `quic_cleanup_posix`／`quic_cleanup_idf` 两项 ASan／UBSan CTest 实际 2/2 通过，0.95 秒；旧源码为 1 项通过、POSIX 项失败。证据 JSON `/tmp/esp-frp-quic-cleanup-regression-20261003.json` 包含旧／新源码、同一 fixture 的 SHA 和两份 raw 日志，已纳入同名机器摘要。stage 6 的原 SDK 镜像、sdkconfig、源码 tar、peer 二进制和日志独立保留在 `/tmp/esp-frp-extensions-xtcp-final-targets-20261003/stage-6/`，不覆盖历史证据。
 
-## 最终 canonical 两目标结果
-
-实验结论落实到 [C3 专属 sdkconfig defaults](https://github.com/esp-space/esp-frp/blob/4e6a80904e054735981b160348bb7380bc9b8003/examples/tcp_proxy/sdkconfig.defaults.esp32c3)。ESP32 默认配置不加该 RISC-V 选项。随后从最终源码生成两个独立快照与 fresh sdkconfig，再编译完整应用；公共头注释、CMake／README 和最后 QUIC 关闭修正同步后重新编译并核对产物。
-
-| 最终目标 | 编译／链接 | bin 字节／十六进制 | 原 factory 余量 | 原容量门禁 |
-| --- | --- | --- | --- | --- |
-| ESP32-C3 | 通过 | 1033056／`0xfc360` | 15520 字节／`0x3ca0` | 通过；退出 0 |
-| ESP32 | 通过 | 988256／`0xf1460` | 60320 字节／`0xeba0` | 通过；退出 0 |
-
-最终实际 sdkconfig 相对第二轮逐项比较：C3 唯一差异是 `CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS=y`，ESP32 无差异。两目标保留 size 优化、silent assertions（断言／abort 仍有效）、IPv6、原 socket／Wi-Fi／TCP 缓冲配置和 X509／CRT／PK／ASN1 的四项 WRITE 配置。SoftAP 在原完整输入中已关闭，本次容量实验未再次修改它。所有第一方生产 C 编译命令均核对：C3 使用 `-msave-restore`，ESP32 不使用，全部无 `-flto`。
-
-从最终 ELF 使用对应 `nm -S --size-sort` 核对两目标各 **59 个必要符号**，全部非零 `T/t/D`：包括 XTCP controller／NAT／codec／绑定 HMAC 和双方 proof、FRPS QUIC 与 peer factory、运行时证书生成、`verify_signature`／`verify_chain`／`sign_certificate`，及普通 `efrp_create`、TCP connect／TLS、work、Yamux adapter／读写／tick。唯一数据符号是 peer ClientHello 注册表 `D`；其余为真实代码。C3 最终 26 个 save／restore helper 仍全在 IRAM。检查不是以头声明或静态库存在代替实际链接。
-
-[原 partitions.csv](https://github.com/esp-space/esp-frp/blob/4e6a80904e054735981b160348bb7380bc9b8003/examples/tcp_proxy/partitions.csv) 未修改：factory offset `0x10000`、size `0x100000`；独立 `frp_scratch` offset `0x110000`、size `0x10000`。CSV SHA-256 `3c2266004b96abda28f9a68e799521ce4e3f747e7d3ce90b7e666414f53d1cf4`；初次、第二轮、隔离实验、最终两目标的实际 `partition-table.bin` SHA-256 均为 `5f900b9e9930afe0f5ad7742849f0835a1d7ccd02c392fe34ab2130c7ff249d6`。没有扩大分区。
-
-最终主要制品 SHA-256：
-
-| 目标 | 文件（目标根相对路径） | SHA-256 |
-| --- | --- | --- |
-| esp32c3 | `sdkconfig` | `643e1dfb87699adf498ca64ad6f5b76c2af2d7e13e74512e4c74ab4b7bae5a0d` |
-| esp32c3 | `build/esp_frp_sample.bin` | `b958ff897e2b8b002cb015e1e1552cb392d83aa58fe01b6428bf6fc2b941a5dc` |
-| esp32c3 | `build/esp_frp_sample.elf` | `1c25025fb57ec43efd47cbbd1d47fd61771a88cd3a6d7eebf410f68cea053df7` |
-| esp32c3 | `build/esp_frp_sample.map` | `14b0817a982fddbb3e8a0b810fc28d478761fd42ac7e04bf6f0989d0fdb5ae4c` |
-| esp32 | `sdkconfig` | `3ab778b0aa3a090057c822f133f7a32489672308b01d424bf1df8bed3a3083ef` |
-| esp32 | `build/esp_frp_sample.bin` | `3ba49c152d91fba112b4365e42fe9c29d27c449b9d45d2db602a3babbaaa694b` |
-| esp32 | `build/esp_frp_sample.elf` | `45ecfb28f4ab006c855c6ed176c3cf58eec0348b4e0f6b21c6ace09db3ed55d7` |
-| esp32 | `build/esp_frp_sample.map` | `df163888be2b43c0dfb0dd632d556a937f341e37242f1765bb006ed0fa57f510` |
-
-每个最终目标根还有 `build-final.log`（公共头重编译）、`build-final-cmake.log`（最后 CMake 重新配置）、`build-final-snapshot.log`（stage 6 容量复核）、`build-final-close.log`（最后 QUIC 关闭修正的重新配置／编译／链接和容量检查）、`linked-symbols.txt`、`elf-sections.txt`、`size-memory.json`、`size-components.json` 和 `build/compile_commands.json`。实际 sdkconfig、bootloader、解析依赖锁、日志及这些审计输出的 SHA 也保存在机器摘要。
-
 ## 复现入口
 
 以下 host 命令复用最终正式配置及二进制；从新目录构建时按 [tests/README.md](../../tests/README.md) 准备同一冻结依赖、Mbed TLS／ASan／UBSan 配置。两种 crypto 配置分开执行、分开记录；Mbed TLS 最终完整矩阵使用 `-j4`：
@@ -162,8 +104,6 @@ for target in esp32c3 esp32; do
 done
 ```
 
-## 尚未闭合的验收
+## 软件与实体证据边界
 
-C3 容量只余 15520 字节，已通过本轮完整镜像的原门禁，但不是未来新增功能的容量保证。官方选项的性能代价尚无实板测量，不能从代码尺寸推导 CPU 时序、worker 堆栈、最低 heap、QUIC 长期运行或 Flash 停用窗口的资源余量。
-
-回环 STUN／peer 正例证明实际软件入口和身份／所有权／清理链路，不证明跨运营商、真实 NAT 路由器或异网可用性。两目标硬件、异网矩阵、Base/MQTT 组合及原生业务首版前置仍未闭环；本检查点不放行设备验收或发布。后续按当前 typed API 与固定依赖实施，不增加自动协议回退。
+回环STUN／peer验证协议入口、身份／所有权和清理方法；异网NAT、两目标实体、Base/MQTT组合、CPU时序/堆栈/heap/QUIC长稳/Flash停用窗口必须分别以实际场景核验，软件容量不作未来新增能力保证。 typed API及固定依赖不会引入自动协议回退。
