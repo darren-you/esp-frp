@@ -5,7 +5,7 @@
     "revision": "fb53f8a76df5ea913715658f5ac602e91a094e72"
   },
   "lwip": {
-    "repository": "https://github.com/esp-space/esp-lwip.git",
+    "repository": "https://github.com/darren-you/esp-lwip.git",
     "revision": "2758df4cd3666b3b2a5b53830148379326425c0d",
     "path": "components/lwip/lwip"
   }
