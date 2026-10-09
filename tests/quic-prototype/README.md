@@ -24,7 +24,7 @@ flowchart LR
 
 ## 源码与安全边界
 
-- [quic-lock.json](../../quic-lock.json) 冻结 ngtcp2 v1.25.0 完整提交 `f9e9ff01ad2c8116bc09de4f644b0028a61486a6`、Picotls 完整提交 `f07f1c8c68b237f1468bc1f1fe1b68aba3ff23b4`，以及 host Mbed TLS 4.1.0 官方完整发布归档 SHA-256。依赖必须放在仓外；构建拒绝版本漂移和未提交修改。
+- [quic-lock.json](../../quic-lock.json) 冻结 ngtcp2 v1.25.0 受控完整提交 `5d5a3cf0faf44e06bf94137d5ff15e5edc5c6c24`（原上游业务基线 `f9e9ff01ad2c8116bc09de4f644b0028a61486a6`）、Picotls 受控完整提交 `7b5899d9b5f16f75e23548cf53ff05c0575a5ecd`（原上游业务基线 `f07f1c8c68b237f1468bc1f1fe1b68aba3ff23b4`），以及 host Mbed TLS 4.1.0 官方完整发布归档 SHA-256。依赖必须放在仓外；构建拒绝版本漂移和未提交修改。
 - [quic_crypto.c](../../src/quic_crypto.c) 是本仓正式模块与原型共用的唯一 ngtcp2/Picotls helper 实现，来自固定 ngtcp2 的 `crypto/picotls/picotls.c`，保留 MIT 许可与来源，直接使用 `ptls_minicrypto_*`。它不改写依赖、不创建 OpenSSL 符号别名，也不编译官方依赖 OpenSSL 的 helper。
 - [quic_random.c](../../src/quic_random.c) 使 context、X25519 和 helper 共用 PSA 随机源。PSA 初始化或生成失败直接终止；不能继续使用未初始化输出。
 - [quic_certificate.c](../../src/quic_certificate.c) 先用官方 Mbed TLS 验证 CA 链、域名、有效期与 KU/EKU 用途，再验证真实 TLS `CertificateVerify`。公开窄边界是 ECDSA P-256/SHA-256；哈希由 PSA 生成，DER ECDSA 由官方 `mbedtls_pk_verify` 转换并交 PSA 验签。没有跳过签名验证的路径。最多 4 个证书、单证书 8192 字节、链总计 16384 字节；时间可信回调在验链和验签时都必须成立。

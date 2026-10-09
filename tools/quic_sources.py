@@ -24,13 +24,18 @@ def verify(path: Path, entry: dict) -> None:
         raise ValueError(f"依赖未锁定完整提交 {entry['revision']}")
     if git(path, "status", "--porcelain", "--untracked-files=normal"):
         raise ValueError("依赖 checkout 有未提交内容")
+    if git(path, "rev-parse", "--is-shallow-repository") != "false":
+        raise ValueError("依赖必须保有完整提交对象")
+    if any(line[:1] in "-+U" for line in git(path, "submodule", "status", "--recursive").splitlines()):
+        raise ValueError("依赖子模块必须完整初始化并匹配精确 gitlink")
 
 def prepare(path: Path, entry: dict) -> None:
     path.mkdir(parents=True, exist_ok=False)
     git(path, "init", "-q")
     git(path, "remote", "add", "origin", entry["repository"])
-    git(path, "fetch", "--depth=1", "origin", entry["revision"])
+    git(path, "fetch", "origin", entry["revision"])
     git(path, "checkout", "--detach", "FETCH_HEAD")
+    git(path, "submodule", "update", "--init", "--recursive", "--checkout")
     verify(path, entry)
 
 def main() -> int:

@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "ngtcp2": {
-    "repository": "https://github.com/ngtcp2/ngtcp2.git",
-    "revision": "f9e9ff01ad2c8116bc09de4f644b0028a61486a6",
+    "repository": "https://github.com/darren-you/reference-quic-ngtcp2.git",
+    "revision": "5d5a3cf0faf44e06bf94137d5ff15e5edc5c6c24",
     "version": "1.25.0"
   },
   "picotls": {
-    "repository": "https://github.com/h2o/picotls.git",
-    "revision": "f07f1c8c68b237f1468bc1f1fe1b68aba3ff23b4"
+    "repository": "https://github.com/darren-you/reference-quic-picotls.git",
+    "revision": "7b5899d9b5f16f75e23548cf53ff05c0575a5ecd"
   },
   "host_mbedtls": {
     "version": "4.1.0",
