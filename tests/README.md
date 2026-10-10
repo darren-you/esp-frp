@@ -96,11 +96,16 @@ ASan 与 TSan 需分别构建。上述驱动验证所有权及竞争，不计作
 
 AES-256-GCM 和 Hello/Login 官方互操作需 Go >=1.25，添加 `-DEFRP_TEST_UPSTREAM_CRYPTO=ON`，运行 `aead_upstream`、`handshake_upstream` 和 `handshake_esp32_upstream`。后两项分别以 `riscv32`、`xtensa` 核对官方 FRP v0.71.0 解码出的 Login，并完成 Token 鉴权、加密往返与拒绝用例；两方向、64 KiB、多记录及拒绝范围见 [crypto-interop](crypto-interop/README.md)。可以同时打开两个上游测试选项。
 
-生产 PSA 适配器也能在 host 运行相同 CTest。准备官方 [TF-PSA-Crypto 1.1.0 发布包](https://github.com/Mbed-TLS/TF-PSA-Crypto/releases/tag/tf-psa-crypto-1.1.0)，使用完整 `tf-psa-crypto-1.1.0.tar.bz2`（SHA-256 `a0b011b7f2c427cc8ee70116bb2d859543014534ae4d7020a69613aec10dc1b4`），解包后显式传入其根目录：
+生产 PSA 适配器也能在 host 运行相同 CTest。使用 [受控完整 host 来源](../tools/README.md#quic-精确源码)中的 `tf-psa-crypto` 精确子目录，其官方 `tf-psa-crypto-1.1.0` source tag 基线为 `29160dd877d29658279fd683b2ae57b320ddcf09`，与原独立官方发布包版本一致。当前源码保留19个生成文件、发布配置及密码原语；C/头文件/汇编与原官方包逐文件相同。独立 PSA 准备可只指定 host 组，不取不消费的 QUIC：
 
 ```bash
+python3 tools/quic_sources.py prepare --host-mbedtls-path /absolute/path/to/mbedtls-4.1.0
+```
+
+显式传入其精确 PSA 子目录：
+```bash
 cmake -S . -B build-psa -DBUILD_TESTING=ON \
-  -DEFRP_PSA_SOURCE_DIR=/absolute/path/to/tf-psa-crypto-1.1.0 \
+  -DEFRP_PSA_SOURCE_DIR=/absolute/path/to/mbedtls-4.1.0/tf-psa-crypto \
   -DGEN_FILES=OFF -DEFRP_TEST_UPSTREAM_CRYPTO=ON \
   -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -DMBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS"
 cmake --build build-psa
@@ -109,7 +114,7 @@ ctest --test-dir build-psa --output-on-failure
 
 显式 PSA host 模式不再链接 OpenSSL。发布包包含生成文件，`GEN_FILES=OFF` 避免把上游代码生成工具引为本项目依赖。不要把 Espressif SDK 内经移植的 TF 子树当作独立官方 host 包；它依赖 SDK 的头文件与配置，生产芯片适配只由 IDF 编译验证。上面两个构建目录选择不同密码后端，用于交叉验证。
 
-严格 TLS 测试使用官方 [Mbed TLS 4.1.0 完整发布包](https://github.com/Mbed-TLS/mbedtls/releases/tag/mbedtls-4.1.0)，文件 `mbedtls-4.1.0.tar.bz2` 的 SHA-256 为 `377a09cf8eb81b5fb2707045e5522d5489d3309fed5006c9874e60558fc81d10`。包内自带 TF-PSA-Crypto 1.1.0，不得同时设置 `EFRP_PSA_SOURCE_DIR`。需 POSIX 与 Go >=1.25：
+严格 TLS 测试使用 [受控 Mbed TLS 4.1.0 完整源归档](https://github.com/darren-you/reference-sdk-mbedtls/releases/tag/v4.1.0)，SHA-256 为 `91773900004719afbae4821f1671a9a3cb04c674208be1d3e7598c53ce199668`。按 [普通准备入口](../tools/README.md#quic-精确源码)取得完整精确 Git 源，入口同时核验正式归档与重建一致性；清理只移除 Actions 来源并保留全部官方生成文件，2 处生成注释差异见来源记录。包内自带 TF-PSA-Crypto 1.1.0，不得同时设置 `EFRP_PSA_SOURCE_DIR`。需 POSIX 与 Go >=1.25：
 
 ```bash
 cmake -S . -B build-tls -DBUILD_TESTING=ON \

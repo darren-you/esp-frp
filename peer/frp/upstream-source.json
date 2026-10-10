@@ -10,12 +10,6 @@
   "production_catalog_changed": false,
   "preserved_files": [
     {
-      "path": "AGENTS.md",
-      "type": "file",
-      "mode": "100644",
-      "sha256": "669d5a2d67e25c848da00c80b6897998746ecdc1611e266f2ef4bfdd47abbc2b"
-    },
-    {
       "path": "CLAUDE.md",
       "type": "symlink",
       "mode": "120000",
