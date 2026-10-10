@@ -17,7 +17,7 @@ python3 tools/sdk.py prepare --path "$HOME/.espressif/frameworks/esp-frp-idf"
 bash "$HOME/.espressif/frameworks/esp-frp-idf/install.sh" esp32c3 esp32
 source "$HOME/.espressif/frameworks/esp-frp-idf/export.sh"
 python3 tools/sdk.py check --path "$IDF_PATH"
-python3 -m unittest discover -s tools/tests -p test_sdk.py
+python3 -B -m unittest discover -s tools/tests -p test_sdk.py
 ```
 
 `prepare` 只创建不存在的新路径，从冻结 Base 提交读取 recipe 和两份修改的数据，不执行 Base 构建或 SDK 内脚本。它核对清单与 patch 摘要、所有官方原文及完整修改集合，在全部 `git apply --check` 通过后才应用；最后独占创建 SDK 根普通文件 `esp-sdk-derivation.json`，其字节与冻结 recipe 完全相同。工具链安装与导出仍是独立的官方入口。
