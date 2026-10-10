@@ -74,13 +74,43 @@ def reject_builtin_content_conversions(path: Path, files: list[str], patch: byte
             raise ValueError(f"SDK 内置 Git 转换会改变受管原始字节：{relative}：{path}")
 
 
-def reject_external_content_filters(path: Path) -> None:
-    """装配前拒绝 Git 最终有效的外部内容驱动，避免 apply 执行未知程序。"""
+def reject_external_content_filters(path: Path, files: list[str]) -> None:
+    """首写前只拒绝实际补丁路径选中的可执行驱动，未使用的注册不影响装配。"""
+    result = subprocess.run(
+        git_command(path, "check-attr", "-z", "--stdin", "filter"),
+        input=b"".join(relative.encode() + b"\0" for relative in files),
+        check=True, capture_output=True, env=git_environment())
+    fields = result.stdout.split(b"\0")
+    if fields[-1] != b"" or len(fields) - 1 != len(files) * 3:
+        raise ValueError("SDK 外部 Git filter 属性输出不完整")
+    attributes = {}
+    for offset in range(0, len(fields) - 1, 3):
+        relative, attribute, driver = (part.decode() for part in fields[offset:offset + 3])
+        if relative not in files or relative in attributes or attribute != "filter":
+            raise ValueError("SDK 外部 Git filter 属性越出受管路径")
+        attributes[relative] = driver
     keys = set(git(path, "config", "--null", "--name-only", "--list").split("\0"))
-    for key in keys:
-        if (key.startswith("filter.") and key.rsplit(".", 1)[-1] in ("clean", "smudge", "process")
-                and git(path, "config", "--get", key)):
-            raise ValueError(f"SDK 装配不能执行外部 Git filter：{key}：{path}")
+    for relative, driver in attributes.items():
+        # check-attr 的 set/unset/unspecified 也可能是同名驱动的字面值；
+        # 不以这些输出文本跳过实际配置中的可执行驱动。
+        executable = any("filter." + driver + "." + kind in keys and
+                         git(path, "config", "--get", "filter." + driver + "." + kind)
+                         for kind in ("clean", "smudge", "process"))
+        if not executable:
+            continue
+        if driver in ("set", "unset", "unspecified"):
+            # 原生属性输出混用布尔/未设置与同名字面值。仅这三个固定 ASCII
+            # 名称用空输入、禁用驱动且 required 的无写入 hash 判断真实绑定。
+            probe = subprocess.run(git_command(
+                path, "-c", "filter." + driver + ".clean=",
+                "-c", "filter." + driver + ".process=",
+                "-c", "filter." + driver + ".required=true",
+                "hash-object", "--path=" + relative, "--stdin"),
+                input=b"", capture_output=True, env=git_environment())
+            if (probe.returncode == 0 and
+                    probe.stdout.strip() == b"e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"):
+                continue
+        raise ValueError(f"SDK 装配不能执行外部 Git filter：{driver}：{relative}：{path}")
 
 
 def verify_repository_origin(path: Path, expected: str) -> None:
@@ -602,8 +632,9 @@ def apply_recipe(sdk: Path, lock: dict, data: bytes, recipe: dict,
         raise ValueError("SDK patch 输入集合与唯一 recipe 不符")
     verify_tree(sdk, lock, recipe, patched=False)
     repositories = {"idf": sdk, "tlsf": sdk / recipe["tlsf"]["path"]}
-    for repository in repositories.values():
-        reject_external_content_filters(repository)
+    for declaration in recipe["managed_patches"]:
+        reject_external_content_filters(repositories[declaration["repository"]],
+                                        [item["path"] for item in declaration["files"]])
     for declaration, path in resources:
         if digest(path.read_bytes()) != declaration["sha256"]:
             raise ValueError("SDK patch 输入摘要不符")
@@ -640,8 +671,7 @@ def prepare(output: Path, lock: dict) -> None:
         data, recipe, resources = fetch_recipe(Path(temporary) / "recipe", lock)
         prepare_git(output, "init", "-q", "-b", "master")
         git(output, "remote", "add", "origin", lock["idf"]["repository"])
-        # 新根首次 checkout 也会执行宿主内容驱动，先核实际有效配置。
-        reject_external_content_filters(output)
+        # 新根和递归 checkout 使用隔离配置，实际补丁路径在 apply 首写前统一核验。
         git(output, "fetch", "--no-filter", "origin", lock["idf"]["revision"])
         prepare_git(output, "checkout", "--detach", "FETCH_HEAD")
         prepare_git(output, "submodule", "update", "--init", "--recursive", "--checkout", "--no-recommend-shallow", "--jobs=8")

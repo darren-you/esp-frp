@@ -245,8 +245,8 @@ def verify_complete_repository(path: Path, source_root: Path | None = None,
         raise ValueError(f"依赖 来源对象不完整：{path}\n{result.stderr.strip()}")
 
     verify_object_bytes(path)
-    if git(path, "ls-files", "--others", "--exclude-standard", "-z"):
-        raise ValueError(f"来源存在其他修改（未提交的普通 untracked 内容）：{path}")
+    if git(path, "ls-files", "--others", "-z"):
+        raise ValueError(f"来源存在其他修改（未提交的 untracked 或 ignored 内容）：{path}")
     verify_tracked_tree(path, source_root, gitlink_overrides or {}, revision)
 
 

@@ -154,6 +154,25 @@ class HostSourceContractTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             SOURCES.verify(self.source, self.entry)
 
+    def test_rejects_ignored_extra_header_in_absorbed_source(self):
+        self.git(self.source, "-c", "protocol.file.allow=always", "submodule", "add", "-q",
+                 str(self.source), "dependency")
+        self.git(self.source, "add", ".")
+        self.git(self.source, "commit", "-qm", "absorbed source fixture")
+        self.entry["revision"] = self.git(self.source, "rev-parse", "HEAD")
+        dependency = self.source / "dependency"
+        self.assertTrue((dependency / ".git").is_file())
+        SOURCES.verify(self.source, self.entry)
+        git_directory = Path(self.git(dependency, "rev-parse", "--absolute-git-dir"))
+        (git_directory / "info").mkdir(exist_ok=True)
+        (git_directory / "info/exclude").write_text("*.h\n")
+        self.git(self.source, "config", "submodule.dependency.ignore", "all")
+        (dependency / "extra.h").write_text("#define UNVERIFIED_HEADER 1\n")
+        self.assertEqual(self.git(self.source, "status", "--porcelain"), "")
+        self.assertEqual(self.git(dependency, "ls-files", "--others", "--exclude-standard"), "")
+        with self.assertRaisesRegex(ValueError, "untracked|ignored"):
+            SOURCES.verify(self.source, self.entry)
+
     def test_check_rejects_shared_clone_even_when_fsck_passes(self):
         shared = self.root / "shared"
         self.git(self.root, "clone", "-q", "--shared", str(self.source), str(shared))
@@ -283,6 +302,38 @@ class SourceIntegrityTest(unittest.TestCase):
         self.assertEqual(self.filename.read_bytes(), self.evil)
         self.assertEqual(self._run_git("diff", "--exit-code", "HEAD").returncode, 0)
         self._git("fsck", "--connectivity-only", "--no-dangling")
+
+    def _assert_ignored_extra_header_rejected(self, scope):
+        global_config = self.root / "source-global-config"
+        global_config.write_text("")
+        if scope == "tracked":
+            (self.source / ".gitignore").write_text("*.h\n")
+            self._commit()
+        elif scope == "info":
+            (self.source / ".git/info").mkdir(exist_ok=True)
+            (self.source / ".git/info/exclude").write_text("*.h\n")
+        else:
+            ignore_file = self.root / "global-ignore"
+            ignore_file.write_text("*.h\n")
+            global_config.write_text("[core]\n\texcludesFile = " + str(ignore_file) + "\n")
+        with patch.dict(os.environ, {"GIT_CONFIG_NOSYSTEM": "1",
+                                     "GIT_CONFIG_GLOBAL": str(global_config)}):
+            self._verify()
+            (self.source / "extra.h").write_text("#define UNVERIFIED_HEADER 1\n")
+            self.assertEqual(self._git("check-ignore", "extra.h"), "extra.h")
+            self.assertEqual(self._git("ls-files", "--others", "--exclude-standard"), "")
+            self.assertEqual(self._git("ls-files", "--others"), "extra.h")
+            with self.assertRaisesRegex(ValueError, "untracked|ignored"):
+                self._verify()
+
+    def test_rejects_extra_header_ignored_by_tracked_gitignore(self):
+        self._assert_ignored_extra_header_rejected("tracked")
+
+    def test_rejects_extra_header_ignored_by_info_exclude(self):
+        self._assert_ignored_extra_header_rejected("info")
+
+    def test_rejects_extra_header_ignored_by_global_ignore(self):
+        self._assert_ignored_extra_header_rejected("global")
 
     def test_rejects_clean_filter_hiding_raw_source_change(self):
         command = shlex.join([sys.executable, "-c",

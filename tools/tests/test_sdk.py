@@ -394,6 +394,109 @@ class SDKContractTest(unittest.TestCase):
                 finally:
                     case.doCleanups()
 
+    def test_apply_allows_unselected_native_lfs_drivers(self):
+        for scope in ("system", "global", "command"):
+            with self.subTest(scope=scope):
+                case = SDKContractTest()
+                try:
+                    case.setUp()
+                    case.pristine()
+                    configuration = case.root / "registered-lfs"
+                    for kind, command in (("clean", "git-lfs clean -- %f"),
+                                          ("smudge", "git-lfs smudge -- %f"),
+                                          ("process", "git-lfs filter-process")):
+                        case.run_git(case.root, "config", "--file", str(configuration), "filter.lfs." + kind, command)
+                    environment = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null",
+                                   "GIT_CONFIG_NOSYSTEM": "0", "GIT_CONFIG_COUNT": "0"}
+                    if scope == "command":
+                        environment.update(GIT_CONFIG_COUNT="3")
+                        for index, (kind, command) in enumerate((("clean", "git-lfs clean -- %f"),
+                                                                ("smudge", "git-lfs smudge -- %f"),
+                                                                ("process", "git-lfs filter-process"))):
+                            environment["GIT_CONFIG_KEY_" + str(index)] = "filter.lfs." + kind
+                            environment["GIT_CONFIG_VALUE_" + str(index)] = command
+                    else:
+                        environment["GIT_CONFIG_" + scope.upper()] = str(configuration)
+                    with patch.dict(os.environ, environment):
+                        SDK.apply_recipe(case.sdk, case.lock, case.recipe_bytes, case.recipe, case.resources)
+                        case.verify()
+                    self.assertEqual(case.stamp.read_bytes(), case.recipe_bytes)
+                finally:
+                    case.doCleanups()
+
+    def test_apply_allows_filter_bound_only_to_unmodified_file(self):
+        self.pristine()
+        marker = self.root / "unused-filter-ran"
+        command = shlex.join([sys.executable, "-c", 'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("ran")', str(marker)])
+        (self.sdk / ".git/info/attributes").write_text(".gitmodules filter=source-probe\n")
+        self.run_git(self.sdk, "config", "filter.source-probe.clean", command)
+        SDK.apply_recipe(self.sdk, self.lock, self.recipe_bytes, self.recipe, self.resources)
+        self.verify()
+        self.assertFalse(marker.exists())
+        self.assertEqual(self.stamp.read_bytes(), self.recipe_bytes)
+
+    def test_apply_allows_boolean_or_unset_attributes_with_same_named_drivers(self):
+        for attribute in ("", "sdk.c !filter\n", "sdk.c filter\n", "sdk.c -filter\n"):
+            with self.subTest(attribute=attribute):
+                fixture = SDKContractTest("runTest")
+                fixture.setUp()
+                fixture.pristine()
+                try:
+                    marker = fixture.root / "sentinel-driver-ran"
+                    command = shlex.join([sys.executable, "-c",
+                        'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("ran")', str(marker)])
+                    for driver in ("set", "unset", "unspecified"):
+                        for kind in ("clean", "smudge", "process"):
+                            fixture.run_git(fixture.sdk, "config", "filter." + driver + "." + kind, command)
+                    (fixture.sdk / ".git/info/attributes").write_text(attribute)
+                    def objects():
+                        return {str(path.relative_to(fixture.sdk)): path.read_bytes()
+                                for path in fixture.sdk.rglob("*") if path.is_file() and
+                                "/objects/" in str(path)}
+                    original_objects = objects()
+                    SDK.apply_recipe(fixture.sdk, fixture.lock, fixture.recipe_bytes, fixture.recipe, fixture.resources)
+                    SDK.verify_tree(fixture.sdk, fixture.lock, fixture.recipe, patched=True)
+                    self.assertEqual(objects(), original_objects, "只读属性判别不得写 Git 对象")
+                    self.assertFalse(marker.exists(), "布尔或未设置属性不得执行同名驱动")
+                    self.assertEqual((fixture.sdk / SDK.DERIVATION_STAMP).read_bytes(), fixture.recipe_bytes)
+                finally:
+                    fixture.temp.cleanup()
+
+    def test_apply_rejects_drivers_named_like_attribute_sentinels(self):
+        for driver in ("set", "unset", "unspecified", "unspecified=other"):
+            with self.subTest(driver=driver):
+                case = SDKContractTest()
+                try:
+                    case.setUp()
+                    case.pristine()
+                    before = (case.sdk / "sdk.c").read_bytes()
+                    marker = case.root / "sentinel-filter-ran"
+                    command = shlex.join([sys.executable, "-c", 'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("ran")', str(marker)])
+                    (case.sdk / ".git/info/attributes").write_text("sdk.c filter=" + driver + "\n")
+                    case.run_git(case.sdk, "config", "filter." + driver + ".clean", command)
+                    with self.assertRaisesRegex(ValueError, "外部 Git filter"):
+                        SDK.apply_recipe(case.sdk, case.lock, case.recipe_bytes, case.recipe, case.resources)
+                    self.assertEqual((case.sdk / "sdk.c").read_bytes(), before)
+                    self.assertFalse(marker.exists())
+                    self.assertFalse(case.stamp.exists())
+                finally:
+                    case.doCleanups()
+
+    def test_apply_rejects_later_repository_filter_before_any_write(self):
+        self.pristine()
+        before = [(file, file.read_bytes()) for file in (self.sdk / "sdk.c", self.tlsf / "tlsf.c")]
+        marker = self.root / "late-repository-filter-ran"
+        command = shlex.join([sys.executable, "-c", 'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("ran")', str(marker)])
+        metadata = Path(self.run_git(self.tlsf, "rev-parse", "--absolute-git-dir"))
+        (metadata / "info/attributes").write_text("tlsf.c filter=source-probe\n")
+        self.run_git(self.tlsf, "config", "filter.source-probe.clean", command)
+        with self.assertRaisesRegex(ValueError, "外部 Git filter"):
+            SDK.apply_recipe(self.sdk, self.lock, self.recipe_bytes, self.recipe, self.resources)
+        for file, content in before:
+            self.assertEqual(file.read_bytes(), content)
+        self.assertFalse(marker.exists())
+        self.assertFalse(self.stamp.exists())
+
     def test_apply_rejects_effective_external_filters_before_mutation(self):
         self.pristine()
         before = (self.sdk / "sdk.c").read_bytes()
@@ -468,12 +571,13 @@ class SDKContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "唯一 recipe"):
                 SDK.read_lock()
 
-    def test_prepare_rejects_inherited_filters_before_first_checkout(self):
+    def test_prepare_isolates_inherited_filters_and_rejects_bound_apply(self):
         marker = self.root / "checkout-filter-ran"
         attributes = self.root / "checkout-attributes"
         attributes.write_text("sdk.c filter=source-probe\n")
         command = shlex.join([sys.executable, "-c", 'import pathlib,sys; pathlib.Path(sys.argv[1]).write_text("ran")', str(marker)])
         original = SDK.git
+        original_prepare = SDK.prepare_git
         sources = {self.lock["idf"]["repository"]: str(self.sdk),
                    self.lock["lwip"]["repository"]: str(self.source),
                    self.lock["sdk_derivation"]["repository"]: str(self.recipe_source)}
@@ -500,13 +604,17 @@ class SDKContractTest(unittest.TestCase):
                         if items and items[0] == "submodule":
                             items = ["-c", "protocol.file.allow=always", *items]
                         return original(path, *items)
-                    with patch.dict(os.environ, environment), patch.object(SDK, "git", local_git):
+                    def local_prepare_git(path, *args):
+                        items = list(args)
+                        if items and items[0] == "submodule":
+                            items = ["-c", "protocol.file.allow=always", *items]
+                        return original_prepare(path, *items)
+                    with patch.dict(os.environ, environment), patch.object(SDK, "git", local_git), \
+                            patch.object(SDK, "prepare_git", local_prepare_git):
                         with self.assertRaisesRegex(ValueError, "外部 Git filter"):
                             SDK.prepare(output, self.lock)
-                    self.assertNotIn("checkout", calls)
-                    self.assertNotIn("submodule", calls)
-                    self.assertFalse(marker.exists(), "首次 checkout 前不得执行 filter")
-                    self.assertFalse((output / "sdk.c").exists())
+                    self.assertFalse(marker.exists(), "隔离 checkout 与绑定补丁拒绝均不得执行 filter")
+                    self.assertEqual((output / "sdk.c").read_text(), "official idf\n")
                     self.assertFalse((output / SDK.DERIVATION_STAMP).exists())
 
     def test_fetch_recipe_does_not_copy_template_transaction_hook(self):
@@ -609,12 +717,13 @@ class SDKContractTest(unittest.TestCase):
                     return original_prepare(path, *items)
                 with patch.dict(os.environ, environment), patch.object(SDK, "git", local_git), \
                         patch.object(SDK, "prepare_git", local_prepare_git, create=True):
-                    # 末次真实配置 guard 仍拒该 driver；此前 native checkout 不能执行它。
-                    with self.assertRaisesRegex(ValueError, "外部 Git filter"):
-                        SDK.prepare(output, self.lock)
+                    # lwIP 的 tcp.c 不属于容量补丁；隔离 checkout 不执行其 driver，
+                    # 未写入该路径的装配继续通过，实际对象/来源校验仍完整执行。
+                    SDK.prepare(output, self.lock)
+                    SDK.verify_tree(output, self.lock, self.recipe, patched=True)
                 self.assertFalse(marker.exists(), "首次递归子仓 checkout 不得运行条件 filter")
                 self.assertEqual((output / self.lock["lwip"]["path"] / "tcp.c").read_text(), "corrected lwip\n")
-                self.assertFalse((output / SDK.DERIVATION_STAMP).exists())
+                self.assertEqual((output / SDK.DERIVATION_STAMP).read_bytes(), self.recipe_bytes)
 
     def test_prepare_does_not_install_inherited_template_hooks(self):
         marker = self.root / "template-hook-ran"
