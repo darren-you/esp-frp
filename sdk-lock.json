@@ -1,12 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "idf": {
-    "repository": "https://github.com/esp-space/esp-idf.git",
+    "repository": "https://github.com/darren-you/esp-idf.git",
     "revision": "578cf89c343e388db43ba1f4ddcd602fedcb763c"
   },
   "lwip": {
-    "repository": "https://github.com/esp-space/esp-lwip.git",
+    "repository": "https://github.com/darren-you/esp-lwip.git",
     "revision": "2758df4cd3666b3b2a5b53830148379326425c0d",
     "path": "components/lwip/lwip"
+  },
+  "sdk_derivation": {
+    "repository": "https://github.com/darren-you/esp-base.git",
+    "revision": "bac1b0f812f87a2466cefc7a230ddb4fb2abcbc2",
+    "path": "sdk-lock.json",
+    "sha256": "aa30328518ba10db58f00fa11f04a04a63f8efca05d08e7ae6ced59d7694aa4d"
   }
 }
