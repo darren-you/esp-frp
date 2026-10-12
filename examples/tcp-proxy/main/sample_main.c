@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp.h"
 #include "sample_echo.h"
+#include "sample_config.h"
+#include "sample_udp_echo.h"
 #include "sample_flash_store.h"
 #include "sample_resources.h"
 #include "esp_event.h"
@@ -71,10 +73,8 @@ static void wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 static bool inputs_valid(void)
 {
     size_t ssid=sizeof sample_wifi_ssid-1, password=sizeof sample_wifi_password-1;
-    const uint8_t loopback[4]={127,0,0,1};
     return ssid && ssid <= 32 && password >= 8 && password <= 64 &&
-        sample_ntp_server[0] && sample_frp_config.ca_length && sample_frp_config.token_length &&
-        sample_frp_config.local_port && !memcmp(loopback, sample_frp_config.local_ipv4, 4);
+        sample_ntp_server[0] && sample_config_valid(&sample_configuration);
 }
 static esp_err_t start_wifi(void)
 {
@@ -115,10 +115,8 @@ static esp_err_t set_dns(void)
 }
 static efrp_result_t create_client(void)
 {
-    efrp_config_t config=sample_frp_config;
-    config.time_is_trusted=trusted; config.run_id=last_run_id;
-    config.flash_store=sample_flash_store_callbacks();
-    efrp_result_t result=efrp_create(&config, &client);
+    efrp_result_t result=sample_config_create(&sample_configuration, trusted,
+        sample_flash_store_callbacks(), last_run_id, &client);
     if (result == EFRP_OK) result=efrp_start(client);
     printf("EFRP_SAMPLE start_error=%d cycle=%u\n", result, cycle); return result;
 }
@@ -151,7 +149,58 @@ static void report(const char *phase)
         status.mux_timeout_source, status.mux_timeout_stream_id, status.mux_timeout_age_ms,
         status.mux_timeout_pending_bytes, status.control_timeout_source);
 #endif
-    sample_echo_report(); sample_resources(phase, cycle);
+    printf("EFRP_SAMPLE_PROTOCOL role=%u backend=%u transport=%u xtcp_phase=%u xtcp_error=%d"
+        " xtcp_attempts=%" PRIu64 " xtcp_established=%" PRIu64 " xtcp_failed=%" PRIu64 " xtcp_rejected=%" PRIu64
+        " udp_received=%" PRIu64 " udp_sent=%" PRIu64 " udp_dropped=%" PRIu64 " udp_expired=%" PRIu64 " udp_active=%u\n",
+        (unsigned)sample_configuration.role, (unsigned)sample_configuration.backend,
+        (unsigned)sample_config_transport(&sample_configuration), (unsigned)status.xtcp.phase, status.xtcp.error,
+        status.xtcp.attempts, status.xtcp.established, status.xtcp.failed, status.xtcp.rejected,
+        status.work.udp_received_datagrams, status.work.udp_sent_datagrams, status.work.udp_dropped_datagrams,
+        status.work.udp_expired_remotes, status.work.udp_active_remotes);
+    if (sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO) sample_echo_report();
+    if (sample_configuration.backend == SAMPLE_BACKEND_UDP_ECHO) sample_udp_echo_report();
+    sample_resources(phase, cycle);
+}
+static bool backend_start(void)
+{
+    if (sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO)
+        return sample_echo_start(sample_config_backend_port(&sample_configuration));
+    if (sample_configuration.backend == SAMPLE_BACKEND_UDP_ECHO)
+        return sample_udp_echo_start(sample_config_backend_port(&sample_configuration),
+            sample_configuration.client.provider.udp_packet_size);
+    return true; /* Explicit external backend or visitor has no sample listener. */
+}
+static void backend_step(void)
+{
+    if (sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO) sample_echo_step();
+    if (sample_configuration.backend == SAMPLE_BACKEND_UDP_ECHO) sample_udp_echo_step();
+}
+static bool backend_stop(void)
+{
+    if (sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO) return sample_echo_stop();
+    if (sample_configuration.backend == SAMPLE_BACKEND_UDP_ECHO) return sample_udp_echo_stop();
+    return true;
+}
+static void shutdown_sample(void)
+{
+    /* Startup/reconfiguration failure still has a live app_main owner. Keep
+     * advancing both sides until native close and worker destruction finish. */
+    while (client) {
+        if (efrp_destroy(&client,0) == EFRP_OK) break;
+        backend_step(); vTaskDelay(1);
+    }
+    while (!backend_stop()) { backend_step(); vTaskDelay(1); }
+}
+static bool local_echo(void)
+{
+    return sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO ||
+        sample_configuration.backend == SAMPLE_BACKEND_UDP_ECHO;
+}
+static efrp_result_t stop_client(uint32_t timeout_ms)
+{
+    efrp_result_t result=client ? efrp_stop(client,timeout_ms) : EFRP_OK;
+    if (result == EFRP_OK) sample_udp_echo_clear_pending();
+    return result;
 }
 static void command(const char *text)
 {
@@ -169,25 +218,32 @@ static void command(const char *text)
             if (recreate) ++cycle;
             /* app_main also owns the echo side. Let it close connections whose
              * matching work sockets were cancelled before measuring baseline. */
-            for (unsigned i=0;i<10;++i) { sample_echo_step(); vTaskDelay(1); }
+            sample_udp_echo_clear_pending();
+            for (unsigned i=0;i<10;++i) { backend_step(); vTaskDelay(1); }
             report("destroyed");
             if (recreate) result=create_client();
         }
     } else if (!strcmp(text,"restart")) {
-        result=client ? efrp_stop(client,30000) : EFRP_INVALID_STATE;
+        result=client ? stop_client(30000) : EFRP_INVALID_STATE;
         if (result == EFRP_OK) result=efrp_start(client);
-    } else if (!strcmp(text,"stop")) result=client ? efrp_stop(client,30000) : EFRP_OK;
-    else if (!strcmp(text,"stop_poll")) result=client ? efrp_stop(client,0) : EFRP_OK;
-    else if (!strcmp(text,"stop_short")) result=client ? efrp_stop(client,50) : EFRP_OK;
+    } else if (!strcmp(text,"stop")) result=stop_client(30000);
+    else if (!strcmp(text,"stop_poll")) result=stop_client(0);
+    else if (!strcmp(text,"stop_short")) result=stop_client(50);
     else if (!strcmp(text,"start")) result=client ? efrp_start(client) : create_client();
     else if (!strcmp(text,"wifi_down")) { wifi_wanted=false; result=(efrp_result_t)esp_wifi_stop(); }
     else if (!strcmp(text,"wifi_up")) { wifi_wanted=true; result=(efrp_result_t)esp_wifi_start(); }
-    else if (!strcmp(text,"echo_off")) sample_echo_stop();
-    else if (!strcmp(text,"echo_on")) result=sample_echo_start(sample_frp_config.local_port) ? EFRP_OK : EFRP_NETWORK_ERROR;
-    else if (!strcmp(text,"echo_local_fin")) result=sample_echo_arm(SAMPLE_ECHO_LOCAL_FIN) ? EFRP_OK : EFRP_INVALID_STATE;
-    else if (!strcmp(text,"echo_stall")) result=sample_echo_arm(SAMPLE_ECHO_PAUSED) ? EFRP_OK : EFRP_INVALID_STATE;
-    else if (!strcmp(text,"echo_resume")) result=sample_echo_resume() ? EFRP_OK : EFRP_INVALID_STATE;
-    else if (!strcmp(text,"echo_reset")) result=sample_echo_reset() ? EFRP_OK : EFRP_INVALID_STATE;
+    else if (!strcmp(text,"echo_off")) {
+        result=!local_echo() ? EFRP_INVALID_STATE : (backend_stop() ? EFRP_OK : EFRP_WOULD_BLOCK);
+    } else if (!strcmp(text,"echo_on")) result=!local_echo() ? EFRP_INVALID_STATE :
+        (backend_start() ? EFRP_OK : EFRP_NETWORK_ERROR);
+    else if (!strcmp(text,"echo_local_fin")) result=sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO &&
+        sample_echo_arm(SAMPLE_ECHO_LOCAL_FIN) ? EFRP_OK : EFRP_INVALID_STATE;
+    else if (!strcmp(text,"echo_stall")) result=sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO &&
+        sample_echo_arm(SAMPLE_ECHO_PAUSED) ? EFRP_OK : EFRP_INVALID_STATE;
+    else if (!strcmp(text,"echo_resume")) result=sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO &&
+        sample_echo_resume() ? EFRP_OK : EFRP_INVALID_STATE;
+    else if (!strcmp(text,"echo_reset")) result=sample_configuration.backend == SAMPLE_BACKEND_TCP_ECHO &&
+        sample_echo_reset() ? EFRP_OK : EFRP_INVALID_STATE;
     else { puts("EFRP_SAMPLE command_error=unknown"); return; }
     printf("EFRP_SAMPLE command=%s error=%d cycle=%u client=%u elapsed_ms=%" PRIu64 "\n",
         text,result,cycle,client!=NULL,(uint64_t)esp_timer_get_time()/1000u-started);
@@ -210,7 +266,7 @@ static void serial_input(void)
 void app_main(void)
 {
     setvbuf(stdout,NULL,_IONBF,0);
-    printf("ESP_FRP_LAB_ONLY TCP_PROXY sdk=6.1 target=%s\n", CONFIG_IDF_TARGET);
+    printf("ESP_FRP_LAB_ONLY PROTOCOL_SAMPLE sdk=6.1 target=%s\n", CONFIG_IDF_TARGET);
     if (!inputs_valid()) { puts("EFRP_SAMPLE valid_private_inputs_required; no_network_started"); return; }
     efrp_result_t scratch_result=sample_flash_store_init();
     if (scratch_result != EFRP_OK) {
@@ -231,8 +287,8 @@ void app_main(void)
     esp_sntp_config_t ntp=ESP_NETIF_SNTP_DEFAULT_CONFIG(sample_ntp_server); ntp.sync_cb=synced;
     ntp.start=false; /* Start only after DHCP and the selected DNS are ready. */
     error=esp_netif_sntp_init(&ntp);
-    if (error != ESP_OK || !sample_echo_start(sample_frp_config.local_port)) {
-        printf("EFRP_SAMPLE network_init_error=%d\n",error); return;
+    if (error != ESP_OK || !backend_start()) {
+        printf("EFRP_SAMPLE network_init_error=%d\n",error); shutdown_sample(); return;
     }
     bool attempted=false;
     unsigned last_ip=0,last_wifi=0;
@@ -251,9 +307,9 @@ void app_main(void)
         unsigned generation=atomic_load(&ip_generation);
         if (atomic_load(&wifi_ready) && last_ip != generation) {
             error=set_dns(); printf("EFRP_SAMPLE dns_config_error=%d\n",error);
-            if (error != ESP_OK) return;
+            if (error != ESP_OK) { shutdown_sample(); return; }
             error=esp_netif_sntp_start(); printf("EFRP_SAMPLE sntp_start_error=%d\n",error);
-            if (error != ESP_OK) return;
+            if (error != ESP_OK) { shutdown_sample(); return; }
             last_ip=generation;
         }
         if (!attempted && atomic_load(&wifi_ready) && trusted(NULL)) {
@@ -266,7 +322,7 @@ void app_main(void)
                 report(status.phase==EFRP_PHASE_READY ? "online" : "transition");
             }
         }
-        serial_input(); sample_echo_step();
+        serial_input(); backend_step();
         if (now>=next_report) { report("periodic"); next_report=now+5000; }
         vTaskDelay(1);
     }

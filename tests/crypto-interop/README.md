@@ -42,6 +42,11 @@ flowchart LR
     device --> wf
     faults --> malformed["yamux_fixture.go：固定非法 header"]
     device <-->|"真实 TCP / TLS；仅指定设备 IP"| c3["独立 C3 sample"]
+    private --> device_interop["device_interop.go：显式 IPv4 / 类型 / 角色 / 传输"]
+    device_interop --> official_process["固定官方 FRPS / FRPC 进程"]
+    device_interop --> maintained_process["显式摘要核对的维护 XTCP 二进制"]
+    device_interop --> backend["UDP 字节断言 / HTTP(S) 后端 / 双流 echo"]
+    device_interop <-->|"指定设备 / stdin resume"| c3
 ```
 
 Go >=1.25，`go.mod` 与 `go.sum` 固定官方 FRP 及公开传递依赖。模块调用原始上游 API，不复制派生算法，不用相邻 checkout 的 replace。首次运行需要下载模块；host 测试的 Token 与随机 Hello 只用于进程内测试，TLS 模式另外创建回环监听。单设备入口仅消费显式私有实验配置，不读取生产配置。
@@ -103,4 +108,70 @@ host 和 device 使用相同工作协议；前者的本地目标变换测试字�
 
 ## 扩展入口
 
-`-udp-codec-peer` 交叉检查官方 binary-v1 codec；`-udp-peer` 运行完整 FRPS 的固定目标 UDP，包括 66 秒真实空闲；`-udp-client-peer` 单独验证同一 worker 活动中断后重连与资源回收；`-proxy-peer` 使用完整 FRPS、官方 STCP visitor、HTTP Host 和 HTTPS SNI 检查类型化 provider。均使用本仓构建的绝对 peer 路径，只监听回环；完整命令、时限与验证边界见[测试说明](../README.md#协议扩展软件测试)。这些 host 入口没有加入下面的单设备模式列表。
+`-udp-codec-peer` 交叉检查官方 binary-v1 codec；`-udp-peer` 运行完整 FRPS 的固定目标 UDP，包括 66 秒真实空闲；`-udp-client-peer` 单独验证同一 worker 活动中断后重连与资源回收；`-proxy-peer` 使用完整 FRPS、官方 STCP visitor、HTTP Host 和 HTTPS SNI 检查类型化 provider。均使用本仓构建的绝对 peer 路径，只监听回环；完整命令、时限与验证边界见[测试说明](../README.md#协议扩展软件测试)。这些 host 入口不属于前述异常协议单设备模式。
+
+## 实体设备扩展互操作入口
+
+从本目录执行 `go run -mod=readonly . -device-interop-config /private/path/device-interop.json`。入口启动本次隔离 FRPS、所需 FRPC 与业务后端，只接收配置声明的设备 IPv4、Login `client_id`／`user` 和精确类型化代理；不存在设备发现、串口控制、刷写、生产服务修改或协议回退。普通代理固定构建本模块锁定的原样官方 FRP v0.71.0 `frps`／`frpc`，新增命令行消费者的传递依赖同样固定在 `go.mod`／`go.sum`。
+
+配置要求与异常协议入口相同：0600 普通文件、最多 16 KiB；字段必须为精确 snake_case，重复或未知字段拒绝，单次只声明一个角色、类型与传输。`listen_ipv4`／`device_ipv4` 必须为显式单播 IPv4，禁止主机名与通配地址。端口限定 1024–65535，期限为 1000–300000 ms，并包含构建、装配、等待和业务传输。`evidence_directory` 必须是可新建的绝对路径，已有目录拒绝覆盖；目录以 0700 创建，保存 0600 原输入、FRP 配置、原进程日志与 `result.json`。以下为 UDP provider 占位输入：
+
+```json
+{
+  "listen_ipv4": "192.0.2.10",
+  "listen_port": 17400,
+  "device_ipv4": "192.0.2.20",
+  "transport": "tcp",
+  "role": "provider",
+  "proxy_type": "udp",
+  "proxy_name": "isolated.udp",
+  "user": "isolated",
+  "client_id": "isolated-device",
+  "token": "replace-with-isolated-fixture-token",
+  "remote_port": 17401,
+  "certificate_file": "/private/path/frps.pem",
+  "private_key_file": "/private/path/frps.key",
+  "ca_file": "/private/path/frps-ca.pem",
+  "server_name": "frp.fixture.invalid",
+  "timeout_ms": 90000,
+  "evidence_directory": "/private/path/new-device-udp-run"
+}
+```
+
+设备输入必须独立装配同一服务器地址、端口、严格 CA／主机名、Token、身份与类型化代理。`proxy_name` 是完整 wire 名：`user` 非空时必须包含 `<user>.` 前缀；官方 FRPC 的本地配置名称由入口按这个明确前缀装配。端点允许列表仅限制实验对象，FRPS 仍执行正式 Token 与附加 HeartBeats／NewWorkConns scopes 验证。
+
+| 实验角色／类型 | 必填类型字段与业务范围 |
+| --- | --- |
+| provider TCP／UDP | `remote_port`；设备的固定本地目标分别使用 TCP echo／UDP echo。UDP 核对两个来源各自 0、1、127、1024、1500 字节完整数据报。 |
+| provider STCP | `secret_key`，最多 128 UTF-8 字节；官方 FRPC visitor 拨精确 provider，设备 wire 的 `allow_users` 必须为空，由 FRPS 按 provider user 默认化。 |
+| visitor STCP | `secret_key`、设备 `visitor_port`；官方 FRPC provider 仅允许该 `user`，业务直接拨指定设备 IPv4 的 listener。 |
+| provider HTTP／HTTPS | `custom_domains`、`vhost_port`、`backend_port`、`backend_token`；1–4 个合法 ASCII 域名，最多 253 字节，按大小写折叠拒绝重复。设备固定 `local_ipv4`／`local_port` 必须是本次 `listen_ipv4`／`backend_port`，采用 external backend。 |
+| provider／visitor XTCP | 对应 STCP 角色字段，加 `frps_binary`／`frpc_binary`、`frps_sha256`／`frpc_sha256`、两项 `stun_ports`；只消费维护候选。 |
+
+STCP／XTCP／TCP 的成功业务断言是两条并发 echo 流，每条按最多 1024 字节写入后读取等量回显，共 300001 字节，然后发送 FIN 并核对回端 EOF 和空尾部。它不依赖 host C peer 的载荷变换协议。
+
+HTTP／HTTPS 后端绑定本次明确的宿主 IPv4，处理 `GET /body?id=<uint32>`；要求 `Authorization: Bearer <backend_token>`，每个注册域名返回精确 300001 字节测试图案。缺少 Bearer 必须返回 401，且业务授权计数不增加；未注册 Host／SNI 不能得到业务响应，原始后端 accept 和 HTTP 请求计数均不得增加，不能以后端 400 或 TLS 拒绝冒充路由未抵达。HTTPS 还要求绝对 `backend_certificate_file`、`backend_private_key_file`、`backend_ca_file`：证书 SAN 覆盖所有域名，业务 TLS 与 FRPS 控制 TLS 是两个独立信任输入，客户端正常验证 CA／主机名。backend 检查真实 SNI 与 Host 一致。非 HTTP 类型拒绝所有 HTTP 业务字段；非 HTTPS 类型拒绝业务 TLS 文件；provider 拒绝 `visitor_port`，非 TCP／UDP 拒绝 `remote_port`，非私有类型拒绝 `secret_key`。
+
+`transport` 必须显式为 `tcp` 或 `quic`。QUIC 额外要求 `quic_port`，设备和本次官方 FRPC 都使用该原生 QUIC 入口；TCP 禁止同时声明 QUIC 端口。类型、角色与传输不会因失败自动改变。
+
+XTCP 输入二进制必须是本仓 `peer/frp` 当前精确维护源码构建的产物。先从明确的维护 checkout 按 [候选说明](../../peer/frp/candidate-development.md)执行 `go build -mod=readonly -tags=noweb -o /private/path/peer-bin/ ./cmd/frps ./cmd/frpc`，再将两个实际产物的 SHA256 填入私有 JSON；入口不搜索或下载维护产物，不替换本模块的官方依赖。执行前检查绝对路径、普通可执行文件、非 symlink 和精确摘要，并将核对的原字节复制到本次私有目录后执行。`stun_ports` 对应 `listen_ipv4` 上的两个本地标准 STUN binding responder；设备的两个固定 STUN 端点必须同它们一致。此入口只验证 LAN 会合与业务，不模拟或授予异网 NAT、穿透成功率或绕过 FRPS 的网络验收。
+
+`ESP_FRP_DEVICE_INTEROP_READY` 只表示对端软件装配完成。外部驱动需独立观察设备完成鉴权及 READY，核对设备身份、资源与角色，再向标准输入发送一行精确 `resume`。EOF、非法行、信号和原期限都会终止并清理。所有对端进程、后端 listener、活连接与协程结束后才写成功结果和 `ESP_FRP_DEVICE_INTEROP_FINISHED`；失败／取消仍保留私有原件。结果记录原配置摘要、实际 FRPS／FRPC 二进制摘要及本次确切业务范围。成功结果只证明该切片的业务，设备自身状态、Flash lease、fd／heap 回收和恢复必须由外部实板驱动另行核对；不表示实板完整矩阵通过。
+
+新增入口的定向软件检查使用 Go FRPC 代替设备，覆盖普通协议角色装配、显式 QUIC、输入／身份拒绝和 HTTPS 活连接取消：
+
+```sh
+go test -mod=readonly -race -count=1 -run '^(TestDeviceInterop|TestDeviceResumeInput)' ./...
+```
+
+这里的 `-race` 只覆盖新增 Go fixture 进程；实际 FRPS／FRPC 是固定源码构建的独立 CLI 进程，未以 race detector 构建，不能由此授予对端内部 race 资格。首轮以进程内官方 `client.Service` 代设备时，固定 v0.71.0 的 `Service.stop` 与 `keepControllerWorking` 在断连退出期间产生数据竞争；当前测试按实体入口的真实 CLI 进程边界装配，不修改上游源码。该首轮失败不能记作通过。
+
+维护 XTCP 的两角色装配检查必须显式提供上述维护构建产物：
+
+```sh
+EFRP_DEVICE_MAINTAINED_FRPS=/private/path/peer-bin/frps \
+EFRP_DEVICE_MAINTAINED_FRPC=/private/path/peer-bin/frpc \
+go test -mod=readonly -race -count=1 -run '^TestDeviceInteropMaintainedDrivers$' ./...
+```
+
+未提供这两个输入时测试明确跳过，跳过不计为 XTCP 通过。上述检查仅验证新增 fixture 自身，不重新运行原 C 协议矩阵，也不访问任何设备。私有运行目录、原输入、证书、日志和结果均不得提交。

@@ -78,12 +78,13 @@ bool sample_echo_start(uint16_t port)
         listen(listener, 2) != 0) { sample_echo_stop(); return false; }
     return true;
 }
-void sample_echo_stop(void)
+bool sample_echo_stop(void)
 {
     stopping = true; next_mode = SAMPLE_ECHO_NORMAL;
     if (listener >= 0 && close(listener) == 0) listener = -1;
     for (unsigned i=0;i<2;++i) close_peer(i, true);
     if (listener < 0 && peers[0].fd < 0 && peers[1].fd < 0) stopping = false;
+    return !stopping;
 }
 void sample_echo_step(void)
 {

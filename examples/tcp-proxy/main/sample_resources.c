@@ -14,6 +14,10 @@
 #if !(CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32) || !CONFIG_FREERTOS_USE_TRACE_FACILITY || !CONFIG_ESP_TIMER_PROFILING
 #error "FRP lab sample requires esp32c3/esp32, task trace and esp_timer profiling"
 #endif
+#if !CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS || !CONFIG_FREERTOS_RUN_TIME_COUNTER_TYPE_U64 || !CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER
+#error "FRP lab runtime measurements require 64-bit ESP timer counters"
+#endif
+_Static_assert(sizeof(configRUN_TIME_COUNTER_TYPE) == sizeof(uint64_t), "64-bit runtime counter required");
 #if CONFIG_IDF_TARGET_ESP32 && !CONFIG_FREERTOS_UNICORE
 #error "ESP32 sample task-name snapshots require the single-core lab configuration"
 #endif
@@ -30,7 +34,11 @@ void sample_resources_init(void)
 {
     ESP_ERROR_CHECK(heap_caps_register_failed_alloc_callback(allocation_failed));
 }
-static struct { char name[configMAX_TASK_NAME_LEN]; unsigned stack_bytes; } facts[32];
+static struct {
+    char name[configMAX_TASK_NAME_LEN];
+    unsigned stack_bytes, task_number;
+    uint64_t runtime_us;
+} facts[32];
 void sample_resources(const char *phase, unsigned cycle)
 {
     unsigned sockets=0, socket_errors=0;
@@ -41,20 +49,33 @@ void sample_resources(const char *phase, unsigned cycle)
     }
     /* Both sample targets run one scheduler core. Copy borrowed TCB names
      * before task deletion can invalidate them. */
+    uint64_t capture_start_us=(uint64_t)esp_timer_get_time();
+    configRUN_TIME_COUNTER_TYPE total_runtime_us=0;
     vTaskSuspendAll();
-    UBaseType_t count=uxTaskGetSystemState(tasks, 32, NULL);
+    UBaseType_t expected_count=uxTaskGetNumberOfTasks();
+    UBaseType_t count=uxTaskGetSystemState(tasks, 32, &total_runtime_us);
     for (UBaseType_t i=0;i<count;++i) {
         strncpy(facts[i].name, tasks[i].pcTaskName, sizeof facts[i].name-1);
         facts[i].name[sizeof facts[i].name-1]=0;
         facts[i].stack_bytes=(unsigned)tasks[i].usStackHighWaterMark * sizeof(StackType_t);
+        facts[i].task_number=(unsigned)tasks[i].xTaskNumber;
+        facts[i].runtime_us=(uint64_t)tasks[i].ulRunTimeCounter;
     }
     (void)xTaskResumeAll();
+    uint64_t capture_end_us=(uint64_t)esp_timer_get_time();
+    /* Raw cumulative SDK counters: deleted tasks and the current unclosed
+     * scheduler slice are not attributed here. No CPU percentage is inferred. */
+    printf("EFRP_SAMPLE_RUNTIME phase=%s cycle=%u complete=%u expected_tasks=%u total_runtime_us=%" PRIu64
+        " capture_start_us=%" PRIu64 " capture_end_us=%" PRIu64 "\n",
+        phase, cycle, count != 0 && count == expected_count, (unsigned)expected_count,
+        (uint64_t)total_runtime_us, capture_start_us, capture_end_us);
     printf("EFRP_SAMPLE_RESOURCE phase=%s cycle=%u heap=%" PRIu32 " min_heap=%" PRIu32 " largest=%u tasks=%u sockets=%u socket_errors=%u allocation_failures=%u last_failed_bytes=%u last_failed_caps=%u\n",
         phase, cycle, esp_get_free_heap_size(), esp_get_minimum_free_heap_size(),
         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)count, sockets, socket_errors,
         atomic_load(&allocation_failures), atomic_load(&last_failed_bytes), atomic_load(&last_failed_caps));
     for (UBaseType_t i=0;i<count;++i)
-        printf("EFRP_SAMPLE_TASK phase=%s cycle=%u name=%s stack_bytes=%u\n", phase, cycle, facts[i].name, facts[i].stack_bytes);
+        printf("EFRP_SAMPLE_TASK phase=%s cycle=%u task_number=%u name=%s stack_bytes=%u runtime_us=%" PRIu64 "\n",
+            phase, cycle, facts[i].task_number, facts[i].name, facts[i].stack_bytes, facts[i].runtime_us);
     printf("EFRP_SAMPLE_TIMERS_BEGIN phase=%s cycle=%u\n", phase, cycle);
     esp_err_t error=esp_timer_dump(stdout);
     printf("EFRP_SAMPLE_TIMERS_END phase=%s cycle=%u error=%d\n", phase, cycle, error);

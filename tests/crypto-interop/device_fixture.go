@@ -42,8 +42,9 @@ var deviceWorkModes = []string{"work-wrong-name", "work-error", "work-oversized"
 
 func waitDeviceResume(ctx context.Context) error {
 	result := make(chan error, 1)
+	input := os.Stdin
 	go func() {
-		line, err := bufio.NewReaderSize(os.Stdin, 64).ReadSlice('\n')
+		line, err := bufio.NewReaderSize(input, 64).ReadSlice('\n')
 		if err == nil && string(line) != "resume\n" {
 			err = fmt.Errorf("expected exactly resume followed by newline")
 		}

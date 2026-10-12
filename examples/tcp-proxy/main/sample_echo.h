@@ -8,5 +8,5 @@ bool sample_echo_arm(sample_echo_mode_t mode);
 bool sample_echo_resume(void);
 bool sample_echo_reset(void);
 void sample_echo_step(void);
-void sample_echo_stop(void);
+bool sample_echo_stop(void);
 void sample_echo_report(void);

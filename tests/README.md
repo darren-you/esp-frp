@@ -148,6 +148,19 @@ Go 测试启动随机回环 TCP 端口和本仓构建的 C peer，结束时回�
 
 `session_peer` 将实际 `session.c` 的对象分配单独替换为测试计数器；TLS、密码与对端保持真实。首轮分别注入会话对象和 Yamux 分配失败，再验证握手配置拒绝回滚；握手结束后，Flash reader 的 4096 字节窗口复用握手所占联合区，并与控制 wire parser 的 `json_rx` 同时保持独立。正常/失败/取消会话销毁均检查持有对象已清零且无残留，clear 失败时保留 session handle 后重试。`aead_flash` 覆盖记录边界、满长坏 tag 和 lease 争用。
 
+## 实验装配软件检查
+
+`sample_config` 定向检查独立样例的 provider / STCP visitor / XTCP visitor 分派、显式 QUIC 和固定目标字段、可信时间/Flash provider 注入、初始与已鉴权 run ID及错误角色/backend 拒绝。它使用 create API 的测试替身，只验证样例装配，不能授予正式协议或设备资格。
+
+`sample_udp_echo` 使用两个真实 loopback UDP 来源，覆盖空包、1500 B边界、超限整包丢弃、发送 EAGAIN后的取消清零、停止/再次启动，以及已占用端口导致启动失败后首次 native close失败的所有权保留与最终释放。关闭注入直接编译样例的 IDF所有权分支；它不模拟 FreeRTOS 或实际 lwIP 调度。只运行新增入口可使用：
+
+```bash
+cmake --build <host-build> --target sample_config_test sample_udp_echo_test
+ctest --test-dir <host-build> -R '^sample_(config|udp_echo)$' --output-on-failure
+```
+
+新入口沿 host 原有 sanitizer配置编译；软件结果与实体测试、双目标镜像容量及 Base组合分别记录。
+
 ## 协议扩展软件测试
 
 默认 host 矩阵增加 `udp_codec`、`proxy_config` 和 POSIX `udp_local`；后者使用真实 UDP，注入 socket 创建、非阻塞设置与 IDF 关闭暂时失败，验证失败所有权和 fd 基线。完整 Mbed TLS 模式增加 `udp_work`／`udp_work_close`，分别验证拆帧/粘帧、合法超限排空、非法 metadata 拒绝、来源过期、取消和保留 fd 时业务缓冲清零。

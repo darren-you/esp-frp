@@ -154,7 +154,12 @@ func main() {
 	workPeer := flag.String("work-peer", "", "C composed local TCP forwarding peer")
 	workFaults := flag.Bool("work-faults", false, "Run work rejection/half-close fixtures instead of the 100 dual-flow rounds")
 	deviceConfig := flag.String("device-config", "", "仓外 0600 JSON：单次真实设备协议 fixture，不执行刷写")
+	deviceInteropConfig := flag.String("device-interop-config", "", "仓外 0600 JSON：显式 IPv4 的官方/维护对端业务互操作，不执行刷写")
 	flag.Parse()
+	if *deviceInteropConfig != "" {
+		must(runDeviceInterop(*deviceInteropConfig))
+		return
+	}
 	if *quicClientPeer != "" {
 		runQUICClient(*quicClientPeer)
 		return
