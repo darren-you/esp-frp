@@ -6,6 +6,7 @@
 #include "dns_fixture.h"
 #include "flash_store_fixture.h"
 #include <assert.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <poll.h>
@@ -42,10 +43,16 @@ static void stop(events_t *e)
 }
 int main(int argc,char **argv)
 {
-    assert(argc==12);bool visitor=!strcmp(argv[1],"visitor");assert(visitor||!strcmp(argv[1],"provider"));
+    assert(argc==17);bool visitor=!strcmp(argv[1],"visitor");assert(visitor||!strcmp(argv[1],"provider"));
     unsigned server_port=(unsigned)strtoul(argv[2],NULL,10),local_port=(unsigned)strtoul(argv[4],NULL,10);
     unsigned stun1=(unsigned)strtoul(argv[5],NULL,10),stun2=(unsigned)strtoul(argv[6],NULL,10);
     assert(server_port&&server_port<=65535&&local_port&&local_port<=65535&&stun1&&stun1<=65535&&stun2&&stun2<=65535);
+    uint8_t server_ipv4[4], stun1_ipv4[4], stun2_ipv4[4], udp_bind_ipv4[4];
+    assert(inet_pton(AF_INET,argv[12],server_ipv4)==1 && inet_pton(AF_INET,argv[13],stun1_ipv4)==1 &&
+           inet_pton(AF_INET,argv[14],stun2_ipv4)==1 && inet_pton(AF_INET,argv[15],udp_bind_ipv4)==1);
+    char *port_end=NULL;unsigned long udp_bind_port=strtoul(argv[16],&port_end,10);
+    assert(*argv[16] && port_end && !*port_end && udp_bind_port<=65535);
+    fixture_dns_address(server_ipv4);
     FILE *file=fopen(argv[3],"rb");assert(file);uint8_t ca[EFRP_TLS_MAX_CA_BYTES];size_t ca_length=fread(ca,1,sizeof ca,file);assert(ca_length&&ca_length<sizeof ca&&!ferror(file)&&!fclose(file));
     unsigned baseline=fds();static efrp_test_flash_t flash;efrp_aead_flash_store_t store=efrp_test_flash_store(&flash);assert(efrp_aead_flash_store_recover(&store)==EFRP_OK);
     events_t events={.trusted=true};char host[254]="frp.fixture.invalid",token[]="public-full-flow-token",secret[129],user[129],target[129],id[65];
@@ -53,7 +60,9 @@ int main(int argc,char **argv)
     assert(snprintf(id,sizeof id,"fixture-xtcp-%s-%ld",argv[1],(long)getpid())>0);
     if(!strcmp(argv[10],"wrong-token"))token[0]='x';else if(!strcmp(argv[10],"wrong-host"))strcpy(host,"wrong.fixture.invalid");else if(!strcmp(argv[10],"untrusted"))atomic_store(&events.trusted,false);else assert(!strcmp(argv[10],"normal"));
     efrp_result_t expected=(efrp_result_t)strtol(argv[11],NULL,10);fixture_dns_mode(FIXTURE_DNS_READY);
-    efrp_xtcp_options_t options={.peer_profile=EFRP_QUIC_PROFILE_P256_AES128_X25519,.stun_servers={{{127,0,0,1},(uint16_t)stun1},{{127,0,0,1},(uint16_t)stun2}},.stun_server_count=2,.udp_bind_ipv4={127,0,0,1}};
+    efrp_xtcp_options_t options={.peer_profile=EFRP_QUIC_PROFILE_P256_AES128_X25519,.stun_servers={{{0},(uint16_t)stun1},{{0},(uint16_t)stun2}},.stun_server_count=2,.udp_bind_port=(uint16_t)udp_bind_port};
+    memcpy(options.stun_servers[0].ipv4,stun1_ipv4,4);memcpy(options.stun_servers[1].ipv4,stun2_ipv4,4);
+    memcpy(options.udp_bind_ipv4,udp_bind_ipv4,4);
     if(visitor){
         efrp_xtcp_visitor_config_t c={.server_hostname=host,.server_port=(uint16_t)server_port,.ca_pem=ca,.ca_length=ca_length,.token=(const uint8_t*)token,.token_length=strlen(token),.hostname="fixture-xtcp-board",.user=user,.client_id=id,.server_proxy_name=target,.secret_key=secret,.bind_ipv4={127,0,0,1},.bind_port=(uint16_t)local_port,.options=options,.time_is_trusted=trusted,.flash_store=&store,.on_event=event,.context=&events};
         assert(efrp_xtcp_visitor_create(&c,&events.client)==EFRP_OK&&events.client);assert(efrp_xtcp_visitor_create(&c,&events.client)==EFRP_INVALID_STATE);memset(&c,0,sizeof c);
