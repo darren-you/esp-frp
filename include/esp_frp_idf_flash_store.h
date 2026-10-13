@@ -12,11 +12,14 @@
 #define EFRP_IDF_FLASH_STORE_LABEL "frp_scratch"
 
 /* Run exactly one synchronous Flash operation while holding the product's
- * existing storage owner. The adapter calls this for each erase, verified
+ * existing storage owner. The adapter calls this for each 4096-byte erase, verified
  * write and read. clear only revokes the RAM lease under the provider guard.
  * The wrapper must call operation exactly once,
  * release ownership even when it fails, and return STORAGE_ERROR if release
- * fails. The provider checks that operation was called exactly once. */
+ * fails. The provider checks that operation was called exactly once.
+ * recover/begin run in a FreeRTOS task: between sectors the provider blocks
+ * for two ticks after release, retaining only its private scratch guard.
+ * No lease is issued until every sector has been erased successfully. */
 typedef efrp_result_t (*efrp_idf_flash_operation_t)(void *operation_context);
 typedef efrp_result_t (*efrp_idf_flash_with_owner_t)(
     void *owner_context, efrp_idf_flash_operation_t operation,

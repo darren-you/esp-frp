@@ -106,6 +106,73 @@ host 和 device 使用相同工作协议；前者的本地目标变换测试字�
 
 入口没有设备发现、刷机、DNS 服务、代理监听或生产安装操作。`ESP_FRP_DEVICE_FIXTURE_READY` 只说明监听建立，`ESP_FRP_DEVICE_WORK_FINISHED` 说明工作场景按其断言结束，`ESP_FRP_DEVICE_FIXTURE_FINISHED` 说明服务端场景结束；三者都不能单独作为实板通过。验收还须核对设备的精确错误、状态/资源回收，以及恢复到官方 FRPS 后的业务字节。私有配置、证书、输入和日志不得提交。
 
+## 单次 OTA 联合 fixture
+
+`-device-joint-config` 用于一次明确 Base OTA 操作的有限实验，复用本仓官方 Token、TLS、Yamux 和 AEAD API。它声明 `esp-frp-joint-fixture` 服务端身份，不启动或冒充官方 FRPS。设备的 TCP 代理名称、`RemotePort`、本地 HTTP 目标、HMAC、镜像签名和 Base 期限保持原合同；设备配置、串口与原 ID 最终结果由外部执行者负责。入口不读取 UART、不生成 HMAC、不刷写、不调整组件 pin、不创建持久服务。
+
+从本目录运行，JSON 必须是无组／其他用户权限的普通文件，最多 16 KiB；字段只能使用精确 snake_case，拒绝大小写别名、symlink、重复／未知字段与混用其他 CLI 选项。下例只有占位值，设备 UUID、boot、operation、镜像长度／完整摘要及代理名称／端口必须换成本次真实输入：
+
+```json
+{
+  "listen_ipv4": "192.0.2.10",
+  "listen_port": 17400,
+  "allowed_peer_ipv4": "192.0.2.20",
+  "certificate_file": "/private/path/fixture.pem",
+  "private_key_file": "/private/path/fixture.key",
+  "token": "replace-with-isolated-fixture-token",
+  "client_id": "11111111-1111-4111-8111-111111111111",
+  "proxy_name": "original-base-proxy",
+  "remote_port": 17401,
+  "boot_id": "22222222-2222-4222-8222-222222222222",
+  "operation_id": "33333333-3333-4333-8333-333333333333",
+  "image_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "image_size_bytes": 65536,
+  "trigger_phase": "prepare",
+  "timeout_ms": 300000,
+  "evidence_directory": "/private/path/new-joint-run"
+}
+```
+
+`listen_ipv4` 与 `allowed_peer_ipv4` 必须是显式单播 IPv4。两个端口为不同的 1024–65535 端口；`remote_port` 必须等于设备原 NewProxy 声明。证书／私钥和证据目录使用绝对路径；设备仍须验证真实 SAN／CA，来源 IP 限制不替代 Login、心跳与 NewWorkConn 的 Token 认证。单次总期限为 1000–300000 ms，包含等待设备和后续转发；证据目录必须尚不存在。
+
+只转发 HTTP 时使用空标准输入，EOF 不触发最大记录：
+
+```sh
+go run -mod=readonly . -device-joint-config /private/path/joint.json </dev/null
+```
+
+`events.jsonl` 的 `listener_ready` 只证明设备侧 TLS listener 建立；通过 Login、精确 NewProxy 与首次认证心跳后，`joint_proxy_ready` 才表示 `http://127.0.0.1:<原RemotePort>` 可用。本机 Base 管理客户端可显式使用该 HTTP URL，仍由真实设备和客户端执行请求／响应 HMAC 与镜像签名验证。代理只绑定 IPv4 loopback，不新增公网管理入口或 TLS 旁路。
+
+允许的完整请求为一次 `POST /api/v1/commands/ota-start`、一次同 operation 的 `PUT /api/v1/ota-images/<operation_id>`，以及最多 128 次 `status`、`firmware.status`、原 operation 的 `ota.result` POST。start 精确绑定 device、boot、operation、镜像摘要／长度；fixture 只做实验范围检查，真实有效性仍由 Base 判定。拒绝其他修改命令、第二次 start／PUT、其他 operation 的结果查询和第三条并发连接，不自动重试。最多接收 132 条本机连接。
+
+请求 header 最多 1024 B，POST body 最多 1024 B，必须 HTTP/1.1、明确 Content-Length、单个管理 Tag，不接受 chunked／Expect。小 POST 将已收齐的原 header／body 一次写入 work stream，不主动在两者之间拆分写入；底层仍可正常分片，不能推断为单个网络包或 TLS 记录。PUT 以 4096 B 缓冲流式发送，完整摘要不一致即终止；设备响应原样返回。命令连接与 work 等待共用最初的 5 s；PUT 使用原总期限内的 30 s 空闲界限，末尾响应最多 30 s、8192 B。设备自身期限继续生效。
+
+单条只读查询在等待 work、发送或读取响应期间超时，只关闭该 HTTP／work 连接，保存已读取响应前缀并记录 `query_timeout`；控制心跳、并行 PUT 和随后有限的原 ID 查询继续运行，不重试超时请求、不延长任何期限。控制通道、身份／协议、证据写入故障以及全局期限仍结束整个 fixture；start／PUT 的失败也保留原单次操作终止边界。
+
+需要最大记录时，由当前 UART 所有者向 stdin 管道提供**一条完整原始** `ESP_BASE_OTA_PHASE` 行。选择 `trigger_phase` 为 `retire_inactive`、`prepare` 或 `select`；该行须属于已声明 boot／operation、实际获准 start 的 request ID，`boundary=begin`、`result=pending`、无 stage uncertainty 且三个计数有效。行到达和实际发送前，单次 PUT 都必须仍在处理。不要把整段 UART、历史行或人工构造的 resume 指令输入此入口；最大记录不会在注册或 PUT 开始时自动注入。
+
+```sh
+# stdin 来自外部只读阶段观察器；观察器与本入口均不代管串口。
+go run -mod=readonly . -device-joint-config /private/path/joint.json < /private/path/phase-input
+```
+
+合法信号触发一条 65536 B AEAD 明文记录；其中包含 16 个合法、有界 ReqWorkConn 帧，各 payload 不超过 4096 B。加密调用来自固定官方实现，串行化心跳／请求与最大记录写入；一次写入出错即结束，不重放或重建计数。多余工作请求受设备既有 pending／拒绝上限约束，不能将 16 个请求解释成 16 条活动连接。输入第二条行、错误身份／阶段、总期限、控制断连或信号均终止并清理本次连接。零行 EOF 允许纯转发；发过一条合法行后 EOF 也不提前终止 HTTP。继承的 OS stdin 管道显式作为可取消的非阻塞文件登记到 Go poller；即使生产者送一行后保持写端打开，取消／SIGTERM 也须解除扫描等待、清理并落盘结果。
+
+每消费一个认证 work stream 请求一个替补，最多两条 HTTP 转发加一个等待 work stream。同会话 PUT 与原 ID 查询可用于观察设备的 `2 active + 1 waiting`；`peak_fixture_active` 仅为宿主转发计数，不能替代设备 FRP 工作流快照。阶段行的宿主接收时间、`record_written` 和 TCP 接收字节都不证明 MCU 已认证记录或同一 Flash／OTA 峰值成立。
+
+证据目录为 0700、文件为 0600：`input.json` 保留原配置（包含 Token），`events.jsonl` 保留宿主时间／单调耗时，`request-<stream>.http` 保留 header／POST body，`response-<stream>.http` 保留读到的响应前缀，上传保留已转发前缀的字节数与 SHA256；原镜像由外部执行者保存。触发时另存 `trigger.uart`、`control-plaintext.bin`、`control-ciphertext.bin`。不复制整个镜像，不输出或提交私有输入／原件。
+
+`result.json` 永远保留 `official_frps=false`、`r5_qualified=false`、`device_result_verified=false`。`first_cancellation` 与唯一 `session_canceled` 事件记录 Context 已选定的首次会话取消原因、阶段和错误类型，不被后续关闭造成的错误覆盖；`cancellation_observed_us` 是宿主观察时刻，不是 MCU 因果证明。`work_started` 同时记录该请求的开始与原期限，包含 work 等待耗时。控制连接关闭（包括 OTA 后重启）、期限或信号以非零退出并保留原件，不自动接续新 boot；**非零退出既不等于设备 OTA 失败，也不等于成功**。外部执行者须通过原 ID 独立核回设备结果，并将 fixture 证据与官方 FRPS、公网路径和 MCU 组合验收分开。
+
+软件回归使用真实 TLS／Yamux／AEAD 和明确的假 HTTP 设备：
+
+```sh
+go test -mod=readonly -race -count=1 -run '^TestJoint' .
+go vet -mod=readonly ./...
+```
+
+覆盖纯转发与阶段触发的完整 start／PUT／并发查询、单条最大记录认证解码、错误 Token／设备／RemotePort、配置拒绝、重复触发、截断上传原件、断连和总期限清理。真实 5 s 查询超时后核对心跳、剩余 PUT 及同会话原 ID 查询；实际 CLI 子进程以 `StdinPipe` 保持写端打开，在单条最大记录之后分别执行控制断连、SIGTERM、总期限和空响应协议故障，验证端口释放、退出与原件落盘；另测主动 EOF 后心跳继续，再断连清理。这些检查不访问实体设备、不执行 Base HMAC／签名实现，也不重新授予原 C 协议矩阵或实板资格。
+
 ## 扩展入口
 
 `-udp-codec-peer` 交叉检查官方 binary-v1 codec；`-udp-peer` 运行完整 FRPS 的固定目标 UDP，包括 66 秒真实空闲；`-udp-client-peer` 单独验证同一 worker 活动中断后重连与资源回收；`-proxy-peer` 使用完整 FRPS、官方 STCP visitor、HTTP Host 和 HTTPS SNI 检查类型化 provider。均使用本仓构建的绝对 peer 路径，只监听回环；完整命令、时限与验证边界见[测试说明](../README.md#协议扩展软件测试)。这些 host 入口不属于前述异常协议单设备模式。

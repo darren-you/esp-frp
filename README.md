@@ -56,6 +56,8 @@ flowchart LR
     official["tests/crypto-interop：官方 FRP / golib"] <-->|"双向字节与拒绝用例"| cp["tests/aead_peer.c"]
     device_fixture["crypto-interop/device_fixture.go：显式私有单设备场景"] --> official
     device_fixture <-->|"真实 TLS / 协议异常输入"| sample
+    joint_fixture["device_joint.go：有限 OTA HTTP / 阶段触发 fixture"] --> official
+    joint_fixture <-->|"原 RemotePort / 固定 HTTP 目标"| base_target["外部 Base 候选；身份与 HMAC 由设备验证"]
     cp --> aead
     official <-->|"Token 校验与握手后加密数据"| hp["tests/handshake_peer.c"]
     hp --> handshake

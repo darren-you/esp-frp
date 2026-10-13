@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "session_idf_flash_fixture.h"
+#include "freertos/task.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -23,11 +24,17 @@ const esp_partition_t *esp_partition_find_first(esp_partition_type_t type,
 esp_err_t esp_partition_erase_range(const esp_partition_t *p, size_t offset,
                                     size_t length)
 {
-    assert(p == &partition && owner.held && offset == 0U &&
-        length == sizeof scratch);
-    memset(scratch, 0xff, length);
+    assert(p == &partition && owner.held && offset % partition.erase_size == 0U &&
+        length == partition.erase_size && offset <= sizeof scratch - length);
+    memset(scratch + offset, 0xff, length);
     erased_bytes += length;
     return ESP_OK;
+}
+
+void vTaskDelay(TickType_t ticks)
+{
+    /* Only verifies the ownership boundary; real scheduling is tested in QEMU. */
+    assert(ticks == 2U && !owner.held && provider.active_lease == 0U);
 }
 
 esp_err_t esp_partition_write(const esp_partition_t *p, size_t offset,

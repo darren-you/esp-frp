@@ -35,6 +35,9 @@ type sessionFixtureIO struct {
 type sessionFixtureOptions struct {
 	mode, token, clientID, proxyName string
 	proxyType                        string
+	remotePort                       int
+	serverVersion                    string
+	joint                            func(*yamux.Session, *msg.V2ReadWriter, func([]byte) ([]byte, error)) error
 	timeout                          time.Duration
 }
 
@@ -123,7 +126,11 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 	if err = serverFrames.WriteFrame(&wire.Frame{Type: wire.FrameTypeServerHello, Payload: shBytes}); err != nil {
 		return err
 	}
-	if err = msg.NewV2ReadWriterWithConn(serverFrames).WriteMsg(&msg.LoginResp{Version: "0.71.0", RunID: "fixture-run"}); err != nil {
+	version := options.serverVersion
+	if version == "" {
+		version = "0.71.0"
+	}
+	if err = msg.NewV2ReadWriterWithConn(serverFrames).WriteMsg(&msg.LoginResp{Version: version, RunID: "fixture-run"}); err != nil {
 		return err
 	}
 	duplex := &sessionFixtureIO{Reader: stream, Writer: &prefix}
@@ -151,13 +158,16 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 	if expectedType == "" {
 		expectedType = "tcp"
 	}
-	if proxy.ProxyName != options.proxyName || proxy.ProxyType != expectedType || proxy.UseEncryption || proxy.UseCompression || proxy.RemotePort != 0 {
+	if proxy.ProxyName != options.proxyName || proxy.ProxyType != expectedType || proxy.UseEncryption || proxy.UseCompression || proxy.RemotePort != options.remotePort {
 		return fmt.Errorf("incorrect or borrowed NewProxy configuration")
 	}
 	if mode == "fixture-register-timeout" {
 		return awaitStop()
 	}
 	response := &msg.NewProxyResp{ProxyName: proxy.ProxyName, RemoteAddr: ":12345"}
+	if options.joint != nil {
+		response.RemoteAddr = fmt.Sprintf(":%d", options.remotePort)
+	}
 	writeJSON := func(id byte, payload []byte) error {
 		return wire.NewConn(crypto).WriteFrame(&wire.Frame{Type: wire.FrameTypeMessage, Payload: append([]byte{0, id}, payload...)})
 	}
@@ -334,6 +344,29 @@ func serveSessionFixture(raw net.Conn, cert tls.Certificate, options sessionFixt
 	}
 	if err = control.WriteMsg(&msg.Pong{}); err != nil {
 		return err
+	}
+	if options.joint != nil {
+		// The joint driver serializes ALL subsequent control writes, including
+		// heartbeat replies. Capture exactly one official AEAD Write; never
+		// replay it after a partial transport write or rebuild its counter.
+		return options.joint(mux, control, func(plain []byte) ([]byte, error) {
+			var encoded bytes.Buffer
+			duplex.Writer = &encoded
+			n, writeErr := crypto.Write(plain)
+			duplex.Writer = stream
+			if writeErr == nil && n != len(plain) {
+				writeErr = io.ErrShortWrite
+			}
+			if writeErr == nil {
+				_ = stream.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				n, writeErr = stream.Write(encoded.Bytes())
+				_ = stream.SetWriteDeadline(time.Time{}) // raw connection retains the absolute fixture deadline
+				if writeErr == nil && n != encoded.Len() {
+					writeErr = io.ErrShortWrite
+				}
+			}
+			return encoded.Bytes(), writeErr
+		})
 	}
 	if work != nil {
 		return work(mux, control, proxy.ProxyName)

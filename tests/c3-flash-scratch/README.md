@@ -4,6 +4,8 @@
 
 ## 架构拓扑
 
+第一次启动还运行真实 FreeRTOS 调度对照：FRP 擦除任务优先级 5，竞争任务优先级 4，以一 tick 轮询同一原子 owner、固定等待上限 500000 us。探针调用真实分区擦除后，在 owner 内加入固定每扇区 40 ms 合成延迟，并用任务通知将释放对齐到竞争任务本 tick 已失败、尚未开始下一次一 tick 等待的位置。测试链接 wrapper 仅把 provider 的两 tick 让出分别改为零／一 tick 作为负对照；两 tick 的 recover／begin 正例执行原 provider。前两者须耗尽预算，后两者须在 16 扇区尚未擦完时取得 owner。SDK 内部让出不被改写；host shim 不参与该调度。此对照证明该合法调度相位下的饥饿及修正，不证明实板物理 Flash 最坏时延。
+
 ```mermaid
 flowchart LR
     generator["make_fixture.py：公开合成密文"] --> app["main.c：完整记录、坏 tag 与内存采样"]
@@ -33,6 +35,6 @@ python tests/c3-flash-scratch/run_qemu.py \
   /absolute/path/to/new-c3-flash-run
 ```
 
-成功要求两次串口分别出现 `PHASE1_PASS`、`PHASE2_PASS`，runner 再按主机文件字节核对：第一次 scratch 完全等于 fixture 的 64 KiB 密文，第二次完全为 `0xff`，最后才打印 `QEMU_PASS`。每次原始串口日志、完整第一次 Flash 镜像、最终镜像、输入命令和 SHA-256 收据均保存在输出目录。失败时目录及原始输入不自动清理；检查 `phase-1.log`、`phase-2.log` 和 `merge.log`。应用打印 `MALLOC_CAP_8BIT` 的空闲字节与最大连续块，读写和完整 GCM 复验耗时；数字只适用于该实验应用和 QEMU。
+成功要求第一次串口同时出现 `CONTENTION_PASS`、`PHASE1_PASS`，第二次出现 `PHASE2_PASS`，runner 再按主机文件字节核对：第一次 scratch 完全等于 fixture 的 64 KiB 密文，第二次完全为 `0xff`，最后才打印 `QEMU_PASS`。每次原始串口日志、完整第一次 Flash 镜像、最终镜像、输入命令和 SHA-256 收据均保存在输出目录。失败时目录及原始输入不自动清理；检查 `phase-1.log`、`phase-2.log` 和 `merge.log`。应用打印 `MALLOC_CAP_8BIT` 的空闲字节与最大连续块，读写和完整 GCM 复验耗时；数字只适用于该实验应用和 QEMU。
 
 [本轮真实运行记录](../../docs/operations/p6-c3-flash-scratch-qemu.md)列出固定版本、镜像摘要、原始日志位置、测量值与未覆盖边界。

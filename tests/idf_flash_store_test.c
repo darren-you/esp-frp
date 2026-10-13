@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp_idf_flash_store.h"
+#include "freertos/task.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-enum { SCRATCH_OFFSET = 0x3e6000 };
+enum { SCRATCH_OFFSET = 0x3e6000, SECTOR_BYTES = 4096, SECTORS = 16 };
 typedef struct {
     bool busy, fail_release, skip_operation, repeat_operation, swallow_error;
-    unsigned claims, releases;
+    unsigned claims, releases, attempts;
+    unsigned deny_at, release_failure_at, skip_at, repeat_at, swallow_at;
 } owner_t;
 static esp_partition_t partition;
 static uint8_t flash[EFRP_IDF_FLASH_STORE_BYTES];
 static bool fail_erase, short_write_success, fail_read;
 static unsigned erase_calls, write_calls, read_calls;
+static unsigned erase_failure_at, delay_calls;
+static size_t erase_offsets[256];
+static owner_t *current_owner;
+static efrp_idf_flash_store_t *current_provider;
+static bool clear_during_delay;
 static uint8_t plaintext[EFRP_AEAD_MAX_PLAINTEXT], wire[EFRP_AEAD_TX_MAX_BYTES];
 static uint8_t window[EFRP_AEAD_RX_CHUNK_BYTES];
 static const uint8_t key[32] = {2, 3, 5, 7};
@@ -25,10 +32,15 @@ const esp_partition_t *esp_partition_find_first(esp_partition_type_t type,
 esp_err_t esp_partition_erase_range(const esp_partition_t *p, size_t offset,
                                      size_t size)
 {
-    assert(p == &partition && offset == 0U && size == sizeof flash);
+    assert(p == &partition && offset % SECTOR_BYTES == 0U &&
+        size == SECTOR_BYTES && offset <= sizeof flash - size);
+    assert(current_owner->busy && current_provider->active_lease == 0U);
+    assert(erase_calls < sizeof erase_offsets / sizeof erase_offsets[0]);
+    erase_offsets[erase_calls] = offset;
     ++erase_calls;
-    memset(flash, 0xff, fail_erase ? size / 2U : size);
-    return fail_erase ? ESP_FAIL : ESP_OK;
+    const bool failed = fail_erase || erase_calls == erase_failure_at;
+    memset(flash + offset, 0xff, failed ? size / 2U : size);
+    return failed ? ESP_FAIL : ESP_OK;
 }
 esp_err_t esp_partition_write(const esp_partition_t *p, size_t offset,
                                const void *source, size_t size)
@@ -51,13 +63,29 @@ static efrp_result_t with_owner(void *context, efrp_idf_flash_operation_t operat
                                 void *operation_context)
 {
     owner_t *owner = context;
-    if (owner->busy) return EFRP_STORAGE_ERROR;
+    ++owner->attempts;
+    if (owner->busy || owner->attempts == owner->deny_at) return EFRP_STORAGE_ERROR;
     owner->busy = true; ++owner->claims;
-    efrp_result_t result = owner->skip_operation ? EFRP_OK : operation(operation_context);
-    if (owner->repeat_operation) { (void)operation(operation_context); result = EFRP_OK; }
-    if (owner->swallow_error) result = EFRP_OK;
+    efrp_result_t result = owner->skip_operation || owner->attempts == owner->skip_at ?
+        EFRP_OK : operation(operation_context);
+    if (owner->repeat_operation || owner->attempts == owner->repeat_at) {
+        (void)operation(operation_context); result = EFRP_OK;
+    }
+    if (owner->swallow_error || owner->attempts == owner->swallow_at) result = EFRP_OK;
     owner->busy = false; ++owner->releases;
-    return owner->fail_release ? EFRP_STORAGE_ERROR : result;
+    return owner->fail_release || owner->attempts == owner->release_failure_at ?
+        EFRP_STORAGE_ERROR : result;
+}
+void vTaskDelay(TickType_t ticks)
+{
+    assert(ticks == 2U && !current_owner->busy && current_provider->active_lease == 0U);
+    ++delay_calls;
+    /* No new reader can obtain the partly erased scratch during the handoff. */
+    uint64_t lease = UINT64_MAX;
+    const efrp_aead_flash_store_t *store = &current_provider->callbacks;
+    assert(store->begin(store->context, &lease) == EFRP_STORAGE_ERROR && lease == 0U);
+    if (clear_during_delay)
+        assert(store->clear(store->context, 1U) == EFRP_STORAGE_ERROR);
 }
 static void reset_flash(void)
 {
@@ -68,6 +96,8 @@ static void reset_flash(void)
     memset(flash, 0x35, sizeof flash);
     fail_erase = short_write_success = fail_read = false;
     erase_calls = write_calls = read_calls = 0U;
+    erase_failure_at = delay_calls = 0U;
+    clear_during_delay = false;
 }
 static efrp_idf_flash_store_config_t config_for(owner_t *owner)
 {
@@ -83,6 +113,8 @@ static const efrp_aead_flash_store_t *bind(efrp_idf_flash_store_t *provider,
 {
     efrp_idf_flash_store_config_t config = config_for(owner);
     assert(efrp_idf_flash_store_bind(provider, &config));
+    current_owner = owner;
+    current_provider = provider;
     const efrp_aead_flash_store_t *store = efrp_idf_flash_store_callbacks(provider);
     assert(store && store->context == provider);
     return store;
@@ -135,14 +167,14 @@ static void test_owner_and_reader(void)
 {
     reset_flash(); owner_t owner = {0}; efrp_idf_flash_store_t provider = {0};
     const efrp_aead_flash_store_t *store = bind(&provider, &owner);
-    assert(efrp_aead_flash_store_recover(store) == EFRP_OK && erase_calls == 1U);
+    assert(efrp_aead_flash_store_recover(store) == EFRP_OK && erase_calls == 1U * SECTORS);
     efrp_aead_flash_reader_t reader = {0};
     assert(efrp_aead_flash_reader_init(&reader, key, store, window, sizeof window) == EFRP_OK);
     size_t small = make_record(4096U);
     owner.busy = true; /* OTA owns Flash across an ordinary control record. */
     unsigned claims = owner.claims;
     feed_record(&reader, small);
-    assert(owner.busy && owner.claims == claims && erase_calls == 1U && !reader.leased);
+    assert(owner.busy && owner.claims == claims && erase_calls == 1U * SECTORS && !reader.leased);
     const uint8_t *decoded; size_t decoded_length;
     assert(efrp_aead_flash_plaintext(&reader, &decoded, &decoded_length) == EFRP_OK);
     assert(decoded_length == 4096U && memcmp(decoded, plaintext, decoded_length) == 0);
@@ -162,7 +194,7 @@ static void test_owner_and_reader(void)
     assert(efrp_aead_flash_reader_init(&reader, key, store, window, sizeof window) == EFRP_OK);
     consumed = 0;
     assert(efrp_aead_flash_feed(&reader, wire, 17U, &consumed) == EFRP_OK);
-    assert(reader.leased && erase_calls == 2U);
+    assert(reader.leased && erase_calls == 2U * SECTORS);
     owner.busy = true;
     assert(efrp_aead_flash_feed(&reader, wire + 17U, large - 17U, &consumed) == EFRP_STORAGE_ERROR);
     assert(!reader.leased && owner.busy && provider.state == EFRP_IDF_FLASH_IDLE);
@@ -178,12 +210,12 @@ static void test_full_record_and_owner_interrupt(void)
 {
     reset_flash(); owner_t owner = {0}; efrp_idf_flash_store_t provider = {0};
     const efrp_aead_flash_store_t *store = bind(&provider, &owner);
-    assert(efrp_aead_flash_store_recover(store) == EFRP_OK && erase_calls == 1U);
+    assert(efrp_aead_flash_store_recover(store) == EFRP_OK && erase_calls == 1U * SECTORS);
     const size_t wire_length = make_record(EFRP_AEAD_MAX_PLAINTEXT);
     efrp_aead_flash_reader_t reader = {0};
     assert(efrp_aead_flash_reader_init(&reader, key, store, window, sizeof window) == EFRP_OK);
     feed_record(&reader, wire_length);
-    assert(reader.ready && reader.leased && erase_calls == 2U);
+    assert(reader.ready && reader.leased && erase_calls == 2U * SECTORS);
     const uint64_t stale_lease = reader.lease;
     for (size_t offset = 0; offset < EFRP_AEAD_MAX_PLAINTEXT; offset += sizeof window) {
         const uint8_t *decoded = NULL; size_t decoded_length = 0U;
@@ -202,7 +234,7 @@ static void test_full_record_and_owner_interrupt(void)
 
     assert(efrp_aead_flash_reader_init(&reader, key, store, window, sizeof window) == EFRP_OK);
     feed_record(&reader, wire_length);
-    assert(reader.ready && reader.leased && erase_calls == 3U);
+    assert(reader.ready && reader.leased && erase_calls == 3U * SECTORS);
     const uint8_t *decoded = NULL; size_t decoded_length = 0U;
     assert(efrp_aead_flash_plaintext(&reader, &decoded, &decoded_length) == EFRP_OK);
     assert(efrp_aead_flash_consume_plaintext(&reader, decoded_length) == EFRP_OK);
@@ -277,6 +309,78 @@ static void test_owner_callback_contract(void)
     assert(store->clear(store->context, lease) == EFRP_OK);
     assert(owner.claims == owner.releases && !owner.busy);
 }
+static void test_sector_handoffs_and_failures(void)
+{
+    /* Exercise first, middle and last sectors for every failure, in both
+     * boot recover and runtime begin. No partially erased lease is usable. */
+    for (unsigned runtime = 0U; runtime < 2U; ++runtime) {
+        for (unsigned failure = 0U; failure < 6U; ++failure) {
+            for (unsigned sector = 0U; sector < SECTORS; ++sector) {
+                reset_flash(); owner_t owner = {0};
+                efrp_idf_flash_store_t provider = {0};
+                const efrp_aead_flash_store_t *store = bind(&provider, &owner);
+                if (runtime) assert(store->recover(store->context) == EFRP_OK);
+                memset(flash, 0x35, sizeof flash);
+                const unsigned erases_before = erase_calls, delays_before = delay_calls;
+                const unsigned attempt = owner.attempts + sector + 1U;
+                if (failure == 0U || failure == 5U) erase_failure_at = erase_calls + sector + 1U;
+                if (failure == 1U) owner.deny_at = attempt;
+                if (failure == 2U) owner.release_failure_at = attempt;
+                if (failure == 3U) owner.skip_at = attempt;
+                if (failure == 4U) owner.repeat_at = attempt;
+                if (failure == 5U) owner.swallow_at = attempt;
+                uint64_t lease = 0U;
+                assert((runtime ? store->begin(store->context, &lease) :
+                    store->recover(store->context)) == EFRP_STORAGE_ERROR);
+                assert(lease == 0U && provider.active_lease == 0U && provider.next_lease == 0U);
+                assert(owner.attempts == attempt && owner.claims == owner.releases && !owner.busy);
+                assert(delay_calls - delays_before == sector);
+                const unsigned erased = sector + ((failure == 1U || failure == 3U) ? 0U : 1U);
+                assert(erase_calls - erases_before == erased);
+                for (unsigned i = 0U; i < erased; ++i)
+                    assert(erase_offsets[erases_before + i] == i * SECTOR_BYTES);
+                for (size_t offset = (sector + 1U) * SECTOR_BYTES; offset < sizeof flash; ++offset)
+                    assert(flash[offset] == 0x35U);
+                const bool untouched = runtime && failure == 1U && sector == 0U;
+                assert(provider.state == (untouched ? EFRP_IDF_FLASH_IDLE : EFRP_IDF_FLASH_QUARANTINED));
+                uint8_t byte = 0U;
+                assert(store->read(store->context, 1U, 0U, &byte, 1U) == EFRP_STORAGE_ERROR);
+                assert(store->write(store->context, 1U, 0U, &byte, 1U) == EFRP_STORAGE_ERROR);
+                owner.deny_at = owner.release_failure_at = owner.skip_at = owner.repeat_at = owner.swallow_at = 0U;
+                erase_failure_at = 0U;
+                if (!untouched)
+                    assert(store->begin(store->context, &lease) == EFRP_STORAGE_ERROR && lease == 0U);
+                const unsigned recovered_from = erase_calls;
+                assert(store->recover(store->context) == EFRP_OK);
+                assert(erase_calls - recovered_from == SECTORS);
+                for (unsigned i = 0U; i < SECTORS; ++i)
+                    assert(erase_offsets[recovered_from + i] == i * SECTOR_BYTES);
+                for (size_t offset = 0U; offset < sizeof flash; ++offset) assert(flash[offset] == 0xffU);
+                assert(store->begin(store->context, &lease) == EFRP_OK && lease == 1U);
+                assert(store->clear(store->context, lease) == EFRP_OK);
+            }
+        }
+    }
+}
+
+static void test_sector_handoff_quarantine(void)
+{
+    reset_flash(); owner_t owner = {0}; efrp_idf_flash_store_t provider = {0};
+    const efrp_aead_flash_store_t *store = bind(&provider, &owner);
+    assert(store->recover(store->context) == EFRP_OK);
+    assert(erase_calls == SECTORS && delay_calls == SECTORS - 1U);
+    clear_during_delay = true;
+    uint64_t lease = 0U;
+    assert(store->begin(store->context, &lease) == EFRP_STORAGE_ERROR && lease == 0U);
+    assert(erase_calls == SECTORS + 1U && delay_calls == SECTORS);
+    assert(provider.state == EFRP_IDF_FLASH_QUARANTINED && provider.active_lease == 0U);
+    clear_during_delay = false;
+    assert(store->recover(store->context) == EFRP_OK);
+    assert(store->begin(store->context, &lease) == EFRP_OK && lease == 1U);
+    assert(store->recover(store->context) == EFRP_STORAGE_ERROR); /* Live lease is never erased. */
+    assert(store->clear(store->context, lease) == EFRP_OK);
+    assert(owner.claims == owner.releases);
+}
 int main(void)
 {
     test_exact_binding();
@@ -284,6 +388,8 @@ int main(void)
     test_full_record_and_owner_interrupt();
     test_flash_failures_and_recovery();
     test_owner_callback_contract();
-    puts("IDF Flash store: exact partition, 64KiB record/17 rereads, OTA contention, clear retry and I/O faults passed");
+    test_sector_handoffs_and_failures();
+    test_sector_handoff_quarantine();
+    puts("IDF Flash store: 16 sector handoffs, 192 fault cases, 64KiB/17 rereads and lease isolation passed");
     return 0;
 }

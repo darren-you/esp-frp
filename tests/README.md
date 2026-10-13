@@ -40,6 +40,8 @@ flowchart LR
     session --> faults["session_fixture.go：官方 API 异常对端"]
     device["crypto-interop/device_fixture.go：私有单设备场景"] --> faults
     device <-->|"真实 TCP / TLS"| board["独立 C3 / ESP32 sample"]
+    joint["device_joint.go：有限 HTTP / 单次最大记录"] --> faults
+    joint <-->|"原始 HTTP / 固定目标"| base["外部 Base 候选"]
     cmake --> work["crypto-interop/work.go / work_fixture.go"]
     work <-->|"双业务流及故障"| wp["work_peer.c"]
     wp --> lib
@@ -76,6 +78,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 `aead_flash` 在 OpenSSL 与官方 PSA host 模式使用伪 Flash 覆盖大小边界、最大记录认证、读写/清理故障和模拟掉电恢复。`idf_flash_store` 直接编译真实 IDF adapter，配假 `esp_partition` 与 owner，覆盖精确分区、完整 64 KiB 记录及 17 次复读、OTA owner 占用时小记录无 scratch 访问、大记录写入或窗口复读中安全失败、写回读发现短写、clear 争用重试及 owner 错误漏调/重调/吞错。完整 Mbed TLS host 的 `session_upstream` 还让当前会话接收官方 64 KiB 控制记录，验证错误 tag 与 clear 失败时保留句柄重试；边界见 [Flash 暂存合同](../docs/design/flash-backed-aead.md)。
+
+`idf_flash_store` 另覆盖 recover／begin 的 16 个逐扇区 claim：6 类故障逐一注入全部扇区，共 192 个失败用例，并验证未完成擦除不发 lease、部分擦除隔离、全区重新恢复及让出期间的并发 clear。host 的 FreeRTOS shim 只核对释放后两 tick 调用和私有 guard；实际优先级 5／4、一 tick 轮询与 500 ms 预算由 [C3 QEMU 探针](c3-flash-scratch/README.md)验证，不能把 host 回调顺序当作调度或实板时延证据。
 
 完整 Mbed TLS host 模式另有 `session_idf_flash_upstream`：正式 `session.c` 与正式 `idf_flash_store.c` 经测试分区 shim 组合，在随机回环端口与官方 FRPS 完成三轮注册/心跳，并用官方协议 fixture 验证 64 KiB 正确记录、64 KiB 错 tag 的零控制消息交付及小记录坏 tag。每轮重建 provider 并执行 boot recover，核对 owner 成对释放、64 KiB 擦写和逐窗口读取计数。运行范围与数据见[集成回归收据](../docs/operations/p6-frp-session-idf-provider-interop.md)。
 
@@ -125,6 +129,8 @@ ctest --test-dir build-tls --output-on-failure
 该模式自动增加 `tls_upstream`，由 Go 标准 TLS 服务端生成临时 CA/证书并启动 C peer；包含 TLS 1.2/1.3、四类证书拒绝、部分 I/O、100 次连接、取消和期限。`MBEDTLS_PLATFORM_MEMORY` 仅为 host 分配失败注入；未开启时不执行分配注入段，其余合同测试仍执行。PSA 的独占输入模式与 SDK 对齐。TLS 测试总期限 180 秒，证书输入和监听均在测试内清理，详见 [TLS 合同](../docs/design/tls-transport.md)。
 
 完整 Mbed TLS 模式也增加 `session_upstream`，总期限 240 秒。它在本机启动实际官方 FRPS，验证百次注册、Token 心跳、工作请求、部分 I/O、拒绝和取消；另有 29 种尾数据、容量、Yamux 非法 header、解析、认证、Flash 清理失败、EOF 和超时场景。host 配置使用公开 fixture，监听仅回环，子进程和临时证书结束后清理；范围见 [控制会话](../docs/design/control-session.md)。[单设备入口](crypto-interop/README.md#单设备协议-fixture) 可用显式私有配置复用协议场景；它不负责刷机，服务端成功也不等于设备验收。
+
+[OTA 联合入口](crypto-interop/README.md#单次-ota-联合-fixture) 保留外部 Base 的原代理与 HTTP 目标，支持有限的 start／PUT／原 ID 查询；默认可只转发，最大控制记录仅在外部只读阶段信号到达后发送一次。它复用真实认证与加密 API，但不是官方 FRPS，软件结果不能授予 MCU 联合资源资格。
 
 同一模式的 `work_upstream` 用实际 FRPS 验证 100 轮双业务流，共 200 条本地连接，每流双向各 300001 字节；总期限 240 秒。`work_faults_upstream` 总期限 180 秒，包含四个真实 FRPS 拒绝/取消场景和 13 个官方 API 半关闭、尾数据、解析、期限与慢流场景。连接目标是独立回环业务 listener；正常结束与取消均检查 fd 基线，详情见 [工作流](../docs/design/work-streams.md)。
 

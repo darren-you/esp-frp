@@ -154,8 +154,28 @@ func main() {
 	workPeer := flag.String("work-peer", "", "C composed local TCP forwarding peer")
 	workFaults := flag.Bool("work-faults", false, "Run work rejection/half-close fixtures instead of the 100 dual-flow rounds")
 	deviceConfig := flag.String("device-config", "", "仓外 0600 JSON：单次真实设备协议 fixture，不执行刷写")
+	jointConfig := flag.String("device-joint-config", "", "仓外 0600 JSON：一次 OTA 会话的有限联合 fixture；不代表官方 FRPS")
 	deviceInteropConfig := flag.String("device-interop-config", "", "仓外 0600 JSON：显式 IPv4 的官方/维护对端业务互操作，不执行刷写")
 	flag.Parse()
+	if *jointConfig != "" {
+		var jointErr error
+		flag.Visit(func(f *flag.Flag) {
+			if f.Name != "device-joint-config" {
+				jointErr = fmt.Errorf("device-joint-config must be the only explicit option")
+			}
+		})
+		if flag.NArg() != 0 {
+			jointErr = fmt.Errorf("device-joint-config does not accept positional arguments")
+		}
+		if jointErr == nil {
+			jointErr = runDeviceJoint(*jointConfig, os.Stdin)
+		}
+		if jointErr != nil {
+			fmt.Fprintf(os.Stderr, "esp-frp joint summary\n  status  stopped\n  reason  %s\n  device_result_verified  false\n", jointErr)
+			os.Exit(1)
+		}
+		return
+	}
 	if *deviceInteropConfig != "" {
 		must(runDeviceInterop(*deviceInteropConfig))
 		return
