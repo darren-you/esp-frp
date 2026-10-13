@@ -16,7 +16,9 @@
 
 设备每次启动都须在创建 FRP 会话前调用 `efrp_aead_flash_store_recover`。provider 此时撤销前一 boot 的任何 lease 并擦除中断记录，只有恢复成功才允许 `begin`。FRP 库无法单独证明产品已在启动顺序中调用；IDF provider 自行拒绝恢复前操作。掉电前可能保留的只有密文，没有 tag 或 RAM key。host 假分区测试验证旧 lease 在恢复后失效；真实设备掉电仍未验证。
 
-IDF provider 在 bind 时逐项核对固定 `frp_scratch` label、data/undefined 类型、调用方传入的精确 offset、`0x10000` 大小、4096 字节擦除粒度及未加密、可写属性；bind 不擦除。每次 recover、begin、write、read 都通过调用方 `with_owner` 回调短暂获得 Flash owner，并验证该回调恰好调用 operation 一次且不吞掉操作错误。write 在返回前分块读回逐字节核对，能拒绝底层错误地报告成功的短写。`clear` 只在 provider guard 下撤销 RAM lease，下一次 begin 才擦除，不访问 Flash 或占用 owner；并发 guard 争用时失败并保留 lease 供重试。`with_owner` 的 claim/release 由 Base 按既有 storage owner 实现；独立样例只有本样例 Flash 操作，使用自己的原子独占标志。provider 不持有跨记录 owner token，不会把 OTA 锁住；OTA 占有 owner 时小记录完全走 RAM，大记录访问失败，随后仍可撤销 lease。此处只证明安全拒绝，业务并发活性还需产品验证。
+IDF provider 在 bind 时逐项核对固定 `frp_scratch` label、data/undefined 类型、调用方传入的精确 offset、`0x10000` 大小、4096 字节擦除粒度及未加密、可写属性；bind 不擦除。`recover`／`begin` 在 FreeRTOS 任务中顺序擦除 16 个扇区，每个 4096 B 擦除独立调用一次 `with_owner`，每次核对 operation 恰好执行一次且错误未被吞掉。释放共享 Flash owner 后、下一个扇区前固定阻塞两 tick，保留的仅是 provider 私有 guard；这给一 tick 轮询的低优先级消费者留下一个中间 tick，不能用单纯 yield 或一 tick 延时替代。额外阻塞共 30 tick，既有调用方获取期限、锁身份与协议期限不变；它不保证任意外部负载下的最大物理延迟。
+
+全部扇区成功前 `begin` 不发布 lease。首个 claim 未获准且未触碰 Flash 时保持可重试；擦过任一扇区后失败、回调漏调／重调／吞错或释放失败均隔离区域，不允许继续发 lease 或读写。`recover` 失败一律隔离；重新恢复从第一个扇区完整擦除，不接续未完成的范围。活动 lease 仍禁止 recover。write 在返回前分块读回逐字节核对，能拒绝底层错误地报告成功的短写。`clear` 只在 provider guard 下撤销 RAM lease，下一次 begin 才擦除，不访问 Flash 或占用 owner；并发 guard 争用时失败并保留 lease 供重试。`with_owner` 的 claim/release 由产品既有 storage owner 实现；独立样例使用自己的原子独占标志。OTA 占有 owner 时小记录完全走 RAM，大记录访问失败后仍可撤销 lease。修复依据与调度负对照见[整区擦除争用记录](../issues/c3-scratch-erase-owner-starvation.md)，实板联合活性仍需产品验证。
 
 ## 成本与观测
 

@@ -76,6 +76,8 @@ def main() -> None:
                 f"initial_flash_sha256={digest(image)}"]
     for index, marker in enumerate(PHASE_MARKERS, start=1):
         run_phase(command, output / f"phase-{index}.log", marker)
+        if index == 1 and b"EFRP_C3_FLASH CONTENTION_PASS" not in (output / "phase-1.log").read_bytes():
+            raise RuntimeError("FreeRTOS owner contention controls did not pass")
         image_bytes = image.read_bytes()
         expected = bytes([0xFF]) * PARTITION_BYTES if index == 2 else fixture[16:65552]
         if image_bytes[PARTITION_OFFSET:PARTITION_OFFSET + PARTITION_BYTES] != expected:

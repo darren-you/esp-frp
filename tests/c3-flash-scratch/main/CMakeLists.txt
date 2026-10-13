@@ -14,3 +14,5 @@ get_filename_component(efrp_component_name "${efrp_component_dir}" NAME)
 idf_component_register(SRCS "main.c" REQUIRES "${efrp_component_name}" esp_partition esp_timer
     INCLUDE_DIRS "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(${COMPONENT_LIB} INTERFACE
+    "-Wl,--wrap=esp_partition_erase_range" "-Wl,--wrap=vTaskDelay")

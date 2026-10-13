@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "esp_frp_idf_flash_store.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include <limits.h>
 #include <string.h>
@@ -44,9 +46,35 @@ static efrp_result_t erase_operation(void *context)
 {
     flash_operation_t *op = context;
     if (++op->calls != 1U) return op->result = EFRP_STORAGE_ERROR;
-    op->result = esp_partition_erase_range(op->provider->partition, 0U,
-        EFRP_IDF_FLASH_STORE_BYTES) == ESP_OK ? EFRP_OK : EFRP_STORAGE_ERROR;
+    op->result = esp_partition_erase_range(op->provider->partition, op->offset,
+        EFRP_IDF_FLASH_ERASE_BYTES) == ESP_OK ? EFRP_OK : EFRP_STORAGE_ERROR;
     return op->result;
+}
+
+static efrp_result_t erase_scratch(efrp_idf_flash_store_t *provider, bool *touched)
+{
+    *touched = false;
+    for (size_t offset = 0U; offset < EFRP_IDF_FLASH_STORE_BYTES;
+         offset += EFRP_IDF_FLASH_ERASE_BYTES) {
+        if (atomic_load_explicit(&provider->quarantine_requested, memory_order_acquire))
+            return EFRP_STORAGE_ERROR;
+        flash_operation_t op = {.provider = provider, .offset = offset};
+        efrp_result_t result = provider->with_owner(provider->owner_context,
+                                                     erase_operation, &op);
+        /* A denied first claim did not touch Flash. Any earlier sector or
+         * malformed successful wrapper makes a failed begin non-reusable. */
+        *touched = *touched || op.calls != 0U || result == EFRP_OK;
+        if (result != EFRP_OK || op.calls != 1U || op.result != EFRP_OK)
+            return EFRP_STORAGE_ERROR;
+        if (offset + EFRP_IDF_FLASH_ERASE_BYTES < EFRP_IDF_FLASH_STORE_BYTES) {
+            /* The provider guard retains scratch exclusivity, not the shared
+             * Flash owner. Two ticks leave one intervening tick for a lower
+             * priority owner polling every tick. A yield or one-tick delay
+             * can wake both tasks together and let FRP reacquire first. */
+            vTaskDelay(2);
+        }
+    }
+    return EFRP_OK;
 }
 
 static efrp_result_t write_operation(void *context)
@@ -96,9 +124,8 @@ static efrp_result_t recover(void *context)
      * never authority for this boot's scratch bytes. */
     provider->state = EFRP_IDF_FLASH_UNRECOVERED;
     provider->active_lease = 0U;
-    flash_operation_t op = {.provider = provider};
-    if (provider->with_owner(provider->owner_context, erase_operation, &op) != EFRP_OK ||
-        op.calls != 1U || op.result != EFRP_OK) {
+    bool touched;
+    if (erase_scratch(provider, &touched) != EFRP_OK) {
         provider->state = EFRP_IDF_FLASH_QUARANTINED;
         return leave(provider, EFRP_STORAGE_ERROR);
     }
@@ -116,11 +143,9 @@ static efrp_result_t begin(void *context, uint64_t *lease)
         provider->next_lease == UINT64_MAX) {
         return leave(provider, EFRP_STORAGE_ERROR);
     }
-    flash_operation_t op = {.provider = provider};
-    efrp_result_t operation_result = provider->with_owner(provider->owner_context,
-                                                            erase_operation, &op);
-    if (operation_result != EFRP_OK || op.calls != 1U || op.result != EFRP_OK) {
-        if (op.calls != 0U || operation_result == EFRP_OK)
+    bool touched;
+    if (erase_scratch(provider, &touched) != EFRP_OK) {
+        if (touched)
             provider->state = EFRP_IDF_FLASH_QUARANTINED;
         return leave(provider, EFRP_STORAGE_ERROR);
     }

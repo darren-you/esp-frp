@@ -116,6 +116,8 @@ ctest --test-dir build --output-on-failure
 
 `esp_frp_idf_flash_store.h` 提供真实 IDF 分区 provider：调用方传入 label、type/subtype、精确 offset/size 和短持有的 storage owner 回调；bind 逐项核对实际分区，recover 擦除中断记录，write 回读校验，clear 只撤销 RAM lease。Base 可复用此 provider 并接自己的 owner，独立样例已绑定专用实验分区；它们仍需分别完成产品容量与实板验证。
 
+`recover`／`begin` 按 4 KiB 扇区释放共享 Flash owner，扇区间阻塞两个 tick；完整擦除后才发 lease，部分失败保持隔离。软件故障与真实 FreeRTOS 调度对照见[擦除争用修复](docs/issues/c3-scratch-erase-owner-starvation.md)，产品联合容量与实板时延仍须另验。
+
 [会话 Flash 硬切收据](docs/operations/p6-frp-session-flash-hard-cut.md)记录三种 host 后端、固定 SDK 双目标样例、相同非空合成输入的容量差异与尚未验收的设备边界。
 [会话阶段复用检查点](docs/operations/p6-frp-session-phase-union.md)记录握手与 Flash 窗口复用后的对象尺寸、资源清理和官方协议回归。
 

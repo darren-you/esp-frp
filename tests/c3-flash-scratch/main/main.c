@@ -4,6 +4,8 @@
 #include "esp_heap_caps.h"
 #include "esp_partition.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <inttypes.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -23,6 +25,13 @@ static uint8_t window[EFRP_AEAD_RX_CHUNK_BYTES];
 static size_t minimum_free = SIZE_MAX, minimum_largest = SIZE_MAX;
 static unsigned owner_calls;
 static uint64_t flash_operation_us, maximum_flash_operation_us;
+static struct {
+    bool active, runtime_begin, acquired, operation_running;
+    bool waiting_for_poll, contender_finished;
+    unsigned handoff_ticks, claims, claims_at_acquire;
+    uint64_t wait_us;
+    TaskHandle_t frp_task, ota_task, observer;
+} contention;
 
 static void fail(const char *stage, int result)
 {
@@ -35,6 +44,9 @@ static void fail(const char *stage, int result)
     efrp_result_t checked_result = (expression); \
     if (checked_result != EFRP_OK) fail((stage), checked_result); \
 } while (0)
+
+static void require_partition(const esp_partition_t *partition, bool expect_erased,
+                              const char *stage);
 
 static void sample_heap(void)
 {
@@ -51,14 +63,141 @@ static efrp_result_t with_owner(void *context, efrp_idf_flash_operation_t operat
     if (atomic_flag_test_and_set_explicit(owner, memory_order_acquire))
         return EFRP_STORAGE_ERROR;
     ++owner_calls;
+    if (contention.active) {
+        ++contention.claims;
+        if (contention.claims == 1U) xTaskNotifyGive(contention.ota_task);
+    }
     int64_t started_us = esp_timer_get_time();
+    if (contention.active) contention.operation_running = true;
     efrp_result_t result = operation(operation_context);
+    if (contention.active) contention.operation_running = false;
     uint64_t elapsed_us = (uint64_t)(esp_timer_get_time() - started_us);
     flash_operation_us += elapsed_us;
     if (elapsed_us > maximum_flash_operation_us)
         maximum_flash_operation_us = elapsed_us;
     atomic_flag_clear_explicit(owner, memory_order_release);
     return result;
+}
+
+/* These wrappers exist only in this QEMU probe. Real partition I/O still
+ * runs; fixed synthetic latency makes priority starvation reproducible
+ * without pretending QEMU implements the board's physical Flash latency. */
+esp_err_t __real_esp_partition_erase_range(const esp_partition_t *partition,
+                                         size_t offset, size_t size);
+void __real_vTaskDelay(TickType_t ticks);
+
+esp_err_t __wrap_esp_partition_erase_range(const esp_partition_t *partition,
+                                         size_t offset, size_t size)
+{
+    const esp_err_t result = __real_esp_partition_erase_range(partition, offset, size);
+    if (contention.active && xTaskGetCurrentTaskHandle() == contention.frp_task) {
+        REQUIRE(size == partition->erase_size, "one_sector_per_claim");
+        __real_vTaskDelay(pdMS_TO_TICKS(40));
+        /* Select the legal worst alignment: the lower-priority contender has
+         * already failed in this tick before the owner is released. Its
+         * notification wakes priority 5 before it calls vTaskDelay(1). */
+        if (!contention.contender_finished) {
+            contention.waiting_for_poll = true;
+            REQUIRE(ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100)) == 1U,
+                    "align_failed_poll_before_release");
+            contention.waiting_for_poll = false;
+        }
+    }
+    return result;
+}
+
+void __wrap_vTaskDelay(TickType_t ticks)
+{
+    if (contention.active && !contention.operation_running &&
+        xTaskGetCurrentTaskHandle() == contention.frp_task) {
+        REQUIRE(ticks == 2, "provider_two_tick_handoff");
+        ticks = (TickType_t)contention.handoff_ticks;
+    }
+    __real_vTaskDelay(ticks);
+}
+
+static void contender_task(void *unused)
+{
+    (void)unused;
+    REQUIRE(ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000)) == 1U, "contender_start");
+    const int64_t started_us = esp_timer_get_time();
+    do {
+        if (!atomic_flag_test_and_set_explicit(&flash_owner, memory_order_acquire)) {
+            contention.acquired = true;
+            contention.claims_at_acquire = contention.claims;
+            atomic_flag_clear_explicit(&flash_owner, memory_order_release);
+            break;
+        }
+        if (contention.waiting_for_poll) xTaskNotifyGive(contention.frp_task);
+        if (esp_timer_get_time() - started_us >= INT64_C(500000)) break;
+        vTaskDelay(1);
+    } while (true);
+    contention.wait_us = (uint64_t)(esp_timer_get_time() - started_us);
+    contention.contender_finished = true;
+    xTaskNotifyGive(contention.observer);
+    vTaskDelete(NULL);
+}
+
+static void eraser_task(void *unused)
+{
+    (void)unused;
+    /* Set the handle before the first wrapped Flash operation. */
+    contention.frp_task = xTaskGetCurrentTaskHandle();
+    const efrp_aead_flash_store_t *store = efrp_idf_flash_store_callbacks(&flash_store);
+    uint64_t lease = 0U;
+    if (contention.runtime_begin) {
+        REQUIRE_OK(store->begin(store->context, &lease), "contention_begin");
+        REQUIRE(lease != 0U, "contention_lease");
+        REQUIRE_OK(store->clear(store->context, lease), "contention_clear");
+    } else {
+        REQUIRE_OK(store->recover(store->context), "contention_recover");
+    }
+    xTaskNotifyGive(contention.observer);
+    vTaskDelete(NULL);
+}
+
+static void test_owner_contention(const esp_partition_t *partition)
+{
+    /* The negative controls change only the handoff delay: immediate and
+     * one-tick reacquisition lose the lower-priority task's 500 ms budget.
+     * Two-tick controls execute the production provider unchanged. */
+    for (unsigned scenario = 0U; scenario < 4U; ++scenario) {
+        memset(&contention, 0, sizeof contention);
+        contention.active = true;
+        contention.handoff_ticks = scenario < 2U ? scenario : 2U;
+        contention.runtime_begin = scenario == 3U;
+        contention.observer = xTaskGetCurrentTaskHandle();
+        REQUIRE(xTaskCreate(contender_task, "ota_poll", 4096, NULL, 4,
+                            &contention.ota_task) == pdPASS, "create_contender");
+        REQUIRE(xTaskCreate(eraser_task, "frp_erase", 8192, NULL, 5,
+                            NULL) == pdPASS, "create_eraser");
+        unsigned finished = 0U;
+        while (finished < 2U) {
+            const uint32_t count = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
+            REQUIRE(count != 0U && count <= 2U - finished, "contention_join");
+            finished += count;
+        }
+        contention.active = false;
+        REQUIRE(contention.claims == 16U, "contention_sector_count");
+        REQUIRE(contention.acquired == (scenario >= 2U), "contention_expected_result");
+        if (scenario >= 2U) {
+            REQUIRE(contention.claims_at_acquire < 16U && contention.wait_us < 500000U,
+                    "lower_priority_acquired_between_sectors");
+        } else {
+            REQUIRE(contention.wait_us >= 500000U, "negative_original_budget_exhausted");
+        }
+        printf("EFRP_C3_FLASH contention mode=%s handoff_ticks=%u frp_priority=5"
+               " ota_priority=4 poll_ticks=1 budget_us=500000 sector_claims=%u"
+               " acquired=%u claims_at_acquire=%u wait_us=%" PRIu64
+               " latency=synthetic_40ms_per_sector\n",
+               contention.runtime_begin ? "begin" : "recover", contention.handoff_ticks,
+               contention.claims, (unsigned)contention.acquired, contention.claims_at_acquire,
+               contention.wait_us);
+        require_partition(partition, true, "contention_erased");
+    }
+    owner_calls = 0U;
+    flash_operation_us = maximum_flash_operation_us = 0U;
+    puts("EFRP_C3_FLASH CONTENTION_PASS negative=0,1 positive=2 recovery_and_begin=verified");
 }
 
 static const esp_partition_t *bind_store(void)
@@ -203,6 +342,7 @@ static void reject_bad_tag(const uint8_t key[32])
 
 static void first_boot(const esp_partition_t *partition)
 {
+    test_owner_contention(partition);
     const efrp_aead_flash_store_t *store = efrp_idf_flash_store_callbacks(&flash_store);
     int64_t started_us = esp_timer_get_time();
     REQUIRE_OK(efrp_aead_flash_store_recover(store), "initial_recover");
