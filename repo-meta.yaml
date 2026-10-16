@@ -1,6 +1,6 @@
 schema_version: 5
 name: esp-frp
-workspace_area: tooling
+workspace_area: shared-sdk
 archetype: tooling-repo
 lifecycle: incubating
 owner: darren-you
